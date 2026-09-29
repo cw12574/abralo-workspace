@@ -1,0 +1,17 @@
+node_modules/
+dist/
+release/
+artifacts/
+evidence/
+test-results/
+playwright-report/
+.env
+.env.*
+*.db*
+.abralo/
+
+# Keep internal planning and release evidence out of the public source tree.
+/AGENTS.md
+/docs/*
+!/docs/preview/
+!/docs/preview/**

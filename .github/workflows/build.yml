@@ -1,0 +1,49 @@
+name: Build and verify desktop packages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: windows-x64
+          - runner: ubuntu-latest
+            target: linux-x64
+          - runner: macos-15-intel
+            target: macos-x64
+          - runner: macos-latest
+            target: macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.16.0
+      - name: Install pnpm
+        run: npm install --global pnpm@10.33.4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm build
+      - name: Run automated tests
+        run: pnpm test
+      - name: Package for this runner
+        run: pnpm package -- "release/abralo-${{ matrix.target }}"
+      - name: Verify packaged runtime and contents
+        run: node scripts/verify-package.mjs "release/abralo-${{ matrix.target }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: abralo-${{ matrix.target }}-${{ github.sha }}
+          path: release/abralo-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14

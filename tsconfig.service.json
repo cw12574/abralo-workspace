@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.json","compilerOptions":{"noEmit":false,"allowImportingTsExtensions":false,"outDir":"dist/service","rootDir":".","declaration":false,"sourceMap":true},"include":["apps/service/src/**/*.ts","packages/host/src/**/*.ts","packages/contracts/src/**/*.ts"],"exclude":["packages/contracts/generated"]}

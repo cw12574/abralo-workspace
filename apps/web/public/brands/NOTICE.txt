@@ -1,0 +1,3 @@
+Railway icon: Simple Icons, https://github.com/simple-icons/simple-icons/blob/develop/icons/railway.svg
+Simple Icons assets are CC0-1.0; the Railway name and logo remain their owner's trademarks.
+Vendored SVG, no runtime icon service or tracking request.
