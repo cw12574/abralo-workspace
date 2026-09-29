@@ -1,0 +1,14 @@
+name: Actions runner preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm hosted runner starts
+        run: echo "GitHub-hosted runner started"
