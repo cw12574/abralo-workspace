@@ -2,3 +2,6 @@ packages:
   - apps/*
   - packages/*
 injectWorkspacePackages: true
+
+overrides:
+  'vite>esbuild': 0.28.2
