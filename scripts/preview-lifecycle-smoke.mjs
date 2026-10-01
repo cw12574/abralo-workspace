@@ -20,7 +20,7 @@ const checks = [];
 if (process.platform !== 'win32' && !process.argv.includes('--skip-install')) {
   execFileSync(join(root, 'runtime/node'), [join(root, 'scripts/install-posix.mjs')], { cwd: root, env, stdio: 'pipe' });
   const base = process.platform === 'darwin' ? join(fixture, 'Library/Application Support/AgentWorkspaceProgram') : join(fixture, '.local/lib/agent-workspace');
-  root = join(base, readdirSync(base)[0]);
+  root = realpathSync(readFileSync(join(base, 'current.txt'), 'utf8').trim());
   if (!existsSync(join(root, 'docs/preview/START-HERE.md'))) throw new Error('Installed guide missing');
   checks.push('POSIX installer in disposable HOME; docs retained (no desktop launch)');
 }

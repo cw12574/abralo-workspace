@@ -41,6 +41,10 @@ jobs:
         run: pnpm package "release/abralo-${{ matrix.target }}"
       - name: Verify packaged runtime and contents
         run: node scripts/verify-package.mjs "release/abralo-${{ matrix.target }}"
+      - name: Exercise isolated launcher, authentication, restart, and backup
+        run: node scripts/preview-lifecycle-smoke.mjs "release/abralo-${{ matrix.target }}"
+      - name: Install and remove in a disposable profile
+        run: node scripts/installer-acceptance-smoke.mjs "release/abralo-${{ matrix.target }}"
       - uses: actions/upload-artifact@v4
         with:
           name: abralo-${{ matrix.target }}-${{ github.sha }}

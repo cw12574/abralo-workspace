@@ -49,4 +49,4 @@ if (runtime.platform !== release.platform || runtime.arch !== release.arch || ru
   throw new Error('Runtime does not match manifest.');
 console.log(JSON.stringify({ status: 'passed', platform: release.platform, arch: release.arch,
   runtime, files: count, firstPartyTextFiles, releaseManifestSha256: createHash('sha256').update(readFileSync(join(root, 'release.json'))).digest('hex'),
-  limitations: ['Pattern scan is not exhaustive secret detection', 'No native provider, installer, signing or desktop acceptance test'] }, null, 2));
+  limitations: ['Pattern scan is not exhaustive secret detection', 'No native provider/account cancellation test, package signing/trust check, or graphical desktop acceptance test'] }, null, 2));
