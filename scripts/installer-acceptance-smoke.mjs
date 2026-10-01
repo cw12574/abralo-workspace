@@ -82,7 +82,7 @@ try {
   if (process.platform === 'win32') {
     env.LOCALAPPDATA = join(fixture, 'LocalAppData');
     const folders = run(
-      'powershell.exe',
+      'pwsh.exe',
       [
         '-NoProfile',
         '-NonInteractive',
@@ -106,7 +106,7 @@ try {
     ownedShortcuts = shortcuts;
 
     run(
-      'powershell.exe',
+      'pwsh.exe',
       [
         '-NoProfile',
         '-NonInteractive',
@@ -129,7 +129,7 @@ try {
       throw new Error('The default Windows installation unexpectedly enabled startup on login.');
     report.install = 'passed: copied payload and created desktop/start-menu shortcuts; startup stayed off';
     const signature = run(
-      'powershell.exe',
+      'pwsh.exe',
       [
         '-NoProfile',
         '-NonInteractive',
