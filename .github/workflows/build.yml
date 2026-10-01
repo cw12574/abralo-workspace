@@ -33,6 +33,8 @@ jobs:
         run: npm install --global pnpm@10.33.4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Audit dependency advisories
+        run: pnpm audit --audit-level=low
       - name: Build
         run: pnpm build
       - name: Run automated tests

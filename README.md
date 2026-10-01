@@ -1,6 +1,6 @@
 # Abralo
 
-Abralo is a local, cross-platform workspace where people and AI agents work together through direct conversations, shared rooms, and project context. This new product generation centers the shared conversation experience. Start with the [tester guide](docs/preview/START-HERE.md). This source tree is licensed under [Apache-2.0](LICENSE).
+Abralo is a local, cross-platform workspace where people and AI agents work together through direct conversations, shared rooms, and project context. This new product generation centers the shared conversation experience. Start with the [tester guide](docs/preview/START-HERE.md). See [contributing](CONTRIBUTING.md) and the [security policy](SECURITY.md). This source tree is licensed under [Apache-2.0](LICENSE).
 
 Requires Node 24.16+ (24.x) for source development. `pnpm install`, `pnpm build`, `pnpm test`, `pnpm start`. `pnpm dev` runs the service from source; `pnpm web` runs Vite. The service serves built browser assets at http://127.0.0.1:4317.
 
