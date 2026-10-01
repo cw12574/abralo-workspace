@@ -38,7 +38,7 @@ jobs:
       - name: Run automated tests
         run: pnpm test
       - name: Package for this runner
-        run: pnpm package -- "release/abralo-${{ matrix.target }}"
+        run: pnpm package "release/abralo-${{ matrix.target }}"
       - name: Verify packaged runtime and contents
         run: node scripts/verify-package.mjs "release/abralo-${{ matrix.target }}"
       - uses: actions/upload-artifact@v4
