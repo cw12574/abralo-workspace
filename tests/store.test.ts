@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, uid } from '../apps/service/src/store.js';
@@ -197,15 +197,15 @@ describe('durable workspace', () => {
       headers,
     });
     expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toEqual({ path: f.dir, name: f.dir.split(/[\\/]/).pop() });
+    expect(saved.json()).toEqual({ path: realpathSync(f.dir), name: f.dir.split(/[\\/]/).pop() });
     expect(
       (
         await app.inject({
           url: `/api/conversations/${f.employee.dmId}/working-folder`,
           headers,
         })
-      ).json().path,
-    ).toBe(f.dir);
+    ).json().path,
+    ).toBe(realpathSync(f.dir));
     const invalid = await app.inject({
       method: 'PUT',
       url: `/api/conversations/${f.employee.dmId}/working-folder`,

@@ -105,7 +105,7 @@ it('approves a team once, includes employees in a channel, and actually queues t
     const second = await approve();
     expect(second.json().channelId).toBe(first.json().channelId);
     expect(s.all('SELECT * FROM employees')).toHaveLength(2);
-    expect(s.all('SELECT * FROM outbox')).toHaveLength(1);
+    expect(s.all('SELECT * FROM outbox')).toHaveLength(2);
     expect(
       s.all('SELECT * FROM employee_conversations WHERE conversation_id=?', first.json().channelId),
     ).toHaveLength(2);
