@@ -21,7 +21,7 @@ const manifest = JSON.parse(readFileSync(join(packageRoot, 'release.json'), 'utf
 if (manifest.platform !== process.platform || manifest.arch !== process.arch)
   throw new Error(`Package ${manifest.platform}/${manifest.arch} does not match this runner.`);
 
-const tempRoot = process.platform === 'linux' ? homedir() : tmpdir();
+const tempRoot = realpathSync(process.platform === 'linux' ? homedir() : tmpdir());
 // macOS exposes the temp directory through a symlink (`/var` -> `/private/var`).
 // Canonicalize the fixture before comparing installer paths against it.
 const fixture = realpathSync(mkdtempSync(join(tempRoot, '.abralo-installer-')));
@@ -61,7 +61,7 @@ function removeInside(parent, candidate) {
 }
 
 function run(command, args, options = {}) {
-  execFileSync(command, args, { stdio: 'pipe', windowsHide: true, ...options });
+  return execFileSync(command, args, { stdio: 'pipe', windowsHide: true, ...options });
 }
 
 function verifyInstalledPayload(root) {

@@ -1,5 +1,5 @@
 // Isolated launcher/restart/backup probe. No model calls and no real user installation.
-import { mkdtempSync, mkdirSync, readFileSync, existsSync, readdirSync, realpathSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -81,4 +81,10 @@ try {
   checks.push('service stop/restart preserves authorized session');
   report.status = 'passed';
 } catch (e) { report.status = 'failed'; report.error = String(e); process.exitCode = 1; }
-finally { await stop(); console.log(JSON.stringify(report, null, 2)); }
+finally {
+  try { await stop(); }
+  finally {
+    rmSync(fixture, { recursive: true, force: true });
+    console.log(JSON.stringify(report, null, 2));
+  }
+}
