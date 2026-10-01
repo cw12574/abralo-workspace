@@ -12,7 +12,7 @@ let root = resolve(process.argv[2]);
 const fixture = mkdtempSync(join(process.platform === 'linux' ? homedir() : tmpdir(), 'abralo-lifecycle-'));
 const data = join(fixture, 'data');
 mkdirSync(data, { recursive: true });
-const buildId = basename(root);
+let buildId = basename(root);
 const env = { ...process.env, HOME: fixture, XDG_DATA_HOME: join(fixture, '.local/share'), WORKSPACE_DATA_DIR: data };
 delete env.WORKSPACE_PUBLIC_URL;
 env.WORKSPACE_HOST = '127.0.0.1';
@@ -21,6 +21,9 @@ if (process.platform !== 'win32' && !process.argv.includes('--skip-install')) {
   execFileSync(join(root, 'runtime/node'), [join(root, 'scripts/install-posix.mjs')], { cwd: root, env, stdio: 'pipe' });
   const base = process.platform === 'darwin' ? join(fixture, 'Library/Application Support/AgentWorkspaceProgram') : join(fixture, '.local/lib/agent-workspace');
   root = realpathSync(readFileSync(join(base, 'current.txt'), 'utf8').trim());
+  // The installed version directory has its own build identity. The launcher
+  // reports that directory name, not the original artifact folder name.
+  buildId = basename(root);
   if (!existsSync(join(root, 'docs/preview/START-HERE.md'))) throw new Error('Installed guide missing');
   checks.push('POSIX installer in disposable HOME; docs retained (no desktop launch)');
 }
