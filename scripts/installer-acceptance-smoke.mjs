@@ -22,7 +22,9 @@ if (manifest.platform !== process.platform || manifest.arch !== process.arch)
   throw new Error(`Package ${manifest.platform}/${manifest.arch} does not match this runner.`);
 
 const tempRoot = process.platform === 'linux' ? homedir() : tmpdir();
-const fixture = mkdtempSync(join(tempRoot, '.abralo-installer-'));
+// macOS exposes the temp directory through a symlink (`/var` -> `/private/var`).
+// Canonicalize the fixture before comparing installer paths against it.
+const fixture = realpathSync(mkdtempSync(join(tempRoot, '.abralo-installer-')));
 const dataDir = join(fixture, 'preserved-user-data');
 mkdirSync(dataDir, { recursive: true });
 writeFileSync(join(dataDir, 'keep.txt'), 'Keep application data when removing program files.\n');
