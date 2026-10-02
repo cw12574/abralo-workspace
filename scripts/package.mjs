@@ -41,7 +41,7 @@ writeFileSync(
   join(target, 'release.json'),
   JSON.stringify(
     {
-      version: '0.1.0-preview',
+      version: (process.env.ABRALO_VERSION || '0.1.0-preview').replace(/^v/, ''),
       platform: process.platform,
       arch: process.arch,
       node: process.version,

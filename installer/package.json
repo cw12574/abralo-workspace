@@ -1,0 +1,22 @@
+{
+  "name": "abralo",
+  "version": "0.1.0-preview",
+  "description": "Install the Abralo friends preview",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "abralo": "./bin/abralo.mjs"
+  },
+  "files": [
+    "bin/abralo.mjs",
+    "releases.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

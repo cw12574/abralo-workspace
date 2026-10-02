@@ -36,6 +36,10 @@ import { registerOperations } from './operations.js';
 import { quotaForecasts } from './usage.js';
 import { handoffTeam } from './team-handoff.js';
 import { createMaintenance, type MaintenanceConfig } from './maintenance.js';
+
+const chiefOfStaffInstructions =
+  'You are the Chief of Staff, the first employee and owner of forward motion. The workspace has user-stated objectives available in your context. When you receive a proactive idle review, inspect relevant recent workspace activity and identify one high-value next action toward those objectives. Do useful, bounded work yourself or delegate to existing employees; do not merely suggest work that you could safely start. Ask the human a specific question only when a material decision or missing fact blocks progress. If no worthwhile action is justified, say so briefly and wait. Use a new employee or team proposal only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Limit autonomous follow-up chains, avoid parallel work without a concrete reason, and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.';
+
 export async function createApp(
   store: Store,
   options: { supervisor?: Supervisor; staticRoot?: string; maintenance?: MaintenanceConfig } = {},
@@ -481,6 +485,7 @@ if ($selected) { [Console]::WriteLine($selected) }
     const ownedEmployees = store
       .all('SELECT data FROM employees WHERE owner_id=?', u.id)
       .map(({ data }) => JSON.parse(data));
+    const chiefOfStaffId = store.setting('workspace.chiefOfStaff.' + u.id);
     return {
       user: u,
       name: store.setting('workspace.name', 'Workspace'),
@@ -490,8 +495,12 @@ if ($selected) { [Console]::WriteLine($selected) }
         store.setting('workspace.purpose', '') ? [store.setting('workspace.purpose', '')] : [],
       ),
       onboarded: store.setting('workspace.onboarded', false),
-      employees: availableEmployees.filter((e) => !e.deactivatedAt),
-      inactiveEmployees: ownedEmployees.filter((e) => !!e.deactivatedAt),
+      employees: availableEmployees
+        .filter((e) => !e.deactivatedAt)
+        .map((e) => ({ ...e, isChiefOfStaff: e.id === chiefOfStaffId })),
+      inactiveEmployees: ownedEmployees
+        .filter((e) => !!e.deactivatedAt)
+        .map((e) => ({ ...e, isChiefOfStaff: e.id === chiefOfStaffId })),
       conversations: conversations.map((conversation) => ({
         ...conversation,
         archivedAt: store.setting('channel.archived.' + conversation.id),
@@ -767,19 +776,40 @@ if ($selected) { [Console]::WriteLine($selected) }
         409,
         'The agent has stopped accepting work, but its current run is still stopping. Retry deletion shortly.',
       );
+    const rooms = store.all(
+      `SELECT c.id,c.name FROM conversations c
+       JOIN employee_conversations ec ON ec.conversation_id=c.id
+       WHERE ec.employee_id=? AND c.kind='channel'`,
+      id,
+    );
+    const roomMembers = rooms.flatMap((room: any) =>
+      store
+        .all('SELECT user_id FROM members WHERE conversation_id=?', room.id)
+        .map((member: any) => member.user_id as string),
+    );
     const viewers = new Set([
       actor.id,
+      ...roomMembers,
       ...store
         .all('SELECT user_id FROM employee_grants WHERE employee_id=?', id)
         .map((row: any) => row.user_id),
     ]);
     const { paths } = store.db.transaction(() => {
+      for (const room of rooms)
+        store.addMessage(
+          room.id,
+          employee.id,
+          employee.name,
+          'system',
+          `${employee.name} left #${room.name}.`,
+        );
       const purged = purgeConversation(employee.dmId);
       store.run('DELETE FROM employee_grants WHERE employee_id=?', id);
       store.run('DELETE FROM grants WHERE employee_id=?', id);
       store.run('DELETE FROM schedules WHERE employee_id=?', id);
       store.run('DELETE FROM outbox WHERE employee_id=?', id);
       store.run('DELETE FROM native_sessions WHERE employee_id=?', id);
+      store.run('DELETE FROM employee_conversations WHERE employee_id=?', id);
       store.run('DELETE FROM employees WHERE id=?', id);
       return purged;
     })();
@@ -815,8 +845,7 @@ if ($selected) { [Console]::WriteLine($selected) }
         ...body.employee,
         name: 'Chief of Staff',
         role: 'Organizes the team and keeps work moving',
-        instructions:
-          'You are the Chief of Staff, the first employee and owner of forward motion. The workspace has user-stated objectives available in your context. When you receive a proactive idle review, inspect relevant recent workspace activity and identify one high-value next action toward those objectives. Do useful, bounded work yourself or delegate to existing employees; do not merely suggest work that you could safely start. Ask the human a specific question only when a material decision or missing fact blocks progress. If no worthwhile action is justified, say so briefly and wait. Use a new employee or team proposal only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Limit autonomous follow-up chains, avoid parallel work without a concrete reason, and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.',
+        instructions: chiefOfStaffInstructions,
       });
       const objectives = body.objectives?.length ? body.objectives : [body.purpose!.trim()];
       const objectiveText = objectives.map((objective, i) => `${i + 1}. ${objective}`).join('\n');
@@ -858,6 +887,45 @@ if ($selected) { [Console]::WriteLine($selected) }
     })();
     queueMicrotask(() => void supervisor.dispatch());
     return result;
+  });
+  app.post('/api/chief-of-staff', async (req) => {
+    const actor = owner(req);
+    const { harness } = z
+      .object({ harness: z.enum(['codex', 'claude', 'opencode']) })
+      .parse(req.body);
+    const owned = store
+      .all('SELECT id,data FROM employees WHERE owner_id=?', actor.id)
+      .map((row: any) => ({ id: row.id, ...JSON.parse(row.data) }));
+    const priorId = store.setting('workspace.chiefOfStaff.' + actor.id);
+    const prior = owned.find((employee: any) => employee.id === priorId);
+    const existing = prior || owned.find((employee: any) => employee.name === 'Chief of Staff');
+    if (existing && !existing.deactivatedAt) {
+      store.set('workspace.chiefOfStaff.' + actor.id, existing.id);
+      return existing;
+    }
+    if (existing?.deactivatedAt)
+      throw new ApiError(
+        409,
+        'Reactivate the existing Chief of Staff from Archived before creating another.',
+      );
+
+    const employee = store.createEmployee(actor.id, {
+      name: 'Chief of Staff',
+      role: 'Organizes the team and keeps work moving',
+      harness,
+      model: '',
+      cwd: '',
+      instructions: chiefOfStaffInstructions,
+    });
+    store.set('workspace.chiefOfStaff.' + actor.id, employee.id);
+    store.addMessage(
+      employee.dmId,
+      employee.id,
+      employee.name,
+      'system',
+      'A new Chief of Staff has been created. Your saved workspace objectives are still available; the previous private conversation was deleted.',
+    );
+    return employee;
   });
   app.post('/api/humans/:id/conversation', async (req) => {
     const other = store.user((req.params as any).id),

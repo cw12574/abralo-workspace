@@ -26,7 +26,7 @@ export class ClaudeAdapter implements Adapter {
         authenticated: auth.loggedIn && auth.authMethod === 'claude.ai',
         version: 'native Claude Code',
         detail: auth.loggedIn
-          ? `${auth.authMethod} · ${auth.subscriptionType || auth.apiProvider}`
+          ? `Sign-in detected: ${auth.authMethod} · ${auth.subscriptionType || auth.apiProvider}. Abralo will confirm access when a task runs.`
           : 'Sign in with Claude Code',
         models: [
           { id: '', name: 'Provider default' },
@@ -272,6 +272,11 @@ export class ClaudeAdapter implements Adapter {
         input.emit({ type: 'complete', data: { cancelled: true } });
         return;
       }
+      const message = e instanceof Error ? e.message : String(e);
+      if (/oauth session expired|could not be refreshed|refresh token.*expired/i.test(message))
+        throw new Error(
+          'Claude sign-in expired. Sign in again with Claude Code, then retry this task.',
+        );
       throw providerLimitFromError(e, 'claude') || e;
     } finally {
       input.signal.removeEventListener('abort', abort);

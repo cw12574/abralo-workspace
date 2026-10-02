@@ -427,6 +427,7 @@ function App() {
     ),
     [thread, setThread] = useState<Message | null>(null),
     [modal, setModal] = useState(''),
+    [settingsTab, setSettingsTab] = useState('general'),
     [confirmAction, setConfirmAction] = useState<any>(null),
     [mobile, setMobile] = useState(false),
     [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'),
@@ -850,10 +851,10 @@ function App() {
     return (
       <Onboarding
         providers={providers}
-        userName={workspace.user.name === 'You' ? '' : workspace.user.name}
         refreshProviders={(harness?: string) =>
           api('/providers' + (harness ? '?check=' + harness : '')).then(setProviders)
         }
+        userName={workspace.user.name === 'You' ? '' : workspace.user.name}
         onDone={async (id: string) => {
           await refresh();
           choose(id);
@@ -898,7 +899,10 @@ function App() {
           className="workspace-name"
           aria-label="Workspace settings"
           title="Workspace settings"
-          onClick={() => setModal('settings')}
+          onClick={() => {
+            setSettingsTab('general');
+            setModal('settings');
+          }}
         >
           <span className="brand-mark">▦</span>
           <strong>{workspace.name}</strong>
@@ -949,6 +953,14 @@ function App() {
               <Plus size={15} />
             </button>
           </div>
+          {workspace.user.role === 'owner' &&
+            !workspace.employees.some((e: any) => e.isChiefOfStaff) &&
+            !workspace.inactiveEmployees?.some((e: any) => e.isChiefOfStaff) && (
+              <button className="nav-row" onClick={() => setModal('chief-of-staff')}>
+                <Plus size={16} />
+                <span>Create Chief of Staff</span>
+              </button>
+            )}
           {workspace.employees.map((e: Employee) => (
             <AgentNavigationRow
               key={e.id}
@@ -1339,6 +1351,9 @@ function App() {
                 employees={workspace.employees}
                 conversations={workspace.conversations}
                 providers={providers}
+                refreshProviders={(harness?: string) =>
+                  api('/providers' + (harness ? '?check=' + harness : '')).then(setProviders)
+                }
                 user={workspace.user}
                 onOpenConversation={choose}
                 onOpenMessage={openMessage}
@@ -1427,6 +1442,11 @@ function App() {
                           employees={workspace.employees}
                           conversations={workspace.conversations}
                           providers={providers}
+                          refreshProviders={(harness?: string) =>
+                            api('/providers' + (harness ? '?check=' + harness : '')).then(
+                              setProviders,
+                            )
+                          }
                           user={workspace.user}
                           onOpenConversation={choose}
                           onOpenMessage={openMessage}
@@ -1446,7 +1466,14 @@ function App() {
           <div className="empty">
             <Users size={32} />
             <h2>Your workspace is ready</h2>
-            <p>Add an employee or create a room to begin.</p>
+            <p>Create a Chief of Staff to coordinate your workspace, or add another employee.</p>
+            {workspace.user.role === 'owner' &&
+              !workspace.employees.some((e: any) => e.isChiefOfStaff) &&
+              !workspace.inactiveEmployees?.some((e: any) => e.isChiefOfStaff) && (
+                <button className="secondary" onClick={() => setModal('chief-of-staff')}>
+                  Create Chief of Staff
+                </button>
+              )}
             <button className="primary" onClick={() => setModal('employee')}>
               Add employee
             </button>
@@ -1519,12 +1546,34 @@ function App() {
           refresh={refresh}
         />
       )}
-      {modal === 'usage' && <Usage providers={providers} onClose={() => setModal('')} />}
+      {modal === 'usage' && (
+        <Usage
+          providers={providers}
+          onClose={() => setModal('')}
+          onConnect={() => {
+            setSettingsTab('accounts');
+            setModal('settings');
+          }}
+        />
+      )}
+      {modal === 'chief-of-staff' && (
+        <CreateChiefOfStaff
+          providers={providers}
+          onClose={() => setModal('')}
+          onCreated={async (id: string) => {
+            await refresh();
+            setModal('');
+            choose(id);
+          }}
+          fail={setError}
+        />
+      )}
       {modal === 'settings' && (
         <SettingsPanel
           workspace={workspace}
           onClose={() => setModal('')}
           refresh={refresh}
+          initialTab={settingsTab}
           onMemorySource={async (sourceId: string) => {
             try {
               const message = await api(
@@ -1655,14 +1704,14 @@ function Onboarding({
               ? 'What should I call you?'
               : step === 1
                 ? `Connect ${name}.`
-                : 'What would you like to achieve?'}
+                : 'What should your team work towards?'}
           </h1>
           <p>
             {step === 0
               ? 'Your Chief of Staff is your first employee. Share what matters, and build the right workforce as you go.'
               : step === 1
                 ? 'Use your existing agent account. Your provider’s usage limits apply.'
-                : 'Give your team a few outcomes to work towards. Clear targets help the Chief of Staff spot useful next steps.'}
+                : 'You can set workspace outcomes before choosing a project. Describe the results you want; your Chief of Staff can help turn them into projects and next steps.'}
           </p>
           {error && <p className="error">{error}</p>}
           {step === 0 ? (
@@ -1724,7 +1773,12 @@ function Onboarding({
                 {provider?.detail || 'Checking this host…'}
               </p>
               {(!provider?.authenticated || harness === 'opencode') && (
-                <ProviderLogin harness={harness} fail={fail} />
+                <ProviderLogin
+                  harness={harness}
+                  provider={provider}
+                  fail={fail}
+                  refresh={(check?: string) => refreshProviders(check)}
+                />
               )}
               <button
                 className="quiet-button"
@@ -1927,6 +1981,7 @@ function Chat({
   employees,
   conversations,
   providers,
+  refreshProviders,
   user,
   onOpenConversation,
   onOpenMessage,
@@ -2509,7 +2564,12 @@ function Chat({
         <div className="conversation-actions">
           {employee &&
             runs.some((r) => r.error && /auth|sign.in|login|credential/i.test(r.error)) && (
-              <ProviderLogin harness={employee.harness} fail={fail} />
+              <ProviderLogin
+                harness={employee.harness}
+                provider={providers.find((p: any) => p.harness === employee.harness)}
+                fail={fail}
+                refresh={(check?: string) => refreshProviders(check)}
+              />
             )}
           {proposals.map((p) => (
             <div className="proposal inline-card" key={p.id}>
@@ -3674,6 +3734,52 @@ function Decision({ decision: d, fail }: any) {
     </div>
   );
 }
+function CreateChiefOfStaff({ providers, onClose, onCreated, fail }: any) {
+  const [harness, setHarness] = useState(
+    providers.find((provider: any) => provider.authenticated)?.harness || 'codex',
+  );
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title="Create Chief of Staff" onClose={onClose} busy={busy}>
+      <form
+        className="ui-stack"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setBusy(true);
+          try {
+            const employee = await api('/chief-of-staff', { harness });
+            await onCreated(employee.dmId);
+          } catch (error: any) {
+            fail(error.message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <p>Your saved workspace objectives will be available to the new Chief of Staff.</p>
+        <label>
+          Provider
+          <select value={harness} onChange={(event) => setHarness(event.target.value)}>
+            {(['codex', 'claude', 'opencode'] as const).map((provider) => (
+              <option key={provider} value={provider}>
+                {names[provider]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <footer>
+          <button type="button" className="secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button className="primary" disabled={busy}>
+            {busy ? 'Creating…' : 'Create Chief of Staff'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  );
+}
+
 function AddEmployee({ providers, onClose, onCreated }: any) {
   const pending = useRef(false);
   const created = useRef<{ id: string; dmId: string } | null>(null);
@@ -4338,6 +4444,16 @@ function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
           <input name="role" defaultValue={e.role} />
         </label>
         <label>
+          Provider
+          <select name="harness" defaultValue={e.harness}>
+            {(['codex', 'claude', 'opencode'] as const).map((harness) => (
+              <option key={harness} value={harness}>
+                {names[harness]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Model
           <input name="model" defaultValue={e.model} placeholder="Provider default" />
         </label>
@@ -4413,16 +4529,35 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
   const [info, setInfo] = useState<any>(null),
     [method, setMethod] = useState<any>(null),
     [authorization, setAuthorization] = useState<any>(null);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
   const connected = provider?.authenticated === true;
   const unknown = provider?.authenticated == null;
   const unavailable = provider?.installed === false;
   async function refreshStatus() {
     try {
-      await refresh(harness === 'opencode' ? harness : undefined);
+      if (typeof refreshRef.current !== 'function')
+        throw new Error('Account status refresh is unavailable.');
+      await refreshRef.current(harness === 'opencode' ? harness : undefined);
     } catch (e: any) {
       fail(e.message);
     }
   }
+  useEffect(() => {
+    if (connected && info) setInfo(null);
+  }, [connected, info]);
+  useEffect(() => {
+    if (!info || connected || (!info.userCode && !info.authUrl && !info.verificationUrl)) return;
+    let checks = 0;
+    const timer = window.setInterval(() => {
+      if (++checks >= 36) {
+        window.clearInterval(timer);
+        return;
+      }
+      void refreshStatus();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [info, connected, harness]);
   return (
     <div className="inline-card ui-stack account-card">
       <div className="account-card-heading">
@@ -4432,7 +4567,9 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
           {checking
             ? 'Checking…'
             : connected
-              ? 'Connected'
+              ? harness === 'claude' && provider?.detail?.startsWith('Sign-in detected:')
+                ? 'Sign-in found; access checked on first task'
+                : 'Connected'
               : unavailable
                 ? 'Not installed'
                 : unknown
@@ -4450,7 +4587,9 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
         {!connected && !unavailable && (
           <button
             className="secondary"
-            disabled={checking}
+            disabled={
+              checking || (!!info && !!(info.userCode || info.authUrl || info.verificationUrl))
+            }
             onClick={async () => {
               try {
                 setInfo(await api(`/providers/${harness}/login`, {}));
@@ -4460,7 +4599,7 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
               }
             }}
           >
-            {unknown ? 'Sign in' : 'Sign in'}
+            {info ? 'Sign-in started' : 'Start provider sign-in'}
           </button>
         )}
         <button className="quiet-button" disabled={checking} onClick={refreshStatus}>
@@ -4471,8 +4610,14 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
       {info?.userCode && <code>{info.userCode}</code>}
       {(info?.authUrl || info?.verificationUrl) && (
         <a target="_blank" rel="noreferrer" href={info.authUrl || info.verificationUrl}>
-          Open provider sign-in
+          {harness === 'codex' ? 'Continue to Codex device sign-in' : 'Open provider sign-in'}
         </a>
+      )}
+      {info?.userCode && harness === 'codex' && (
+        <p className="caption">
+          This device code is started by Abralo’s bundled Codex CLI. Approve it only if you just
+          started this sign-in here.
+        </p>
       )}
       {harness === 'claude' && info && (
         <form
@@ -4857,7 +5002,7 @@ function EmployeeUsageChart({ totals }: { totals: Record<string, number> }) {
   );
 }
 
-function Usage({ providers, onClose }: any) {
+function Usage({ providers, onClose, onConnect }: any) {
   const [data, setData] = useState<any>({ runs: [] });
   const [accounts, setAccounts] = useState<any>({ providers, forecasts: {}, trends: {} });
   useEffect(() => {
@@ -4889,7 +5034,13 @@ function Usage({ providers, onClose }: any) {
         {accounts.providers.map((p: any) => (
           <div className="usage-account" key={p.harness}>
             <strong>{names[p.harness]}</strong>
-            <small>{p.detail}</small>
+            {p.authenticated ? (
+              <small>{p.detail}</small>
+            ) : (
+              <button className="quiet-button" onClick={onConnect}>
+                {`Sign in with ${names[p.harness]}`}
+              </button>
+            )}
             {p.limits ? (
               Object.entries(p.limits.rateLimitsByLimitId || { default: p.limits.rateLimits })
                 .filter(([, bucket]) => Boolean(bucket))
@@ -5154,10 +5305,10 @@ function PermissionMenu({ employee, fail }: any) {
     </>
   );
 }
-function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail }: any) {
+function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, initialTab }: any) {
   const [notificationStatus, setNotificationStatus] = useState('');
   const [startup, setStartup] = useState<any>(null);
-  const [tab, setTab] = useState('general'),
+  const [tab, setTab] = useState(initialTab || 'general'),
     [prefs, setPrefs] = useState<any>({ enabled: false, sound: true, privatePreview: false }),
     [memories, setMemories] = useState<any[]>([]),
     [accountProviders, setAccountProviders] = useState<any[]>([]),
@@ -5377,8 +5528,12 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail }:
                 }}
               >
                 <LogOut size={14} />
-                Sign out
+                Sign out of Abralo
               </button>
+              <p className="caption">
+                This signs you out of the workspace. It does not sign you out of connected AI
+                providers.
+              </p>
             </form>
           ) : tab === 'accounts' ? (
             <>
