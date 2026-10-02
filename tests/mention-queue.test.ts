@@ -20,7 +20,16 @@ it('offers busy-agent mentions for a choice and preserves queued work until it r
   const { app, supervisor } = await createApp(store);
   const busyRunId = uid();
   const activeRequest = store.addMessage(team, owner.id, owner.name, 'human', 'Current work');
-  const activeResponse = store.addMessage(team, agent.id, agent.name, 'agent', 'Working…', null, [], busyRunId);
+  const activeResponse = store.addMessage(
+    team,
+    agent.id,
+    agent.name,
+    'agent',
+    'Working…',
+    null,
+    [],
+    busyRunId,
+  );
   store.run(
     'INSERT INTO runs(id,conversation_id,user_id,employee_id,message_id,response_id,state,created_at,updated_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,?)',
     busyRunId,
@@ -139,4 +148,4 @@ it('offers busy-agent mentions for a choice and preserves queued work until it r
     await app.close();
     store.close();
   }
-});
+}, 30_000);

@@ -1,6 +1,6 @@
 {
   "name": "abralo",
-  "version": "0.1.1-preview",
+  "version": "0.1.2-preview",
   "description": "Install the Abralo friends preview",
   "license": "Apache-2.0",
   "type": "module",

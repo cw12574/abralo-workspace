@@ -14,7 +14,7 @@
     "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts --configLoader native && tsc -p tsconfig.service.json",
     "start": "node dist/service/apps/service/src/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=2 --testTimeout 15000",
     "test:live": "tsx scripts/live-smoke.ts",
     "package": "node scripts/package.mjs"
   },

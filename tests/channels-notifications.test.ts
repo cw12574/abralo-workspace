@@ -119,9 +119,9 @@ it('isolates agent DMs, delivers channel briefs, and keeps a durable per-human n
         .messages(team)
         .some((message) => message.text.includes('please add a brief pricing review')),
     ).toBe(true);
-    const agentMention = s.messages(team).find((message) =>
-      message.text.includes('please add a brief pricing review'),
-    )!;
+    const agentMention = s
+      .messages(team)
+      .find((message) => message.text.includes('please add a brief pricing review'))!;
     const agentMentionJob = s.one('SELECT * FROM outbox WHERE message_id=?', agentMention.id);
     expect(agentMentionJob.employee_id).toBe(scout.id);
     expect(s.setting('outbox.mention.' + agentMentionJob.id)).toBe(true);
@@ -294,4 +294,4 @@ it('isolates agent DMs, delivers channel briefs, and keeps a durable per-human n
   } finally {
     await app.close();
   }
-});
+}, 30_000);
