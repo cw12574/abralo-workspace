@@ -87,7 +87,7 @@ jobs:
           done
           [[ "$count" -eq 4 ]] || { echo "Expected four platform packages, found $count" >&2; exit 1; }
           find release-assets -type f -name '*.tar.gz' -size +2047M -print -quit | grep -q . && {
-            echo 'A release asset exceeds GitHub's 2 GiB per-file limit.' >&2
+            echo "A release asset exceeds GitHub's 2 GiB per-file limit." >&2
             exit 1
           } || true
           (cd release-assets && sha256sum *.tar.gz > SHA256SUMS)
