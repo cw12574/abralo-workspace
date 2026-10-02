@@ -2,7 +2,13 @@
 
 Abralo is a local, cross-platform workspace where people and AI agents work together through direct conversations, shared rooms, and project context. This new product generation centers the shared conversation experience. Start with the [tester guide](docs/preview/START-HERE.md). See [contributing](CONTRIBUTING.md) and the [security policy](SECURITY.md). This source tree is licensed under [Apache-2.0](LICENSE).
 
-Requires Node 24.16+ (24.x) for source development. `pnpm install`, `pnpm build`, `pnpm test`, `pnpm start`. `pnpm dev` runs the service from source; `pnpm web` runs Vite. The service serves built browser assets at http://127.0.0.1:4317.
+## Install the friends preview
+
+For normal use, download the matching package artifact from the [latest successful build](https://github.com/cw12574/abralo-workspace/actions/workflows/build.yml). Choose the artifact for your operating system and CPU, download it, and extract it. Follow [the tester guide](docs/preview/START-HERE.md). Do not use GitHub's **Download ZIP** source archive or run `pnpm build` to install the app: those are for developers and do not include the packaged runtime. A packaged app directory contains `release.json`, `runtime/`, and `scripts/`.
+
+## Source development
+
+Requires Node 24.16+ (24.x). Run `pnpm install`, `pnpm build`, `pnpm test`, and `pnpm start`. `pnpm dev` runs the service from source; `pnpm web` runs Vite. The service serves built browser assets at http://127.0.0.1:4317. `pnpm build` compiles the app but does not create a distributable package or the `runtime/` directory; packaging is a separate step.
 
 Data is stored under the OS user application-data directory, outside the checkout. Set `WORKSPACE_DATA_DIR` for an isolated test instance and `WORKSPACE_PORT` for another port. Never use a live database in OneDrive or a network share.
 
