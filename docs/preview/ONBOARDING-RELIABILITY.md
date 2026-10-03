@@ -2,9 +2,9 @@
 
 ## Incident and confidence
 
-Jayanth reported “Failed to fetch” on the connection step in v0.1.2-preview, followed by unresponsive sign-in/status controls. His screenshot contents and service log have not been supplied here, so the exact incident cause remains unconfirmed.
+A preview tester reported “Failed to fetch” on the connection step in v0.1.2-preview, followed by unresponsive sign-in/status controls. His screenshot contents and service log have not been supplied here, so the exact incident cause remains unconfirmed.
 
-Review and fault injection found an unhandled Codex stdin error path capable of terminating the service, shared status checks that waited on unrelated providers, and missing bounds/recovery in OpenCode startup. A clean-profile runtime probe also found that the source pnpm layout did not resolve the bundled Claude binary. These are verified code defects; none alone is proof of Jayanth's incident cause.
+Review and fault injection found an unhandled Codex stdin error path capable of terminating the service, shared status checks that waited on unrelated providers, and missing bounds/recovery in OpenCode startup. A clean-profile runtime probe also found that the source pnpm layout did not resolve the bundled Claude binary. These are verified code defects; none alone is proof of the tester's incident cause.
 
 ## Changes in this branch
 
@@ -49,7 +49,7 @@ No live model calls, other-platform runs, external telemetry, deployment or rele
 2. Pass browser fault injection: local-service failure and recovery, sign-in delay, cancellation, device fallback, automatic completion, reload and OpenCode model selection.
 3. Run the native clean-profile probe, installer/lifecycle checks and packaged browser checks on Windows x64, Linux x64, macOS Intel and Apple silicon. A local Windows run does not replace that matrix.
 4. Perform opt-in live-account acceptance for each supported authentication method: new/returning account, declined login, expired login, unavailable entitlement, quota exhaustion, slow/offline network and successful first task. Test Safari on macOS as well as Chromium. Automated fixtures do not establish these outcomes.
-5. Obtain Jayanth's OS/browser and redacted service log, reproduce his failure or identify the incident cause, then have him retest the candidate.
+5. Obtain the tester's OS/browser and redacted service log, reproduce his failure or identify the incident cause, then have him retest the candidate.
 6. Resolve the Claude distribution/authentication route before expanding public availability.
 
 ## Remaining work for broader scale
