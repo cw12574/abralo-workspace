@@ -11,12 +11,26 @@ export class OpenCodeAdapter implements Adapter {
   async start() {
     if (this.starting) return this.starting;
     this.starting = new Promise<void>((resolve, reject) => {
-      this.child = launch('opencode', ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
+      const child = launch('opencode', ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
         env: { ...process.env, OPENCODE_SERVER_PASSWORD: this.password },
       });
+      this.child = child;
       let buffer = '';
-      const timer = setTimeout(() => reject(new Error('OpenCode did not start')), 30000);
-      this.child.stdout.on('data', (d: Buffer) => {
+      const fail = (error: Error) => {
+        clearTimeout(timer);
+        if (this.child === child) {
+          this.starting = undefined;
+          this.child = undefined;
+          this.url = '';
+        }
+        child.kill();
+        reject(error);
+      };
+      const timer = setTimeout(() => {
+        fail(new Error('OpenCode did not start. Try connecting again.'));
+        child.kill();
+      }, 15000);
+      child.stdout.on('data', (d: Buffer) => {
         buffer = (buffer + d.toString()).slice(-10000);
         const m = buffer.match(/https?:\/\/127\.0\.0\.1:\d+/);
         if (m) {
@@ -25,24 +39,27 @@ export class OpenCodeAdapter implements Adapter {
           resolve();
         }
       });
-      this.child.stderr.on('data', () => {});
-      this.child.on('error', (e: Error) => {
-        clearTimeout(timer);
-        this.starting = undefined;
-        reject(e);
-      });
-      this.child.on('exit', () => {
-        clearTimeout(timer);
-        this.starting = undefined;
-      });
+      child.stderr.on('data', () => {});
+      child.stdin.on('error', fail);
+      child.on('error', fail);
+      child.on('exit', () => fail(new Error('OpenCode stopped. Try connecting again.')));
     });
-    return this.starting;
+    const attempt = this.starting;
+    try {
+      return await attempt;
+    } catch (error) {
+      if (this.starting === attempt) this.starting = undefined;
+      throw error;
+    }
   }
   async api(path: string, method = 'GET', body?: any, directory?: string) {
     await this.start();
     const url = new URL(path, this.url);
     if (directory) url.searchParams.set('directory', directory);
     const r = await fetch(url, {
+      signal: AbortSignal.timeout(
+        path.startsWith('/provider') || path.startsWith('/auth') ? 20000 : 90000,
+      ),
       method,
       headers: {
         authorization: `Basic ${Buffer.from('opencode:' + this.password).toString('base64')}`,
@@ -88,7 +105,8 @@ export class OpenCodeAdapter implements Adapter {
         installed: true,
         authenticated: null,
         version: '',
-        detail: String(e),
+        detail:
+          'OpenCode could not check its providers. Check your connection and try again, or restart Abralo.',
       };
     }
   }

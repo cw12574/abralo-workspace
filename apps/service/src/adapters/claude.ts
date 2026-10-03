@@ -18,8 +18,17 @@ export class ClaudeAdapter implements Adapter {
       const r = await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
         windowsHide: true,
         timeout: 20000,
+      }).catch((error) => {
+        // The CLI exits nonzero when signed out but still returns structured
+        // status. A spawn/timeout/parse failure is an unknown state, not logout.
+        if (error.stdout) {
+          const status = JSON.parse(error.stdout);
+          if (status.loggedIn === false) return { stdout: error.stdout };
+        }
+        throw error;
       });
       const auth = JSON.parse(r.stdout);
+      if (typeof auth.loggedIn !== 'boolean') throw new Error('Invalid Claude status');
       return {
         harness: 'claude',
         installed: true,
@@ -39,9 +48,9 @@ export class ClaudeAdapter implements Adapter {
       return {
         harness: 'claude',
         installed: true,
-        authenticated: false,
+        authenticated: null,
         version: '',
-        detail: 'Sign in with Claude Code on this host.',
+        detail: 'Claude Code could not check your account. Try again, or restart Abralo.',
       };
     }
   }

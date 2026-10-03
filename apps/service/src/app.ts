@@ -27,7 +27,12 @@ import {
 import { Supervisor } from './supervisor.js';
 import { EmployeeInput, SendMessage } from '../../../packages/contracts/src/index.js';
 import { summaryEvent } from '../../../packages/contracts/src/activity-summary.js';
-import { ensureDirectory, execFileAsync, launch } from '../../../packages/host/src/index.js';
+import {
+  ensureDirectory,
+  execFileAsync,
+  launch,
+  killTree,
+} from '../../../packages/host/src/index.js';
 import { CodexAdapter } from './adapters/codex.js';
 import { registerWorkspaceTools } from './workspace-tools.js';
 import { registerNotifications } from './notifications.js';
@@ -558,13 +563,45 @@ if ($selected) { [Console]::WriteLine($selected) }
   });
   app.get('/api/providers', async (req) => {
     owner(req);
-    return supervisor.infos((req.query as any).check);
+    const { check } = z
+      .object({ check: z.enum(['codex', 'claude', 'opencode']).optional() })
+      .parse(req.query);
+    return supervisor.infos(check);
   });
   app.post('/api/providers/codex/login', async (req) => {
     owner(req);
-    return (supervisor.adapters.codex as CodexAdapter).login();
+    const { type } = z
+      .object({ type: z.enum(['chatgpt', 'chatgptDeviceCode']).default('chatgpt') })
+      .parse(req.body || {});
+    return (supervisor.adapters.codex as CodexAdapter).login(type);
+  });
+  app.post('/api/providers/codex/cancel', async (req) => {
+    owner(req);
+    await (supervisor.adapters.codex as CodexAdapter).cancelLogin();
+    return { ok: true };
   });
   let claudeLogin: any = null;
+  const stopClaudeLogin = async () => {
+    const attempt = claudeLogin;
+    if (!attempt) return;
+    claudeLogin = null;
+    clearTimeout(attempt.timer);
+    if (attempt.process.pid) await killTree(attempt.process.pid);
+  };
+  app.get('/api/providers/claude/login', async (req) => {
+    owner(req);
+    if (!claudeLogin)
+      throw new ApiError(
+        409,
+        'Claude sign-in ended. Check your connection or start sign-in again.',
+      );
+    return claudeLogin.info;
+  });
+  app.post('/api/providers/claude/cancel', async (req) => {
+    owner(req);
+    await stopClaudeLogin();
+    return { ok: true };
+  });
   app.post('/api/providers/claude/login', async (req) => {
     owner(req);
     if (claudeLogin) return claudeLogin.info;
@@ -574,6 +611,11 @@ if ($selected) { [Console]::WriteLine($selected) }
         'Complete the native Claude Code sign-in in your browser, then check the connection.',
     };
     claudeLogin = { process, info };
+    const attempt = claudeLogin;
+    attempt.timer = setTimeout(() => {
+      if (claudeLogin === attempt) void stopClaudeLogin();
+    }, 10 * 60000);
+    attempt.timer.unref();
     let output = '';
     const capture = (d: Buffer) => {
       output = (output + d.toString()).slice(-8000);
@@ -584,13 +626,19 @@ if ($selected) { [Console]::WriteLine($selected) }
     };
     process.stdout.on('data', capture);
     process.stderr.on('data', capture);
-    process.on('error', () => {
-      claudeLogin = null;
-    });
-    process.on('exit', () => {
-      claudeLogin = null;
-    });
+    const ended = () => {
+      clearTimeout(attempt.timer);
+      if (claudeLogin === attempt) claudeLogin = null;
+    };
+    process.on('error', ended);
+    process.stdin.on('error', ended);
+    process.on('exit', ended);
     await new Promise((r) => setTimeout(r, 1000));
+    if (claudeLogin !== attempt)
+      throw new ApiError(
+        409,
+        'Claude sign-in ended. Check your connection or start sign-in again.',
+      );
     return info;
   });
   app.post('/api/providers/claude/code', async (req) => {
@@ -1822,6 +1870,7 @@ if ($selected) { [Console]::WriteLine($selected) }
   }
   app.addHook('onClose', async () => {
     maintenance.close();
+    await stopClaudeLogin();
     await supervisor.dispose();
     store.close();
   });

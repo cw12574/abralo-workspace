@@ -665,7 +665,7 @@ function App() {
   useEffect(() => {
     if (workspace?.user.role === 'owner')
       api('/providers')
-        .then(setProviders)
+        .then((next) => setProviders((previous) => (previous.length ? previous : next)))
         .catch((e) => setError(e.message));
   }, [workspace?.user?.id]);
   useEffect(() => {
@@ -850,10 +850,20 @@ function App() {
   if (!workspace.onboarded && workspace.user.role === 'owner')
     return (
       <Onboarding
+        draftKey={'abralo.onboarding.' + workspace.user.id}
         providers={providers}
-        refreshProviders={(harness?: string) =>
-          api('/providers' + (harness ? '?check=' + harness : '')).then(setProviders)
-        }
+        refreshProviders={async (harness?: string) => {
+          const next = await api('/providers' + (harness ? '?check=' + harness : ''));
+          setProviders((previous) =>
+            harness
+              ? [
+                  ...previous.filter((p) => p.harness !== harness),
+                  ...next.filter((p: ProviderInfo) => p.harness === harness),
+                ]
+              : next,
+          );
+          setError('');
+        }}
         userName={workspace.user.name === 'You' ? '' : workspace.user.name}
         onDone={async (id: string) => {
           await refresh();
@@ -1663,6 +1673,7 @@ function Login({ onDone, error }: { onDone: () => Promise<any>; error: string })
   );
 }
 function Onboarding({
+  draftKey,
   providers,
   refreshProviders,
   onDone,
@@ -1670,20 +1681,46 @@ function Onboarding({
   error,
   userName: initialUserName,
 }: any) {
+  const [draft] = useState(() => {
+    try {
+      const value = JSON.parse(sessionStorage.getItem(draftKey) || '{}');
+      return {
+        userName: typeof value.userName === 'string' ? value.userName.slice(0, 80) : '',
+        harness: ['codex', 'claude', 'opencode'].includes(value.harness) ? value.harness : 'codex',
+        objectives:
+          Array.isArray(value.objectives) &&
+          value.objectives.every((v: unknown) => typeof v === 'string')
+            ? value.objectives
+            : [''],
+      };
+    } catch {
+      return { userName: '', harness: 'codex', objectives: [''] };
+    }
+  });
   const [checking, setChecking] = useState(false),
     [checked, setChecked] = useState(false);
-  const [step, setStep] = useState(0),
+  const [step, setStep] = useState(draft.userName ? 1 : 0),
     [name] = useState('Chief of Staff'),
-    [harness, setHarness] = useState('codex'),
+    [harness, setHarness] = useState<string>(draft.harness),
     [model, setModel] = useState(''),
-    [objectives, setObjectives] = useState(['']),
+    [objectives, setObjectives] = useState<string[]>(
+      draft.objectives.length ? draft.objectives : [''],
+    ),
     [objectiveError, setObjectiveError] = useState(''),
     [userName, setUserName] = useState(
-      initialUserName && initialUserName !== 'You' ? initialUserName : '',
+      draft.userName || (initialUserName && initialUserName !== 'You' ? initialUserName : ''),
     ),
     [busy, setBusy] = useState(false),
     [login, setLogin] = useState<any>(null);
   const provider = providers.find((p: ProviderInfo) => p.harness === harness);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({ userName, harness, objectives }));
+    } catch {}
+  }, [draftKey, userName, harness, objectives]);
+  useEffect(() => {
+    if (step === 1) void refreshProviders(harness).catch((e: Error) => fail(e.message));
+  }, [step, harness]);
   return (
     <main className={`onboarding step-${step}`}>
       <header>
@@ -1750,7 +1787,8 @@ function Onboarding({
                     className={`provider-option ${harness === p ? 'active' : ''}`}
                     onClick={() => {
                       setHarness(p);
-                      void refreshProviders(p);
+                      setChecked(false);
+                      fail('');
                       setModel('');
                       setLogin(null);
                     }}
@@ -1774,6 +1812,7 @@ function Onboarding({
               </p>
               {(!provider?.authenticated || harness === 'opencode') && (
                 <ProviderLogin
+                  key={harness}
                   harness={harness}
                   provider={provider}
                   fail={fail}
@@ -1806,13 +1845,32 @@ function Onboarding({
                     : 'Not connected yet. Complete sign-in, then check again.'}
                 </p>
               )}
+              {harness === 'opencode' && provider?.authenticated && (
+                <label>
+                  OpenCode model
+                  <select value={model} onChange={(e) => setModel(e.target.value)}>
+                    <option value="">Choose a model from your connected provider</option>
+                    {provider.models?.map((m: { id: string; name: string }) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  {!provider.models?.length && (
+                    <span>
+                      No models are available yet. Check the provider connection or choose another
+                      provider.
+                    </span>
+                  )}
+                </label>
+              )}
               <div className="form-actions">
                 <button className="quiet-button" onClick={() => setStep(0)}>
                   Back
                 </button>
                 <button
                   className="primary"
-                  disabled={!provider?.authenticated}
+                  disabled={!provider?.authenticated || (harness === 'opencode' && !model)}
                   onClick={() => setStep(2)}
                 >
                   Continue
@@ -1842,6 +1900,9 @@ function Onboarding({
                     },
                   });
                   await onDone(employee.dmId);
+                  try {
+                    sessionStorage.removeItem(draftKey);
+                  } catch {}
                 } catch (e: any) {
                   fail(e.message);
                 } finally {
@@ -4525,38 +4586,109 @@ function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
     </Modal>
   );
 }
-function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
+function ProviderLogin({
+  harness,
+  fail: reportFailure,
+  provider,
+  checking,
+  refresh,
+}: {
+  harness: string;
+  fail: (message: string) => void;
+  provider?: ProviderInfo;
+  checking?: boolean;
+  refresh: (harness?: string) => Promise<unknown>;
+}) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const fail = (message: string) => {
+    if (mounted.current) reportFailure(message);
+  };
   const [info, setInfo] = useState<any>(null),
     [method, setMethod] = useState<any>(null),
     [authorization, setAuthorization] = useState<any>(null);
+  const [working, setWorking] = useState(false);
+  const statusInFlight = useRef(false);
+  const loginInFlight = useRef(false);
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   const connected = provider?.authenticated === true;
   const unknown = provider?.authenticated == null;
   const unavailable = provider?.installed === false;
   async function refreshStatus() {
+    if (statusInFlight.current) return;
+    statusInFlight.current = true;
+    setWorking(true);
     try {
-      if (typeof refreshRef.current !== 'function')
-        throw new Error('Account status refresh is unavailable.');
-      await refreshRef.current(harness === 'opencode' ? harness : undefined);
+      await refreshRef.current(harness);
+      fail('');
+      if (harness === 'claude' && info && !connected) {
+        try {
+          const current = await api('/providers/claude/login');
+          if (current.authUrl && current.authUrl !== info.authUrl) setInfo(current);
+        } catch (error: any) {
+          if (error.status === 409) setInfo(null);
+          else throw error;
+        }
+      }
     } catch (e: any) {
       fail(e.message);
+    } finally {
+      statusInFlight.current = false;
+      setWorking(false);
+    }
+  }
+  async function startSignIn(type?: string) {
+    if (loginInFlight.current) return;
+    loginInFlight.current = true;
+    setWorking(true);
+    fail('');
+    try {
+      setInfo(await api(`/providers/${harness}/login`, type ? { type } : {}));
+    } catch (e: any) {
+      fail(e.message);
+    } finally {
+      loginInFlight.current = false;
+      setWorking(false);
     }
   }
   useEffect(() => {
-    if (connected && info) setInfo(null);
+    if (connected && info) {
+      setInfo(null);
+      setAuthorization(null);
+      setMethod(null);
+    }
   }, [connected, info]);
   useEffect(() => {
-    if (!info || connected || (!info.userCode && !info.authUrl && !info.verificationUrl)) return;
-    let checks = 0;
-    const timer = window.setInterval(() => {
-      if (++checks >= 36) {
-        window.clearInterval(timer);
+    if (!info || connected || harness === 'opencode') return;
+    let stopped = false;
+    let timer: number;
+    const deadline = Date.now() + 10 * 60000;
+    const poll = async () => {
+      if (stopped) return;
+      if (Date.now() >= deadline) {
+        setInfo(null);
+        fail('Sign-in has not completed. Start sign-in again when you are ready.');
         return;
       }
+      await refreshStatus();
+      if (!stopped) timer = window.setTimeout(poll, 5000);
+    };
+    timer = window.setTimeout(poll, 1500);
+    const focused = () => {
       void refreshStatus();
-    }, 5000);
-    return () => window.clearInterval(timer);
+    };
+    window.addEventListener('focus', focused);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', focused);
+    };
   }, [info, connected, harness]);
   return (
     <div className="inline-card ui-stack account-card">
@@ -4588,29 +4720,79 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
           <button
             className="secondary"
             disabled={
-              checking || (!!info && !!(info.userCode || info.authUrl || info.verificationUrl))
+              checking ||
+              working ||
+              (!!info && !!(info.userCode || info.authUrl || info.verificationUrl))
             }
-            onClick={async () => {
-              try {
-                setInfo(await api(`/providers/${harness}/login`, {}));
-                await refreshStatus();
-              } catch (e: any) {
-                fail(e.message);
-              }
-            }}
+            onClick={() => void startSignIn()}
           >
-            {info ? 'Sign-in started' : 'Start provider sign-in'}
+            {working ? 'Connecting…' : info ? 'Sign-in started' : 'Start provider sign-in'}
           </button>
         )}
-        <button className="quiet-button" disabled={checking} onClick={refreshStatus}>
-          {checking ? 'Checking…' : unknown ? 'Check status' : 'Refresh'}
+        <button className="quiet-button" disabled={checking || working} onClick={refreshStatus}>
+          {checking || working ? 'Checking…' : unknown ? 'Check status' : 'Refresh'}
         </button>
       </div>
+      {harness === 'codex' && !connected && (
+        <div className="account-card-actions">
+          <button
+            className="quiet-button"
+            disabled={working}
+            onClick={() => void startSignIn('chatgptDeviceCode')}
+          >
+            Use a device code instead
+          </button>
+          {info && (
+            <button
+              className="quiet-button"
+              disabled={working}
+              onClick={async () => {
+                setWorking(true);
+                try {
+                  await api('/providers/codex/cancel', {});
+                  setInfo(null);
+                  fail('');
+                } catch (e: any) {
+                  fail(e.message);
+                } finally {
+                  setWorking(false);
+                }
+              }}
+            >
+              Cancel sign-in
+            </button>
+          )}
+        </div>
+      )}
+      {harness === 'claude' && info && !connected && (
+        <button
+          className="quiet-button"
+          disabled={working}
+          onClick={async () => {
+            setWorking(true);
+            try {
+              await api('/providers/claude/cancel', {});
+              setInfo(null);
+              fail('');
+            } catch (e: any) {
+              fail(e.message);
+            } finally {
+              setWorking(false);
+            }
+          }}
+        >
+          Cancel sign-in
+        </button>
+      )}
       {info?.message && <p>{info.message}</p>}
       {info?.userCode && <code>{info.userCode}</code>}
       {(info?.authUrl || info?.verificationUrl) && (
         <a target="_blank" rel="noreferrer" href={info.authUrl || info.verificationUrl}>
-          {harness === 'codex' ? 'Continue to Codex device sign-in' : 'Open provider sign-in'}
+          {harness === 'codex'
+            ? info.userCode
+              ? 'Continue to Codex device sign-in'
+              : 'Continue with ChatGPT'
+            : 'Open provider sign-in'}
         </a>
       )}
       {info?.userCode && harness === 'codex' && (
@@ -4729,14 +4911,15 @@ function ProviderLogin({ harness, fail, provider, checking, refresh }: any) {
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            const f = new FormData(e.currentTarget);
+            const form = e.currentTarget;
+            const f = new FormData(form);
             try {
               await api('/providers/opencode/key', {
                 provider: method.provider,
                 key: f.get('key'),
                 billingConsent: true,
               });
-              e.currentTarget.reset();
+              form.reset();
               setInfo({ message: 'API account connected.' });
               await refreshStatus();
             } catch (e: any) {

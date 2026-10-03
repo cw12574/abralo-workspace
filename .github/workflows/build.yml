@@ -47,6 +47,14 @@ jobs:
           ABRALO_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '0.1.0-preview' }}
       - name: Verify packaged runtime and contents
         run: node scripts/verify-package.mjs "release/abralo-${{ matrix.target }}"
+      - name: Verify native providers in a clean profile without inference
+        run: node scripts/provider-runtime-smoke.mjs "release/abralo-${{ matrix.target }}"
+      - name: Install browser for onboarding acceptance
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Verify onboarding failure and recovery in the packaged UI
+        run: pnpm exec tsx scripts/onboarding-reliability-smoke.ts
+        env:
+          ABRALO_TEST_WEB_ROOT: release/abralo-${{ matrix.target }}/dist/web
       - name: Exercise isolated launcher, authentication, restart, and backup
         run: node scripts/preview-lifecycle-smoke.mjs "release/abralo-${{ matrix.target }}"
       - name: Install and remove in a disposable profile

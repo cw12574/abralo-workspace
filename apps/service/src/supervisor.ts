@@ -9,6 +9,7 @@ import { OpenCodeAdapter } from './adapters/opencode.js';
 import { ProviderLimitError, providerLimitFromError } from './adapters/provider-limit.js';
 import { taskFolder, checkpoint } from './task-context.js';
 import { collaborationInstructions } from './collaboration.js';
+import { ProviderChecks } from './provider-checks.js';
 import {
   terminal,
   type Adapter,
@@ -16,6 +17,7 @@ import {
   type RunState,
 } from '../../../packages/contracts/src/index.js';
 export class Supervisor {
+  private providerChecks = new ProviderChecks();
   adapters: Record<string, Adapter> = {
     codex: new CodexAdapter(),
     claude: new ClaudeAdapter(),
@@ -44,15 +46,17 @@ export class Supervisor {
   async infos(check?: string) {
     return Promise.all(
       Object.entries(this.adapters).map(([name, a]) =>
-        name === 'opencode' && !(a as OpenCodeAdapter).child && check !== 'opencode'
-          ? Promise.resolve({
-              harness: 'opencode',
-              installed: !!executable('opencode'),
-              authenticated: null,
-              version: '1.18.32',
-              detail: 'Select OpenCode to check its providers.',
-            })
-          : a.info(),
+        check && check !== name
+          ? Promise.resolve(this.providerChecks.snapshot(name as 'codex' | 'claude' | 'opencode'))
+          : name === 'opencode' && !(a as OpenCodeAdapter).child && check !== 'opencode'
+            ? Promise.resolve({
+                harness: 'opencode',
+                installed: !!executable('opencode'),
+                authenticated: null,
+                version: '1.18.32',
+                detail: 'Select OpenCode to check its providers.',
+              })
+            : this.providerChecks.check(name as 'codex' | 'claude' | 'opencode', a),
       ),
     );
   }

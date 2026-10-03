@@ -12,6 +12,18 @@ import type { Adapter, RunInput, ProviderInfo } from '../../../../packages/contr
 import { providerLimitFromError } from './provider-limit.js';
 import type { SandboxPolicy } from '../../../../packages/contracts/generated/codex/v2/SandboxPolicy.js';
 export class CodexAdapter implements Adapter {
+  private loginAttempt?: {
+    type: string;
+    promise: Promise<any>;
+    expiresAt: number;
+    loginId?: string;
+  };
+  private authOperation: Promise<unknown> = Promise.resolve();
+  private withAuthLock<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.authOperation.then(operation, operation);
+    this.authOperation = result.catch(() => {});
+    return result;
+  }
   child?: ChildProcessWithoutNullStreams;
   ready?: Promise<void>;
   seq = 0;
@@ -28,9 +40,10 @@ export class CodexAdapter implements Adapter {
   async start() {
     if (this.ready) return this.ready;
     this.ready = (async () => {
-      this.child = launch('codex', ['app-server', '--stdio']);
-      this.child.stderr.on('data', () => {});
-      createInterface({ input: this.child.stdout }).on('line', (line) => {
+      const child = launch('codex', ['app-server', '--stdio']);
+      this.child = child;
+      child.stderr.on('data', () => {});
+      createInterface({ input: child.stdout }).on('line', (line) => {
         let m: any;
         try {
           m = JSON.parse(line);
@@ -44,9 +57,17 @@ export class CodexAdapter implements Adapter {
             this.pending.delete(m.id);
             m.error ? p.reject(new Error(m.error.message)) : p.resolve(m.result);
           }
-        } else this.events.emit('message', m);
+        } else {
+          if (
+            m.method === 'account/login/completed' &&
+            m.params?.loginId === this.loginAttempt?.loginId
+          )
+            this.loginAttempt = undefined;
+          this.events.emit('message', m);
+        }
       });
       const fail = (e: Error) => {
+        if (this.child !== child) return;
         for (const p of this.pending.values()) {
           clearTimeout(p.timer);
           p.reject(e);
@@ -56,18 +77,39 @@ export class CodexAdapter implements Adapter {
         this.events.emit('failure', e);
         this.ready = undefined;
         this.child = undefined;
+        this.loginAttempt = undefined;
+        child.kill();
       };
-      this.child.on('error', fail);
-      this.child.on('exit', () =>
+      child.on('error', fail);
+      // EPIPE is emitted on stdin, not on ChildProcess. Without this listener a
+      // provider exiting during initialization can terminate the entire service.
+      child.stdin.on('error', fail);
+      child.on('exit', () =>
         fail(new Error('Codex App Server stopped; the run outcome must be reconciled.')),
       );
-      await this.request('initialize', {
-        clientInfo: { name: 'agent_workspace', title: 'Agent Workspace', version: '0.1.0' },
-        capabilities: { experimentalApi: true },
-      });
-      this.notify('initialized', {});
+      try {
+        await this.request(
+          'initialize',
+          {
+            clientInfo: { name: 'agent_workspace', title: 'Agent Workspace', version: '0.1.0' },
+            capabilities: { experimentalApi: true },
+          },
+          15000,
+        );
+        this.notify('initialized', {});
+      } catch (error) {
+        fail(error as Error);
+        child.kill();
+        throw error;
+      }
     })();
-    return this.ready;
+    const attempt = this.ready;
+    try {
+      return await attempt;
+    } catch (error) {
+      if (this.ready === attempt) this.ready = undefined;
+      throw error;
+    }
   }
   request(method: string, params: any = {}, timeoutMs = 90000): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -99,11 +141,14 @@ export class CodexAdapter implements Adapter {
       };
     try {
       await this.start();
-      const [account, models, limits] = await Promise.all([
-        this.request('account/read', { refreshToken: false }),
-        this.request('model/list', { limit: 100 }),
-        this.request('account/rateLimits/read').catch(() => null),
-      ]);
+      const account = await this.request('account/read', { refreshToken: false }, 5000);
+      const [models, limits] =
+        account.account?.type === 'chatgpt'
+          ? await Promise.all([
+              this.request('model/list', { limit: 100 }, 5000).catch(() => ({ data: [] })),
+              this.request('account/rateLimits/read', {}, 5000).catch(() => null),
+            ])
+          : [{ data: [] }, null];
       return {
         harness: 'codex',
         installed: true,
@@ -121,13 +166,47 @@ export class CodexAdapter implements Adapter {
         installed: true,
         authenticated: null,
         version: '',
-        detail: String(e),
+        detail:
+          'Codex could not check your account. Check your connection and try again, or restart Abralo.',
       };
     }
   }
-  async login() {
-    await this.start();
-    return this.request('account/login/start', { type: 'chatgptDeviceCode' });
+  login(type = 'chatgpt') {
+    return this.withAuthLock(() => this.beginLogin(type));
+  }
+  private async beginLogin(type: string) {
+    if (this.loginAttempt && this.loginAttempt.expiresAt > Date.now()) {
+      if (this.loginAttempt.type === type) return this.loginAttempt.promise;
+      await this.cancelActiveLogin();
+    }
+    const attempt: NonNullable<typeof this.loginAttempt> = {
+      type,
+      expiresAt: Date.now() + 10 * 60000,
+      promise: Promise.resolve<any>(null),
+    };
+    attempt.promise = (async () => {
+      await this.start();
+      const info = await this.request('account/login/start', { type }, 15000);
+      attempt.loginId = info.loginId;
+      return info;
+    })();
+    this.loginAttempt = attempt;
+    try {
+      return await attempt.promise;
+    } catch (error) {
+      if (this.loginAttempt === attempt) this.loginAttempt = undefined;
+      throw error;
+    }
+  }
+  cancelLogin() {
+    return this.withAuthLock(() => this.cancelActiveLogin());
+  }
+  private async cancelActiveLogin() {
+    const attempt = this.loginAttempt;
+    if (!attempt) return;
+    const info = await attempt.promise;
+    if (info?.loginId) await this.request('account/login/cancel', { loginId: info.loginId }, 5000);
+    if (this.loginAttempt === attempt) this.loginAttempt = undefined;
   }
   async steer(runId: string, message: string) {
     const live = this.liveRuns.get(runId);
