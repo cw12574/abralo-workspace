@@ -12,6 +12,8 @@ const mimeTypes = {
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.woff2': 'font/woff2',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
@@ -22,12 +24,14 @@ createServer(async (request, response) => {
     return;
   }
 
-  const pathname = new URL(request.url || '/', 'http://localhost').pathname;
-  const decoded = decodeURIComponent(pathname);
-  const relativePath = normalize(decoded).replace(/^([/\\]|\.\.(?:[/\\]|$))+/, '');
-  const requestedFile = join(root, relativePath || 'index.html');
-
   try {
+    const pathname = new URL(request.url || '/', 'http://localhost').pathname;
+    const decoded = decodeURIComponent(pathname);
+    const relativePath = normalize(decoded).replace(/^([/\\]|\.\.(?:[/\\]|$))+/, '');
+    const publicFiles = new Set(['', 'index.html', 'site.css', 'site.js', 'mark.svg', 'social-card.svg', 'social-card.png']);
+    const publicFont = /^assets[/\\]fonts[/\\][a-zA-Z0-9_-]+\.woff2$/.test(relativePath);
+    if (!publicFiles.has(relativePath) && !publicFont) throw new Error('Not public');
+    const requestedFile = join(root, relativePath || 'index.html');
     const details = await stat(requestedFile);
     const file = details.isDirectory() ? join(requestedFile, 'index.html') : requestedFile;
     const body = await readFile(file);
@@ -36,6 +40,7 @@ createServer(async (request, response) => {
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'strict-origin-when-cross-origin',
       'x-frame-options': 'DENY',
+      'cache-control': 'public, max-age=0, must-revalidate',
     });
     response.end(body);
   } catch {
