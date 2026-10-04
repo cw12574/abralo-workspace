@@ -83,6 +83,48 @@ try {
         ),
       [],
     );
+    const featureRequests = [];
+    const recordFeatureRequest = (r) => featureRequests.push(r.url());
+    page.on('request', recordFeatureRequest);
+    for (const [service, agent] of [
+      ['stripe', 'Finance'],
+      ['gmail', 'Research'],
+      ['railway', 'Ops'],
+    ]) {
+      const option = page.locator(`[data-service="${service}"]`);
+      if (width < 700) await option.tap();
+      else await option.click();
+      assert.equal(await option.getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.locator('.service-picker [aria-pressed="true"]').count(), 1);
+      assert.equal(await page.locator('#connection-agent').innerText(), agent);
+      assert.match(
+        await page.locator('#connection-setup-note').innerText(),
+        /does not connect an account/,
+      );
+      if (service === 'gmail')
+        assert.match(
+          await page.locator('#connection-setup-note').innerText(),
+          /OAuth client configured once/,
+        );
+      assert.ok(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        `feature overflow ${width} ${service}`,
+      );
+    }
+    await page.locator('[data-service="gmail"]').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#connection-service').innerText(), 'Gmail');
+    assert.match(await page.locator('.usage-example').innerText(), /Illustrative data/);
+    assert.equal(await page.locator('meter').getAttribute('value'), '64');
+    assert.equal(
+      await page
+        .locator('.share-legend b')
+        .allTextContents()
+        .then((v) => v.reduce((sum, x) => sum + parseInt(x), 0)),
+      100,
+    );
+    assert.deepEqual(featureRequests, [], 'feature selection must not initiate external sign-in');
+    page.off('request', recordFeatureRequest);
     await page.goto(base + '/#provider-details');
     assert.equal(await page.locator('#provider-details').getAttribute('open'), '');
     await page.goto(base + '/start.html', { waitUntil: 'networkidle' });
@@ -94,7 +136,7 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
     console.log(
-      `${width}px: app palette, responsive workflow, touch/click and keyboard tabs, pause/resume, offscreen suspension, navigation and setup passed`,
+      `${width}px: responsive workflow and feature examples, keyboard/touch, pause/resume, no sign-in side effects, navigation and setup passed`,
     );
   }
   const timed = await browser.newPage({ viewport: { width: 1440, height: 1100 } });

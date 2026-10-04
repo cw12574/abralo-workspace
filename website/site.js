@@ -22,6 +22,37 @@ function revealDetails() {
 window.addEventListener('hashchange', revealDetails);
 revealDetails();
 
+// Service selection changes only the explanatory example; no sign-in is initiated.
+const serviceExamples = {
+  railway: {
+    name: 'Railway',
+    agent: 'Ops',
+    note: 'Railway setup uses the provider’s sign-in flow. This illustration does not connect an account.',
+  },
+  stripe: {
+    name: 'Stripe',
+    agent: 'Finance',
+    note: 'Stripe setup uses the provider’s sign-in flow. This illustration does not connect an account.',
+  },
+  gmail: {
+    name: 'Gmail',
+    agent: 'Research',
+    note: 'Gmail needs a Google OAuth client configured once for this installation, then Google sign-in. This illustration does not connect an account.',
+  },
+};
+for (const button of document.querySelectorAll('[data-service]')) {
+  button.addEventListener('click', () => {
+    const example = serviceExamples[button.dataset.service];
+    for (const other of document.querySelectorAll('[data-service]'))
+      other.setAttribute('aria-pressed', String(other === button));
+    document.querySelector('#connection-prompt').textContent =
+      `Connect ${example.name} for @${example.agent}.`;
+    document.querySelector('#connection-service').textContent = example.name;
+    document.querySelector('#connection-agent').textContent = example.agent;
+    document.querySelector('#connection-setup-note').textContent = example.note;
+  });
+}
+
 // This is an explicitly labeled illustration, not a live agent session.
 const demo = document.querySelector('#workspace');
 if (demo) {

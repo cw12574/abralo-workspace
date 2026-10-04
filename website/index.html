@@ -38,7 +38,8 @@
     <script src="/site.js" defer></script>
     <noscript
       ><style>
-        .walkthrough-controls {
+        .walkthrough-controls,
+        .service-picker {
           display: none;
         }
         .menu-toggle {
@@ -693,6 +694,149 @@
           <p>
             Join any conversation. Inspect results, answer questions and redirect the work as it
             develops.
+          </p>
+        </article>
+      </section>
+      <section class="product-features wrap" aria-label="Connections and usage">
+        <article class="feature-card" id="connections-feature" aria-labelledby="connections-title">
+          <span class="feature-number">04 / CONNECTED TOOLS</span>
+          <h2 id="connections-title">Connect from the conversation.</h2>
+          <p class="feature-intro">
+            Ask an agent to connect a service. Sign in, grant access, and carry on. Share an
+            existing account with another agent when you choose.
+          </p>
+          <div class="feature-example connections-example">
+            <div class="example-label">
+              <span>CONNECTED ACCOUNTS</span><span>Illustrative setup</span>
+            </div>
+            <div class="service-picker" role="group" aria-label="Preview a supported service">
+              <button type="button" data-service="railway" aria-pressed="true">Railway</button>
+              <button type="button" data-service="stripe" aria-pressed="false">Stripe</button>
+              <button type="button" data-service="gmail" aria-pressed="false">Gmail</button>
+            </div>
+            <div class="connection-prompt">
+              <span class="human avatar" aria-hidden="true">Y</span>
+              <p id="connection-prompt">Connect Railway for @Ops.</p>
+            </div>
+            <div class="connection-thread" aria-hidden="true">
+              <span></span><span>request → authorize → continue</span>
+            </div>
+            <div class="connected-example" aria-label="Example connected account">
+              <div class="connected-title">
+                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                  <path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4" /></svg
+                ><strong id="connection-service">Railway</strong
+                ><span class="example-connected">Connected</span>
+              </div>
+              <div class="connection-grant">
+                <span>Agent access</span
+                ><span><b id="connection-agent">Ops</b><i>Read only</i></span>
+              </div>
+              <p class="reuse-note">
+                <span aria-hidden="true">↳</span> Reuse this account for another agent with your
+                approval.
+              </p>
+            </div>
+            <p class="connection-setup-note" id="connection-setup-note" role="status">
+              Railway setup uses the provider’s sign-in flow. This illustration does not connect an
+              account.
+            </p>
+          </div>
+          <p class="feature-footnote">
+            Preview connections: Railway, Stripe and Gmail. Gmail requires a Google OAuth client
+            once.
+          </p>
+        </article>
+        <article class="feature-card" id="usage-feature" aria-labelledby="usage-title">
+          <span class="feature-number">05 / USAGE VISIBILITY</span>
+          <h2 id="usage-title">Know where your allowance goes.</h2>
+          <p class="feature-intro">
+            See reported allowance, reset times and usage trends. Break down token use by agent, and
+            get a forecast when there’s enough recent activity.
+          </p>
+          <div class="feature-example usage-example">
+            <div class="example-label"><span>USAGE</span><span>Illustrative data</span></div>
+            <div class="allowance-heading"><strong>Codex</strong><span>5 hour window</span></div>
+            <div class="allowance-reading">
+              <span>Allowance remaining</span><strong>64<small>%</small></strong>
+            </div>
+            <meter
+              class="allowance-meter"
+              min="0"
+              max="100"
+              value="64"
+              aria-label="Example remaining account allowance: 64 percent"
+            >
+              64%
+            </meter>
+            <div class="allowance-detail">
+              <span>Resets at 17:00</span
+              ><span
+                >Past hour
+                <svg
+                  viewBox="0 0 95 22"
+                  aria-label="Example allowance trending down over the past hour"
+                  role="img"
+                >
+                  <path
+                    d="M1 3 12 3 12 6 24 6 24 8 38 8 38 12 53 12 53 14 67 14 67 17 80 17 80 19 94 19"
+                  /></svg
+              ></span>
+            </div>
+            <div class="employee-share">
+              <svg
+                class="usage-ring"
+                viewBox="0 0 100 100"
+                role="img"
+                aria-label="Example token shares: Backend 58 percent, Interface 31 percent, Reviewer 11 percent. 100,000 tokens total."
+              >
+                <circle class="ring-track" cx="50" cy="50" r="39" />
+                <g transform="rotate(-90 50 50)" fill="none" stroke-width="8">
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="39"
+                    pathLength="100"
+                    stroke="#8c9eff"
+                    stroke-dasharray="57 43"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="39"
+                    pathLength="100"
+                    stroke="#56b6a8"
+                    stroke-dasharray="30 70"
+                    stroke-dashoffset="-58"
+                  />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="39"
+                    pathLength="100"
+                    stroke="#e6a45e"
+                    stroke-dasharray="10 90"
+                    stroke-dashoffset="-89"
+                  />
+                </g>
+                <text x="50" y="49" class="ring-total">100k</text>
+                <text x="50" y="62" class="ring-unit">tokens</text>
+              </svg>
+              <div class="share-legend">
+                <p>Observed by agent</p>
+                <div><i style="--share-color: #8c9eff"></i><span>Backend</span><b>58%</b></div>
+                <div><i style="--share-color: #56b6a8"></i><span>Interface</span><b>31%</b></div>
+                <div><i style="--share-color: #e6a45e"></i><span>Reviewer</span><b>11%</b></div>
+              </div>
+            </div>
+            <div class="forecast-note">
+              <span aria-hidden="true">⌁</span>
+              <p>At this pace, allowance could run out <strong>16:20–16:50</strong>.</p>
+            </div>
+          </div>
+          <p class="feature-footnote">
+            Allowance is provider-reported and shared with other apps. Agent shares cover up to 500
+            recent workspace runs with reported tokens; forecasts are estimates.
           </p>
         </article>
       </section>

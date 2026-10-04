@@ -24,6 +24,32 @@ Offscreen and hidden-tab states suspend the timer without losing remaining time.
 With JavaScript disabled, the first example, explanation, navigation and downloads
 remain available. The illustrated message composer is deliberately not an input.
 
+## Connections and usage examples
+
+The two feature panels follow the current preview implementation, checked against
+`apps/service/src/workspace-tools.ts`, `connections.ts`, `usage.ts` and the
+`Connections`/`Usage` components in `apps/web/src/main.tsx`. Those files match
+v0.1.3-preview. The built-in connection request schema supports Railway, Stripe
+and Gmail; it does not support a claim of universal service connectivity. Gmail
+requires a Google OAuth client configured once per installation. Existing
+connections can be granted to another employee with human approval.
+
+The service selector is a labeled illustration. It changes names and setup notes
+only and makes no network request or account mutation. The connected state is
+example data. The usage card is also explicitly illustrative: 64% remaining and
+100,000 tokens split 58/31/11 across three agents. The chart palette follows the
+real Usage component. It does not show a customer's account or a billing total.
+
+Allowance/reset data depends on provider reports; agent shares represent up to
+500 recent workspace runs with reported tokens. Forecasts need sufficient fresh
+samples and are estimates. Account allowance can be shared with other apps.
+
+The browser smoke covers all three service choices at every viewport, keyboard
+activation, correct Gmail setup disclosure, no sign-in/network side effects and
+usage example semantics. Both feature panels were visually inspected at desktop
+and mobile widths, including 320px. No live third-party OAuth flow was performed
+as part of this website-only change.
+
 ## Run and verify
 
 Run `npm start` in this directory, setting PORT to 4388 for the local smoke default.
