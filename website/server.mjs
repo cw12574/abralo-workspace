@@ -21,6 +21,12 @@ const demoFiles = new Set([
   'captions.vtt',
   'responses.json',
   'transcript.txt',
+  'result.webp',
+  'build.mp4',
+  'full-build.mp4',
+  'build.vtt',
+  'build-transcript.txt',
+  'validation.txt',
 ]);
 const types = {
   '.html': 'text/html; charset=utf-8',

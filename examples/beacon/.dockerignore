@@ -1,0 +1,7 @@
+.git
+node_modules
+data
+*.tmp
+tests
+REVIEW.md
+BRIEF.md

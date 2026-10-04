@@ -1,0 +1,57 @@
+BEACON — VALIDATION EVIDENCE
+4 October 2026
+
+Final published source: examples/beacon
+Runtime: Node v24.16.0, Windows x64
+Command: node --test tests/integration.mjs
+Exit code: 0
+
+✔ CRUD defaults, normalization, JSON errors, and persisted deletion (169.022ms)
+✔ validation rejects invalid shapes, URLs, fields and numeric boundaries without mutation (63.2055ms)
+✔ JSON parser rejects malformed/content-type errors and enforces byte limit with length or chunking (22.6491ms)
+✔ JSON content type accepts parameters but rejects a different media type with a matching prefix (9.8849ms)
+✔ HTTP status boundaries 200 through 399 are up; 400 and above are down (43.8716ms)
+✔ real HTTP checks classify status, group failures, recover, order history and survive restart (100.1605ms)
+✔ redirects count as up without following and streaming bodies are cancelled (36.1549ms)
+✔ unresponsive endpoint times out within a bound and connection failure becomes a down check (136.2532ms)
+✔ overlapping manual checks share one request and one persisted result (144.2783ms)
+✔ delete during a pending check returns 404 and cannot resurrect history (50.0761ms)
+✔ scheduler checks new/due monitors, shares manual work and leaves recent checks alone (335.4705ms)
+✔ retention evicts oldest checks/incidents and uptime uses only retained checks (50.8722ms)
+✔ 500-monitor cap returns 409 without mutation (27.3909ms)
+✔ invalid persisted JSON refuses startup without overwriting and invalid options reject (8.8392ms)
+Beacon request failed: EISDIR: illegal operation on a directory, open '<example-project>\tests\.fixture-BuxEw7\state.json.tmp'
+✔ persistence failure produces useful 500 and rolls back in-memory mutation (12.0046ms)
+✔ shutdown aborts an active check with 503 and does not persist a cancelled check (28.283ms)
+✔ only allowlisted assets are served with same-origin CSP, correct types and HEAD behavior (50.2103ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1487.1738
+
+The EISDIR diagnostic is expected: a test deliberately prevents writing the temporary state file and verifies a useful 500 response with no in-memory mutation.
+
+BROWSER VERIFICATION
+Browser: create three monitors and execute real HTTP checks through the dashboard: PASS
+Browser: two HTTP 503 failures grouped into one incident, then recovered on HTTP 200: PASS
+Browser: 320, 390, 768 and 1440px page widths have no horizontal page overflow: PASS
+Browser: remove monitor through confirmation dialog: PASS
+Browser: no uncaught JavaScript errors: PASS
+Browser: Playwright Chromium. Controlled loopback HTTP fixtures, no external targets. Browser verification was performed by the operator; the independent review's earlier browser limitation is preserved as historical evidence.
+
+LIMITATIONS
+Docker build/run/volume-restart: NOT RUN — Docker CLI unavailable.
+No production hosting, authentication, multi-user isolation, load testing, full accessibility audit, or cross-platform app-runtime claim.
+The UI was exercised in Chromium only. Local HTTP fixtures do not validate external DNS or HTTPS behavior.
+The 17 tests include seeded retention/cap boundaries; they do not create every historical record through live HTTP calls. Restart uses graceful server shutdown/recreation, not simulated machine failure.
+
+The reviewer originally found application/jsonp was accepted as application/json (16 passed, 1 failed). Backend engineer corrected exact media-type matching; regression test contents were not changed. The filename was renamed on publication to isolate Node tests from Abralo's Vitest discovery; see PROVENANCE.md.
+
+SHA-256 OF PUBLISHED IMPLEMENTATION AND TEST
+1e8616213b469a2181be4dc0c53f0b08c567b51a6d15845b07d22c8796441abb  server.mjs
+8d525543e99fa2aae158f8914f3b25fa26425996d027239899e895b968188e3e  public/app.js
+01cbfaa3fcf4cc81d748a687dd326a08a72b6fdb7557016c675e7e75c2c2b9d7  tests/integration.mjs

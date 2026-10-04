@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Beacon · Uptime monitor</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to dashboard</a>
+  <header class="topbar"><div class="shell brand-row"><a class="brand" href="/" aria-label="Beacon home"><img src="/favicon.svg" alt="" width="32" height="32">beacon<span class="brand-divider">/</span><span class="brand-sub">Uptime monitor</span></a><span class="local-label">LOCAL INSTANCE</span></div></header>
+  <main id="main" class="shell">
+    <div class="page-heading"><div><p class="eyebrow">OBSERVABILITY / OVERVIEW</p><h1>Service health</h1><p class="muted">Your endpoints, checks and incidents in one place.</p></div><button id="add-monitor" class="primary" type="button">+ Add monitor</button></div>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <div id="action-error" class="error" role="alert" hidden></div>
+    <div id="list-error" class="error" role="alert" hidden></div>
+    <section class="stats" aria-label="Monitor summary">
+      <div class="stat"><span>Total monitors</span><strong id="total">—</strong><small>HTTP &amp; HTTPS endpoints</small></div>
+      <div class="stat"><span><i class="dot up"></i>Operational</span><strong id="up">—</strong><small>Latest check succeeded</small></div>
+      <div class="stat"><span><i class="dot down"></i>Down</span><strong id="down">—</strong><small>Needs attention</small></div>
+      <div class="stat"><span><i class="dot unknown"></i>Awaiting check</span><strong id="unknown">—</strong><small>No result recorded yet</small></div>
+    </section>
+    <section class="panel" aria-labelledby="monitors-heading">
+      <div class="panel-heading"><h2 id="monitors-heading">Monitors <span id="monitor-count" class="count">—</span></h2><div class="sync"><span id="sync-status" role="status">Connecting…</span><button id="refresh" class="small" type="button">Refresh</button></div></div>
+      <p id="loading" class="empty" role="status">Loading monitors…</p>
+      <div id="empty" class="empty" hidden><span class="empty-symbol" aria-hidden="true">↗</span><h3>Your first signal starts here</h3><p>Add an HTTP or HTTPS endpoint to begin monitoring its availability.</p><button id="add-first" class="primary" type="button">+ Add your first monitor</button></div>
+      <div id="monitor-table-wrap" class="table-scroll" tabindex="0" role="region" aria-label="Monitor metrics" hidden><table class="monitor-table"><thead><tr><th scope="col">Endpoint</th><th scope="col">Status</th><th scope="col">Latency</th><th scope="col">Retained uptime</th><th scope="col">Last check</th><th scope="col" class="actions-heading">Actions</th></tr></thead><tbody id="monitor-rows"></tbody></table></div>
+      <div class="panel-foot">Uptime = successful retained checks / all retained checks. Up to 1,000 checks per monitor; not time-weighted.</div>
+    </section>
+    <section id="history" class="panel history-panel" aria-labelledby="history-heading">
+      <div class="panel-heading"><div><p class="eyebrow">INVESTIGATE</p><h2 id="history-heading">Outage &amp; recovery history</h2></div><button id="close-history" class="small" type="button" hidden>Close history</button></div>
+      <div id="history-placeholder" class="empty compact">Select a monitor’s history to inspect incidents and recent checks.</div>
+      <div id="history-content" hidden><div class="history-intro"><div><h3 id="history-name"></h3><p id="history-url" class="mono muted"></p><p id="history-config" class="muted"></p></div><span id="history-status" class="badge"></span></div><div id="history-error" class="error" role="alert" hidden></div><p id="history-loading" class="empty" role="status" hidden>Loading history…</p><div id="history-data" hidden><div class="history-grid"><div><h3 class="section-title">Incidents <span id="incident-count" class="count"></span></h3><div id="incidents"></div></div><div><h3 class="section-title">Recent checks <span class="subtle">Latest 20</span></h3><div id="checks"></div></div></div><p class="panel-foot">Incidents group consecutive failures and resolve on the next successful check. Up to 100 incidents retained. Times are shown in your local timezone.</p></div></div>
+    </section>
+    <footer><span>BEACON <span class="subtle">/ Local uptime monitoring</span></span><span>Dashboard refreshes every 5 seconds</span></footer>
+    <noscript><p class="error">JavaScript is required to load monitors and use this dashboard.</p></noscript>
+  </main>
+  <dialog id="create-dialog" aria-labelledby="create-title"><form id="create-form"><div class="dialog-heading"><div><p class="eyebrow">NEW ENDPOINT</p><h2 id="create-title">Add a monitor</h2></div><button id="close-create" type="button" class="icon-button" aria-label="Close add monitor">×</button></div><p class="muted">Beacon checks the endpoint automatically after you save.</p><label for="name">Name</label><input id="name" name="name" required maxlength="100" placeholder="e.g. Local API" autocomplete="off"><label for="url">Endpoint URL</label><input id="url" name="url" type="url" required maxlength="2048" placeholder="http://127.0.0.1:8080/health" aria-describedby="url-help"><p id="url-help" class="field-help">HTTP or HTTPS, without credentials or a URL fragment.</p><div class="form-grid"><div><label for="interval">Check interval (seconds)</label><input id="interval" name="intervalSeconds" type="number" required min="10" max="86400" step="1" value="60"><p class="field-help">10–86,400 seconds</p></div><div><label for="timeout">Timeout (milliseconds)</label><input id="timeout" name="timeoutMs" type="number" required min="100" max="30000" step="1" value="5000"><p class="field-help">100–30,000 milliseconds</p></div></div><p class="local-note">Trusted local use only. The server can reach private network addresses. No authentication or provider telemetry.</p><p id="create-error" class="error" role="alert" hidden></p><div class="dialog-actions"><button id="cancel-create" type="button">Cancel</button><button id="save-monitor" class="primary" type="submit">Create monitor</button></div></form></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><form id="delete-form"><h2 id="delete-title">Remove monitor?</h2><p id="delete-description"></p><p class="muted">This permanently removes the monitor and its check and incident history.</p><p id="delete-error" class="error" role="alert" hidden></p><div class="dialog-actions"><button id="cancel-delete" type="button" autofocus>Keep monitor</button><button id="confirm-delete" class="danger" type="submit">Remove monitor</button></div></form></dialog>
+</body>
+</html>

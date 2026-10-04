@@ -1,0 +1,25 @@
+WEBVTT
+
+00:00.000 --> 00:06.000
+The result: Beacon, a working local uptime monitor. Real HTTP fixture results.
+
+00:06.000 --> 00:14.000
+In Abralo, the operator gives the backend engineer a detailed build brief.
+
+00:14.000 --> 00:20.000
+The backend engineer builds the service and hands the API contract to the interface engineer.
+
+00:20.000 --> 00:26.000
+The interface engineer implements the dashboard, then hands it to the reviewer. Waiting omitted.
+
+00:26.000 --> 00:34.000
+The reviewer finds a content-type validation defect. The operator requests a narrow fix.
+
+00:34.000 --> 00:42.000
+The backend engineer fixes it. All 17 unchanged regression tests pass.
+
+00:42.000 --> 00:48.000
+The operator accepts a local prototype. Docker remains untested; no production approval.
+
+00:48.000 --> 00:56.000
+The generated dashboard tracks an actual local fixture's outage and recovery. Inspect the source below.

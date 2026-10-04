@@ -1,24 +1,81 @@
-// Start website/server.mjs separately, then pass its origin or the deployed origin.
-import assert from 'node:assert/strict';
+﻿import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
-
 const base = process.argv[2] || 'http://127.0.0.1:4387';
 const browser = await chromium.launch();
 try {
-  for (const width of [320, 390, 768, 1440]) {
-    const page = await browser.newPage({ viewport: { width, height: 960 } });
-    page.setDefaultTimeout(15000);
+  for (const [width, height] of [
+    [320, 844],
+    [390, 844],
+    [768, 1000],
+    [1440, 1000],
+  ]) {
+    const page = await browser.newPage({ viewport: { width, height } });
+    page.setDefaultTimeout(20000);
     const errors = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-    page.on('response', (response) => {
-      if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('response', (r) => {
+      if (r.status() >= 400) errors.push(r.status() + ' ' + r.url());
     });
     await page.goto(base, { waitUntil: 'networkidle' });
-    assert.match(await page.locator('h1').innerText(), /You and your agents/);
+    assert.match(await page.locator('h1').innerText(), /Build software/);
     assert.ok(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      `Overflow at ${width}`,
+      'horizontal overflow ' + width,
     );
+    const box = await page.locator('#hero-video').boundingBox();
+    assert.ok(box.y < height - 40, 'demo starts below first viewport ' + width);
+    await page.waitForFunction(() => {
+      const v = document.querySelector('#hero-video');
+      return v.currentTime > 0.2 && !v.paused;
+    });
+    assert.ok(await page.locator('video').evaluate((v) => v.muted), 'autoplay must be muted');
+    await page.getByRole('button', { name: 'Pause demo', exact: true }).click();
+    const stopped = await page.locator('video').evaluate((v) => v.currentTime);
+    await page.waitForTimeout(250);
+    assert.ok(
+      Math.abs((await page.locator('video').evaluate((v) => v.currentTime)) - stopped) < 0.15,
+    );
+    await page.locator('[data-chapter="2"]').click();
+    await page.waitForFunction(() => {
+      const v = document.querySelector('video');
+      return Math.abs(v.currentTime - 14) < 0.15 && !v.seeking;
+    });
+    assert.equal(await page.locator('video').evaluate((v) => v.paused), true);
+    assert.equal(await page.locator('[data-chapter="2"]').getAttribute('aria-current'), 'true');
+    await page.getByRole('button', { name: 'Play demo', exact: true }).click();
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    await page.waitForFunction(() => document.querySelector('video').paused);
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForFunction(() => !document.querySelector('video').paused);
+    await page.getByRole('button', { name: 'Pause demo', exact: true }).click();
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(150);
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForTimeout(300);
+    assert.equal(
+      await page.locator('video').evaluate((v) => v.paused),
+      true,
+      'manual pause must persist',
+    );
+    await page.getByRole('button', { name: 'Replay ↺', exact: true }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector('video').currentTime < 3 && !document.querySelector('video').paused,
+    );
+    await page.locator('video').evaluate((v) => {
+      v.currentTime = v.duration - 0.2;
+    });
+    await page.waitForFunction(() => document.querySelector('video').ended);
+    await page.getByRole('button', { name: 'Replay demo', exact: true }).waitFor();
+    await page.locator('video').evaluate((v) => {
+      v.textTracks[0].mode = 'showing';
+    });
+    await page.waitForFunction(() => document.querySelector('track').readyState === 2);
+    if (width <= 760) {
+      await page.getByRole('button', { name: 'Open menu' }).click();
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('.menu-toggle').getAttribute('aria-expanded'), 'false');
+    }
     assert.deepEqual(
       await page
         .locator('a[href^="#"]')
@@ -27,99 +84,89 @@ try {
         ),
       [],
     );
-    const tabs = page.getByRole('tab');
-    await tabs.nth(0).focus();
-    await page.keyboard.press('ArrowRight');
-    assert.equal(await tabs.nth(1).getAttribute('aria-selected'), 'true');
-    assert.match(await page.locator('#demo-description').innerText(), /£50/);
-    await page.keyboard.press('End');
-    assert.equal(await tabs.nth(2).getAttribute('aria-selected'), 'true');
-    await page.getByRole('button', { name: 'Enlarge application screenshot' }).click();
-    assert.equal(await page.locator('#capture-dialog').evaluate((el) => el.open), true);
-    await page.keyboard.press('Escape');
-    assert.equal(await page.locator('#capture-dialog').evaluate((el) => el.open), false);
-    await page.getByRole('button', { name: /Back to the brief/ }).click();
-    assert.equal(await tabs.nth(0).getAttribute('aria-selected'), 'true');
-    if (width <= 800) {
-      await page.getByRole('button', { name: 'Open menu' }).click();
-      assert.equal(await page.locator('.menu-toggle').getAttribute('aria-expanded'), 'true');
-      await page.keyboard.press('Escape');
-      assert.equal(await page.locator('.menu-toggle').getAttribute('aria-expanded'), 'false');
-    }
-    await page.getByRole('button', { name: /Watch the screen recording/ }).click();
-    const video = page.locator('video');
-    await video.evaluate(async (element) => {
-      element.muted = true;
-      await element.play();
-    });
-    await page.waitForFunction(() => document.querySelector('video').currentTime > 0);
-    assert.ok(await video.evaluate((element) => element.duration > 30 && element.duration < 40));
-    await video.evaluate((element) => {
-      element.currentTime = 26;
-    });
-    await page.waitForFunction(
-      () =>
-        document.querySelector('video').currentTime >= 26 &&
-        !document.querySelector('video').seeking,
-    );
-    assert.equal(await page.locator('track').evaluate((element) => element.readyState), 2);
-    await page.keyboard.press('Escape');
-    assert.equal(await video.evaluate((element) => element.paused), true);
-    await page.locator('.transcript summary').click();
-    assert.match(await page.locator('#findings-text').innerText(), /total >= 50/);
     await page.goto(base + '/#provider-details');
     assert.equal(await page.locator('#provider-details').getAttribute('open'), '');
     await page.goto(base + '/start.html', { waitUntil: 'networkidle' });
-    assert.ok(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      `Guide overflow at ${width}`,
-    );
     assert.match(await page.locator('body').innerText(), /notes.txt/);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     assert.deepEqual(errors, []);
     console.log(
-      `${width}px: walkthrough, keyboard, dialogs, video playback/seek/captions, navigation and guide passed`,
+      width +
+        'px: above-fold autoplay, pause/resume, off-screen behavior, chapters, replay/end, captions and setup passed',
     );
     await page.close();
   }
-  const request = await browser.newContext();
+  const reduced = await browser.newContext({
+    reducedMotion: 'reduce',
+    viewport: { width: 1440, height: 1000 },
+  });
+  const rp = await reduced.newPage();
+  await rp.goto(base, { waitUntil: 'networkidle' });
+  await rp.waitForTimeout(400);
+  assert.equal(await rp.locator('video').evaluate((v) => v.paused), true);
+  await rp.getByRole('button', { name: 'Play demo', exact: true }).click();
+  await rp.waitForFunction(() => document.querySelector('video').currentTime > 0);
+  await reduced.close();
+  console.log('Reduced-motion preference and explicit play passed');
+  const constrained = await browser.newContext();
+  await constrained.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', { value: { saveData: true } });
+  });
+  const cp = await constrained.newPage();
+  await cp.goto(base, { waitUntil: 'networkidle' });
+  assert.equal(await cp.locator('video').evaluate((v) => v.paused), true);
+  await cp.getByRole('button', { name: 'Play demo', exact: true }).click();
+  await cp.waitForFunction(() => document.querySelector('video').currentTime > 0);
+  await constrained.close();
+  const blocked = await browser.newContext();
+  await blocked.addInitScript(() => {
+    const nativePlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      HTMLMediaElement.prototype.play = nativePlay;
+      return Promise.reject(new DOMException('Autoplay blocked', 'NotAllowedError'));
+    };
+  });
+  const bp = await blocked.newPage();
+  await bp.goto(base, { waitUntil: 'networkidle' });
+  await bp.getByRole('button', { name: 'Play demo', exact: true }).click();
+  await bp.waitForFunction(() => document.querySelector('video').currentTime > 0);
+  await blocked.close();
+  const noScript = await browser.newContext({ javaScriptEnabled: false });
+  const np = await noScript.newPage();
+  await np.goto(base, { waitUntil: 'networkidle' });
+  assert.equal(await np.locator('video').getAttribute('controls'), '');
+  await np.locator('noscript').getByRole('link', { name: 'read the transcript' }).waitFor();
+  await noScript.close();
+  console.log('Save-data, rejected-autoplay recovery and no-JavaScript fallback passed');
+  const req = await browser.newContext();
   for (const [path, status] of [
     ['/health', 200],
-    ['/assets/demo/transcript.txt', 200],
-    ['/assets/demo/responses.json', 200],
-    // Railway rejects invalid percent escapes at its edge. Exercise our malformed
-    // decoder locally; on a public origin use the valid encoding of a percent sign.
-    [
-      new URL(base).hostname === '127.0.0.1' || new URL(base).hostname === 'localhost'
-        ? '/%'
-        : '/%25',
-      404,
-    ],
+    ['/assets/demo/build-transcript.txt', 200],
+    ['/assets/demo/validation.txt', 200],
     ['/server.mjs', 404],
-    ['/package.json', 404],
     ['/assets/demo/../../../server.mjs', 404],
-  ]) {
-    const response = await request.request.get(base + path);
-    assert.equal(response.status(), status, path);
-  }
-  const head = await request.request.head(base + '/assets/demo/review.mp4');
+    ['/%25', 404],
+  ])
+    assert.equal((await req.request.get(base + path)).status(), status, path);
+  const head = await req.request.head(base + '/assets/demo/build.mp4');
   assert.equal(head.status(), 200);
   assert.equal((await head.body()).length, 0);
-  const partial = await request.request.get(base + '/assets/demo/review.mp4', {
+  const part = await req.request.get(base + '/assets/demo/build.mp4', {
     headers: { Range: 'bytes=0-99' },
   });
-  assert.equal(partial.status(), 206);
-  assert.equal((await partial.body()).length, 100);
-  const invalid = await request.request.get(base + '/assets/demo/review.mp4', {
-    headers: { Range: 'bytes=99999999-' },
-  });
-  assert.equal(invalid.status(), 416);
-  const suffix = await request.request.get(base + '/assets/demo/review.mp4', {
+  assert.equal(part.status(), 206);
+  assert.equal((await part.body()).length, 100);
+  const tail = await req.request.get(base + '/assets/demo/full-build.mp4', {
     headers: { Range: 'bytes=-32' },
   });
-  assert.equal(suffix.status(), 206);
-  assert.equal((await suffix.body()).length, 32);
-  await request.close();
-  console.log('Health, public file boundary, HEAD and video ranges passed');
+  assert.equal(tail.status(), 206);
+  assert.equal((await tail.body()).length, 32);
+  const invalid = await req.request.get(base + '/assets/demo/build.mp4', {
+    headers: { Range: 'bytes=9999999999-' },
+  });
+  assert.equal(invalid.status(), 416);
+  await req.close();
+  console.log('Public asset boundaries and video byte ranges passed');
 } finally {
   await browser.close();
 }

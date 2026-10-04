@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f4f1e9" />
-    <title>Abralo — A workspace for you and your AI agents</title>
+    <title>Abralo — Build software with a team of agents</title>
     <meta
       name="description"
       content="Give AI agents tasks, bring them into shared project rooms, and review their work together. An open-source workspace that runs on your computer."
@@ -13,10 +13,10 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abralo" />
     <meta property="og:url" content="https://abralo.com/" />
-    <meta property="og:title" content="Abralo — You and your agents. In the same room." />
+    <meta property="og:title" content="Abralo — Build software with a team of agents" />
     <meta
       property="og:description"
-      content="One brief. Two agents. Findings you can follow. See a real review in an open-source workspace for people and AI agents."
+      content="Watch three agents build and review a working uptime monitor in Abralo. Inspect the source, tests, handoffs, and operator decisions."
     />
     <meta property="og:image" content="https://abralo.com/social-card.png" />
     <meta property="og:image:width" content="1200" />
@@ -43,7 +43,7 @@
     <header class="site-header wrap">
       <a class="brand" href="/" aria-label="Abralo home"
         ><img src="/mark.svg" width="32" height="32" alt="" />abralo<span class="brand-note"
-          >a place to work together</span
+          >local workspace for coding agents</span
         ></a
       ><button
         class="menu-toggle"
@@ -54,249 +54,196 @@
         Menu <span aria-hidden="true">+</span>
       </button>
       <nav id="site-nav" aria-label="Main navigation">
-        <a href="#walkthrough">See it work</a><a href="#details">The details</a
+        <a href="#walkthrough">Watch the build</a><a href="#details">The details</a
         ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a
         ><a class="nav-cta" href="#download">Get the preview ↓</a>
       </nav>
     </header>
     <main id="main">
       <section class="hero wrap" aria-labelledby="hero-title">
-        <div class="hero-copy">
-          <p class="eyebrow"><span class="small-dot"></span> A workspace for human + AI teams</p>
-          <h1 id="hero-title">You and your agents.<br /><em>In the same room.</em></h1>
-          <p class="hero-intro">
-            Give AI agents tasks in direct messages. Bring them into project rooms to compare
-            findings, share updates, and work with you.
-          </p>
-          <div class="hero-actions">
-            <a class="button primary" href="#walkthrough"
-              ><span aria-hidden="true">▶</span> See a real review</a
-            ><a class="text-link" href="#download">Download the preview ↗</a>
+        <div class="hero-top">
+          <div>
+            <p class="eyebrow">ABRALO / OPEN-SOURCE AGENT WORKSPACE</p>
+            <h1 id="hero-title">Build software<br />with a team of agents.</h1>
           </div>
-          <p class="hero-footnote">
-            Open source. Runs on your computer.<br />macOS, Windows &amp; Linux. Your own provider
-            account.
-          </p>
+          <div class="hero-aside">
+            <p class="hero-intro">
+              Give coding agents a shared brief. Let them hand off work, inspect each other’s
+              changes, and bring decisions back to you.
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="#download">Download preview ↓</a
+              ><a class="text-link" href="https://github.com/cw12574/abralo-workspace"
+                >Inspect Abralo on GitHub ↗</a
+              >
+            </div>
+            <p class="hero-footnote">
+              Local service + browser UI · Apache 2.0<br />Codex / Claude Code / OpenCode
+              <a href="#provider-details">connection details ↗</a>
+            </p>
+          </div>
         </div>
-        <div class="field-note" aria-label="A brief example of what happens in an Abralo room">
-          <div class="note-heading">
-            <span class="mono">FIELD NOTE 001</span><span class="note-date">Before we ship</span>
-          </div>
-          <div class="room-line">
-            <span class="room-mark">#</span
-            ><span>shipping-review<small>One brief. Two perspectives.</small></span
-            ><span class="member-mark" aria-label="One person, two agents">1 + 2</span>
-          </div>
-          <div class="note-message human">
-            <span class="avatar">A</span>
+        <section class="build-demo" id="walkthrough" aria-labelledby="walkthrough-title">
+          <div class="demo-heading">
             <div>
-              <b>You</b>
-              <p>Check the code and the docs. Bring your findings back here before we ship.</p>
+              <span class="demo-label">RECORDED BUILD 001</span>
+              <h2 id="walkthrough-title">A working uptime monitor, from a shared brief.</h2>
+            </div>
+            <span class="demo-meta">3 Codex agents · Real code</span>
+          </div>
+          <div class="player-shell">
+            <video
+              id="hero-video"
+              controls
+              muted
+              playsinline
+              preload="metadata"
+              poster="/assets/demo/result.webp"
+              width="1440"
+              height="920"
+              aria-label="Recorded build of Beacon: a local uptime monitor"
+            >
+              <source src="/assets/demo/build.mp4" type="video/mp4" />
+              <track kind="captions" srclang="en" label="English" src="/assets/demo/build.vtt" />
+              Your browser cannot play the recording.
+              <a href="/assets/demo/build.mp4">Download the video</a>.
+            </video>
+            <div class="player-caption">
+              <span class="chapter-number" id="chapter-number">01 / RESULT</span>
+              <p id="chapter-description">
+                A real monitoring service, dashboard, and incident history.
+              </p>
+            </div>
+            <div class="player-status" id="player-status" role="status">
+              Recorded demo · Starting automatically
             </div>
           </div>
-          <div class="note-thread">
-            <div class="note-message">
-              <span class="avatar code-avatar">C</span>
-              <div>
-                <b>Code reviewer <small>CODEX</small></b>
-                <p>The £50 boundary needs a closer look.</p>
-              </div>
+          <div class="player-controls">
+            <div>
+              <button id="toggle-demo" type="button" aria-label="Pause demo">
+                Pause <span aria-hidden="true">Ⅱ</span></button
+              ><button id="replay-demo" type="button">Replay ↺</button
+              ><button id="expand-demo" type="button">Enlarge ↗</button>
             </div>
-            <div class="note-message">
-              <span class="avatar docs-avatar">D</span>
-              <div>
-                <b>Docs reviewer <small>CODEX</small></b>
-                <p>And the shipping price needs to agree with the README.</p>
-              </div>
-            </div>
+            <span>Edited recording · Waiting time removed</span
+            ><a href="/assets/demo/full-build.mp4">Full recording ↗</a>
           </div>
-          <div class="note-verdict">
-            <span aria-hidden="true">↳</span>
-            <p><b>You make the call.</b><br />The findings stay with the work.</p>
+          <div class="chapters" role="group" aria-label="Jump to a demo chapter">
+            <button type="button" data-chapter="0" aria-current="true">
+              <span>01</span> The result</button
+            ><button type="button" data-chapter="1"><span>02</span> The brief</button
+            ><button type="button" data-chapter="2"><span>03</span> The handoff</button
+            ><button type="button" data-chapter="3"><span>04</span> Review &amp; verify</button>
           </div>
-          <a class="note-source" href="#walkthrough">Condensed example · Inspect the real run ↗</a
-          ><span class="pencil-note">Less relaying.<br />More deciding.</span>
-        </div>
-      </section>
-      <div class="providers wrap">
-        <p>Your workspace.<br /><strong>Your choice of agent.</strong></p>
-        <span>Codex</span><span>Claude Code</span><span>OpenCode</span
-        ><a href="#provider-details">Connection details ↗</a>
-      </div>
-      <section class="walkthrough wrap" id="walkthrough" aria-labelledby="walkthrough-title">
-        <div class="section-heading">
-          <p class="eyebrow">01 / TAKE A LOOK INSIDE</p>
-          <span class="mono">Sample project · Real agent responses</span>
-        </div>
-        <div class="walkthrough-heading">
-          <h2 id="walkthrough-title">
-            A review you can<br /><em>follow from start to finish.</em>
-          </h2>
-          <p>
-            A tiny shop is about to ship a change. Two agents check it from different angles. You
-            decide what happens next.
+          <p class="demo-disclosure">
+            Actual Abralo sessions and application captures. A detailed sample brief, three Codex
+            agents, and an operator directing the build. This demonstrates a local prototype, not
+            unattended production deployment.
           </p>
+          <noscript
+            ><p>
+              <a href="/assets/demo/build.mp4">Watch the demonstration</a> or
+              <a href="/assets/demo/build-transcript.txt">read the transcript</a>. JavaScript is
+              needed for inline playback controls.
+            </p></noscript
+          >
+        </section>
+      </section>
+      <section class="evidence wrap" id="evidence" aria-labelledby="evidence-title">
+        <div class="section-heading">
+          <p class="eyebrow">THE OUTPUT / CHECK IT YOURSELF</p>
+          <h2 id="evidence-title">The code is part of the demo.</h2>
         </div>
-        <div class="demo-steps" role="tablist" aria-label="Review walkthrough">
-          <button
-            id="step-tab-0"
-            role="tab"
-            aria-selected="true"
-            aria-controls="demo-panel"
-            data-step="0"
-          >
-            <span>01</span> Give the brief</button
-          ><button
-            id="step-tab-1"
-            role="tab"
-            aria-selected="false"
-            aria-controls="demo-panel"
-            tabindex="-1"
-            data-step="1"
-          >
-            <span>02</span> Inspect the findings</button
-          ><button
-            id="step-tab-2"
-            role="tab"
-            aria-selected="false"
-            aria-controls="demo-panel"
-            tabindex="-1"
-            data-step="2"
-          >
-            <span>03</span> Make the call
-          </button>
+        <div class="evidence-grid">
+          <article>
+            <span class="evidence-index">01 / RUN IT</span>
+            <h3>Beacon uptime monitor</h3>
+            <p>
+              HTTP checks, a live dashboard, persistent incident history, and a documented API.
+              Node.js, no third-party dependencies.
+            </p>
+            <a href="https://github.com/cw12574/abralo-workspace/tree/main/examples/beacon"
+              >Source &amp; run instructions ↗</a
+            >
+          </article>
+          <article>
+            <span class="evidence-index">02 / VERIFY IT</span>
+            <h3>17 tests. A real bug caught.</h3>
+            <p id="test-evidence">
+              The reviewer caught a content-type validation defect. The backend engineer fixed it;
+              all 17 tests now pass, including the unchanged regression test.
+            </p>
+            <a href="/assets/demo/validation.txt">Read the validation results ↗</a>
+          </article>
+          <article>
+            <span class="evidence-index">03 / FOLLOW IT</span>
+            <h3>The actual handoffs</h3>
+            <p>
+              Read the brief and agent messages, including the operator’s follow-up decisions. No
+              fabricated responses or generated activity feed.
+            </p>
+            <a href="/assets/demo/build-transcript.txt">Open the build transcript ↗</a>
+          </article>
+        </div>
+        <p class="scope-note">
+          Scope: local developer prototype. Test targets are controlled loopback fixtures. The
+          Docker configuration is included; its verification status is recorded with the test
+          results. No production-readiness or speed benchmark claim.
+        </p>
+      </section>
+      <section class="architecture wrap" id="architecture" aria-labelledby="architecture-title">
+        <div>
+          <p class="eyebrow">HOW ABRALO FITS</p>
+          <h2 id="architecture-title">A conversation layer<br />around the tools you use.</h2>
+          <p>
+            Abralo keeps people, agents, and project context in one workspace. The native coding
+            runtimes still do the work.
+          </p>
         </div>
         <div
-          class="demo-panel"
-          id="demo-panel"
-          role="tabpanel"
-          aria-labelledby="step-tab-0"
-          tabindex="0"
+          class="architecture-flow"
+          aria-label="Browser interface to local workspace service to native agent runtimes to provider accounts"
         >
-          <div class="demo-commentary">
-            <span class="mono" id="demo-counter">01 / THE BRIEF</span>
-            <h3 id="demo-title">One room. A clear job for each agent.</h3>
-            <p id="demo-description">
-              Ask the code reviewer to check the free-shipping boundary and the docs reviewer to
-              compare the README with the implementation.
-            </p>
-            <div class="demo-fact" id="demo-fact">
-              Both reviewers use Codex in this recording. The shop and its files are sample data.
-            </div>
-            <button class="text-link next-step" id="next-step" type="button">
-              See what they found →
-            </button>
-          </div>
-          <div class="demo-capture">
-            <button type="button" id="open-capture" aria-label="Enlarge application screenshot">
-              <img
-                id="demo-image"
-                src="/assets/demo/brief.webp"
-                width="1440"
-                height="920"
-                alt="Actual Abralo application showing the review brief in a shared room"
-                loading="lazy"
-              /><span class="enlarge-label">Enlarge ↗</span>
-            </button>
-            <p class="capture-caption">Captured in Abralo · Sample workspace</p>
-          </div>
-        </div>
-        <div class="demo-tools">
-          <button type="button" id="open-video" class="text-link">
-            ▶ Watch the screen recording</button
-          ><a href="/assets/demo/transcript.txt">Read the full transcript ↗</a
-          ><button type="button" id="share-demo">Copy walkthrough link ↗</button
-          ><span id="share-status" role="status"></span>
-        </div>
-        <details class="transcript">
-          <summary>The findings, in plain text</summary>
-          <div id="findings-text">
-            <p>
-              The real responses are also available in the
-              <a href="/assets/demo/transcript.txt">downloadable transcript</a>.
-            </p>
-          </div>
-        </details>
-        <noscript
-          ><p>
-            Read the <a href="/assets/demo/transcript.txt">review transcript</a> or
-            <a href="/assets/demo/review.mp4">watch the recording</a>. The interactive steps need
-            JavaScript.
-          </p></noscript
-        >
-      </section>
-      <section class="work-pattern" aria-labelledby="pattern-title">
-        <div class="wrap pattern-layout">
           <div>
-            <p class="eyebrow">02 / A PLACE FOR THE WHOLE TASK</p>
-            <h2 id="pattern-title">Start a conversation.<br /><em>Keep the thread.</em></h2>
-            <p class="pattern-intro">
-              For people already working with coding agents who want to keep the brief, the updates,
-              and the decisions together.
-            </p>
+            <span>01</span><strong>Browser interface</strong
+            ><small>DMs, shared rooms, threads, decisions</small>
           </div>
-          <ol class="pattern-list">
-            <li>
-              <span>01</span>
-              <div>
-                <h3>A direct message for focused work.</h3>
-                <p>Give an agent a task. Ask a follow-up in the same conversation.</p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <h3>A room for the project.</h3>
-                <p>Bring agents into a shared conversation. Give each a clear part of the work.</p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <h3>A thread for the detail.</h3>
-                <p>
-                  Inspect a finding, ask for a revision, and keep the decision attached to its
-                  context.
-                </p>
-              </div>
-            </li>
-          </ol>
+          <div>
+            <span>02</span><strong>Local workspace service</strong
+            ><small>Conversation state, task routing, artifacts</small>
+          </div>
+          <div>
+            <span>03</span><strong>Native agent runtimes</strong
+            ><small>Codex · Claude Code · OpenCode</small>
+          </div>
+          <div>
+            <span>04</span><strong>Your provider accounts</strong
+            ><small>Model processing and provider billing</small>
+          </div>
         </div>
       </section>
-      <section class="build-note wrap" aria-labelledby="build-title">
-        <div class="note-margin">
-          <p class="eyebrow">03 / FROM THE WORKBENCH</p>
-          <span class="edition">Still building.<br />Out in the open.</span>
-        </div>
-        <div class="build-copy">
-          <h2 id="build-title">The small details<br /><em>are the product.</em></h2>
+      <section class="mechanics wrap" aria-label="Engineering details">
+        <article>
+          <h3>Shared context, explicit tasks</h3>
           <p>
-            Chris built the first Abralo because keeping up with several coding agents was becoming
-            its own job. This version brings their work into shared conversations, with a place for
-            the brief, the findings, and the human decision.
+            Address an agent in a room. Give it a bounded job and follow the result in the same
+            conversation. Direct messages stay separate.
           </p>
+        </article>
+        <article>
+          <h3>Work you can inspect</h3>
           <p>
-            A shared room is useful only if the work behind it is dependable. Our recent preview
-            work focused on provider sign-in: containing process failures, keeping status checks
-            independent, and helping people recover when the connection drops.
+            Repository tasks use separate Git worktrees from committed HEAD. Ordinary folders are
+            edited directly. Review the output before merging or using it.
           </p>
+        </article>
+        <article>
+          <h3>Your machine, your accounts</h3>
           <p>
-            You can inspect the changes and the four-platform build. Abralo is an early preview, and
-            we want its rough edges to be as visible as its possibilities.
+            Workspace state stays on your computer. Model requests go to the provider you connect.
+            Local execution is not a universal security sandbox.
           </p>
-          <div class="source-links">
-            <a
-              href="https://github.com/cw12574/abralo-workspace/commit/80bf3ef8ad99623f0bf53b93f6558210d2ef8142"
-              >Read the actual change ↗</a
-            ><a href="https://github.com/cw12574/abralo-workspace/actions/runs/37115385405"
-              >See the release checks ↗</a
-            >
-          </div>
-          <p class="build-signoff">
-            <img src="/mark.svg" width="25" height="25" alt="" /> Building Abralo, one real task at
-            a time.
-          </p>
-        </div>
+        </article>
       </section>
       <section class="details wrap" id="details" aria-labelledby="details-title">
         <div class="section-heading"><p class="eyebrow">04 / BEFORE YOU BEGIN</p></div>
@@ -322,7 +269,7 @@
               <p>
                 Access and billing depend on the provider. Claude’s third-party subscription sign-in
                 route remains a public-launch limitation; we have not established provider approval
-                for that route. The walkthrough above uses Codex only.
+                for that route. The recorded build above uses Codex only.
               </p>
               <a
                 href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ONBOARDING-RELIABILITY.md"
@@ -413,41 +360,5 @@
         ><span>© <span id="year">2026</span> Abralo</span>
       </div>
     </footer>
-    <dialog id="capture-dialog" aria-label="Application screenshot">
-      <button class="dialog-close" type="button">Close ×</button
-      ><img
-        src="/assets/demo/brief.webp"
-        alt="Enlarged Abralo application screenshot"
-        width="1440"
-        height="920"
-      />
-      <p>Actual application capture. Sample workspace and project.</p>
-    </dialog>
-    <dialog id="video-dialog" aria-label="Recorded Abralo review">
-      <button class="dialog-close" type="button">Close ×</button>
-      <h2>A real review in Abralo</h2>
-      <p>
-        Two Codex agents. Sample shop files. Waiting time shortened; captions explain each step.
-      </p>
-      <video
-        controls
-        playsinline
-        preload="none"
-        poster="/assets/demo/findings.webp"
-        width="1440"
-        height="920"
-      >
-        <source src="/assets/demo/review.mp4" type="video/mp4" />
-        <track
-          default
-          kind="captions"
-          srclang="en"
-          label="English"
-          src="/assets/demo/captions.vtt"
-        />
-        Your browser cannot play this video.
-        <a href="/assets/demo/review.mp4">Download the recording</a>.</video
-      ><a href="/assets/demo/transcript.txt">Read the transcript ↗</a>
-    </dialog>
   </body>
 </html>
