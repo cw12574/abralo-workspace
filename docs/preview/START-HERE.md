@@ -1,6 +1,6 @@
 # Abralo preview setup
 
-This is an early, opt-in preview for friends. The application and shortcuts currently say **Agent Workspace**. The Windows and macOS packages are unsigned; the Linux package has no publisher signature. Automated build and install checks have passed, but native desktop acceptance, signing/trust checks and some live agent-permission checks are still open. This is not a finished or independently security-audited release.
+This is an early developer preview. The application and shortcuts currently say **Agent Workspace**. The Windows and macOS packages are unsigned; the Linux package has no publisher signature. Automated build and install checks have passed, but native desktop acceptance, signing/trust checks and some live agent-permission checks are still open. This is not a finished or independently security-audited release.
 
 Only use a package from the official Abralo release for your operating system and CPU. A CI build or checksum alone does not establish that a package is safe or signed by a publisher. The current downloadable preview is [v0.1.3-preview](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview).
 
@@ -16,7 +16,7 @@ Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build`
 ## Before installing
 
 - Use your own provider account. Model requests use its allowance or the billing option you explicitly select. The application is local; model processing is performed by the selected provider.
-- The official packaged app includes the agent runtimes; you do not need to install Codex, Claude Code, or OpenCode separately. You will need to sign in with your own supported provider account inside the app.
+- The official packaged app includes the agent runtimes; you do not need to install them separately. You will need your own supported provider account. Read the [provider support table](../../README.md#provider-support) before choosing one: the Claude subscription authentication route remains unresolved; OpenCode also needs a model selection. The recorded build used Codex.
 - Begin with disposable files containing no personal, customer or employer information. The preview has not had an independent security audit.
 - Start with one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
 - Leave external connections, remote access and schedules unused for this first trial. Do not run as administrator or use Bypass/Full access.
@@ -84,7 +84,9 @@ Closing the tab does not stop agents. Use **Stop** in the conversation and wait 
 
 ## Feedback
 
-Use [the feedback sheet](FEEDBACK.md), then explore independently if you wish. You do not need to try every feature. The useful questions are: could you get started, did you get something useful, and would you choose to return?
+For a reproducible problem, [open a bug report](https://github.com/cw12574/abralo-workspace/issues/new/choose) with the version, OS/CPU/browser, provider, last successful step and exact error. Include only reviewed, redacted evidence. For a suspected vulnerability, follow [the security policy](../../SECURITY.md).
+
+For a guided trial with Chris, use [the feedback sheet](FEEDBACK.md). You do not need to try every feature. The useful questions are: could you get started, did you get something useful, and would you choose to return?
 
 Read [access and privacy](ACCESS-AND-PRIVACY.md) and [recovery](RECOVERY.md) before adding anything you care about.
 

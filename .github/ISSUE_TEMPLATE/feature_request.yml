@@ -1,0 +1,22 @@
+name: Feature or workflow suggestion
+description: Explain a task Abralo could make easier.
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: What are you trying to do?
+      description: Describe a concrete workflow and who needs it. Avoid confidential project details.
+    validations:
+      required: true
+  - type: textarea
+    id: limitation
+    attributes:
+      label: What gets in the way today?
+      description: Describe the current behavior or workaround.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: Optional. The problem is useful even without a proposed solution.

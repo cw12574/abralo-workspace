@@ -1,6 +1,8 @@
 # Abralo installer command
 
-Install the preview with pnpm or npm:
+**Unpublished development package.** The release manifest does not yet contain pinned archive hashes. These commands are not a supported install route today. Use the [GitHub release archives](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview) and [setup guide](../docs/preview/START-HERE.md).
+
+After the package has been published and verified, the intended commands are:
 
 ```sh
 pnpm dlx abralo@preview

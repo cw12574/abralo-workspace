@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Installation and first task
+    url: https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/START-HERE.md
+    about: Download the packaged app, connect a provider and check your first result.
+  - name: Security reporting guidance
+    url: https://github.com/cw12574/abralo-workspace/blob/main/SECURITY.md
+    about: Do not post vulnerabilities or secrets in public issues.
