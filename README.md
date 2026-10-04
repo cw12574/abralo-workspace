@@ -2,9 +2,9 @@
 
 Abralo is a local, cross-platform workspace where people and AI agents work together through direct conversations, shared rooms, and project context. This new product generation centers the shared conversation experience. Start with the [tester guide](docs/preview/START-HERE.md). See [contributing](CONTRIBUTING.md) and the [security policy](SECURITY.md). This source tree is licensed under [Apache-2.0](LICENSE).
 
-## Install the friends preview
+## Install the preview
 
-For normal use, download the matching package artifact from the [latest successful build](https://github.com/cw12574/abralo-workspace/actions/workflows/build.yml). Choose the artifact for your operating system and CPU, download it, and extract it. Follow [the tester guide](docs/preview/START-HERE.md). Do not use GitHub's **Download ZIP** source archive or run `pnpm build` to install the app: those are for developers and do not include the packaged runtime. A packaged app directory contains `release.json`, `runtime/`, and `scripts/`.
+For normal use, download the matching `.tar.gz` package and `SHA256SUMS` from [v0.1.3-preview](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview). Choose your operating system and CPU, verify the checksum, and extract the package. Follow [the setup guide](https://abralo.com/start.html) or [the detailed tester guide](docs/preview/START-HERE.md). Do not use GitHub's **Download ZIP** source archive or run `pnpm build` to install the app: those are for developers and do not include the packaged runtime. A packaged app directory contains `release.json`, `runtime/`, and `scripts/`.
 
 **Command-line installer:** after the installer package is published, Node.js 18+ users will be able to run `pnpm dlx abralo@preview`. It downloads the version-matched GitHub Release package, checks its SHA-256, and runs the existing platform installer. The command still requires Node and pnpm; the installed app includes its own Node runtime. See [`installer/README.md`](installer/README.md).
 

@@ -1,17 +1,17 @@
-# Abralo friends preview
+# Abralo preview setup
 
 This is an early, opt-in preview for friends. The application and shortcuts currently say **Agent Workspace**. The Windows and macOS packages are unsigned; the Linux package has no publisher signature. Automated build and install checks have passed, but native desktop acceptance, signing/trust checks and some live agent-permission checks are still open. This is not a finished or independently security-audited release.
 
-Only use an artifact from the official Abralo build workflow for your operating system and CPU. This is an opt-in friends preview; please do not redistribute the package. A CI build or checksum alone does not establish that a package is safe or signed by a publisher.
+Only use a package from the official Abralo release for your operating system and CPU. A CI build or checksum alone does not establish that a package is safe or signed by a publisher. The current downloadable preview is [v0.1.3-preview](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview).
 
 ## Download and unpack the app
 
-1. Open the [Abralo build workflow](https://github.com/cw12574/abralo-workspace/actions/workflows/build.yml) and choose its latest successful run. Confirm all four platform jobs passed.
-2. Download the matching artifact: `windows-x64`, `linux-x64`, `macos-x64` for an Intel Mac, or `macos-arm64` for Apple silicon.
-3. Compare the downloaded archive's SHA-256 with the checksum Chris sent you, using the commands below.
-4. Extract the downloaded artifact archive. Open the extracted package directory that contains `release.json`, `runtime/`, and `scripts/`.
+1. Open the [v0.1.3-preview release](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview). Its four platform jobs passed in [this build](https://github.com/cw12574/abralo-workspace/actions/runs/37115385405).
+2. Download the matching `.tar.gz` package: `abralo-windows-x64`, `abralo-linux-x64`, `abralo-macos-x64` for an Intel Mac, or `abralo-macos-arm64` for Apple silicon.
+3. Download `SHA256SUMS` from that same release and compare the archive's SHA-256 with its matching line, using the commands below.
+4. Extract the archive. On Windows, PowerShell's `tar -xzf .\abralo-windows-x64.tar.gz` can extract it. Open the resulting package directory that contains `release.json`, `runtime/`, and `scripts/`.
 
-Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build` to install the app. Those are for developers; `pnpm build` does not create a distributable package or the `runtime/` directory. If `runtime/` is missing, you have the source tree rather than the packaged app. Download the matching Actions artifact instead. Spaces in the package's parent directory name are okay; do not rename files inside the package.
+Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build` to install the app. Those are for developers; `pnpm build` does not create a distributable package or the `runtime/` directory. If `runtime/` is missing, you have the source tree rather than the packaged app. Download the matching release package instead. Spaces in the package's parent directory name are okay; do not rename files inside the package.
 
 ## Before installing
 
@@ -20,7 +20,7 @@ Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build`
 - Begin with disposable files containing no personal, customer or employer information. The preview has not had an independent security audit.
 - Start with one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
 - Leave external connections, remote access and schedules unused for this first trial. Do not run as administrator or use Bypass/Full access.
-- On Windows, run `Get-FileHash .\PACKAGE.zip -Algorithm SHA256` in PowerShell; on macOS, run `shasum -a 256 PACKAGE.zip`; on Linux, run `sha256sum PACKAGE.zip`. Replace `PACKAGE.zip` with the archive's actual name. A checksum checks file integrity; it is not a publisher signature. If the values differ or no checksum was supplied, stop and ask Chris.
+- On Windows, run `Get-FileHash .\PACKAGE.tar.gz -Algorithm SHA256` in PowerShell; on macOS, run `shasum -a 256 PACKAGE.tar.gz`; on Linux, run `sha256sum PACKAGE.tar.gz`. Replace `PACKAGE.tar.gz` with the archive's actual name. A checksum checks file integrity; it is not a publisher signature. If the values differ or no checksum was supplied, stop and ask Chris.
 - Do not disable antivirus, Gatekeeper or other system protection, and do not change a machine-wide execution policy. If your system blocks a package or script, stop, record the exact message and ask Chris. Do not use instructions from an unsolicited message or download a replacement package from another source.
 
 ## Install

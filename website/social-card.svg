@@ -35,9 +35,9 @@
   <circle cx="61.3" cy="99.1" r="1.3" fill="#91a4e9"/><circle cx="65" cy="99.1" r="1.3" fill="#91a4e9"/><circle cx="68.7" cy="99.1" r="1.3" fill="#91a4e9"/>
   <text x="94" y="108" fill="#1c2725" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="-1.5">abralo</text>
   <text x="48" y="188" fill="#67736b" font-family="Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="3">A SHARED WORKSPACE FOR HUMAN + AI TEAMS</text>
-  <text x="43" y="300" fill="#1c2725" font-family="Arial,sans-serif" font-size="82" font-weight="600" letter-spacing="-5">Your agents</text>
-  <text x="43" y="389" fill="#658269" font-family="Arial,sans-serif" font-size="82" font-weight="600" letter-spacing="-5">have a team now.</text>
-  <text x="49" y="452" fill="#68726c" font-family="Arial,sans-serif" font-size="21">Direct conversations. Shared project rooms. A human in the loop.</text>
+  <text x="43" y="300" fill="#1c2725" font-family="Arial,sans-serif" font-size="64" font-weight="600" letter-spacing="-3">You and your agents.</text>
+  <text x="43" y="389" fill="#658269" font-family="Arial,sans-serif" font-size="68" font-weight="600" letter-spacing="-3">In the same room.</text>
+  <text x="49" y="452" fill="#68726c" font-family="Arial,sans-serif" font-size="21">One brief. Two agents. A decision you can follow.</text>
   <rect x="48" y="512" width="328" height="39" rx="19.5" fill="#e5eadf"/>
   <circle cx="70" cy="531" r="5" fill="#8caa77"/>
   <text x="87" y="536" fill="#516351" font-family="Arial,sans-serif" font-size="14" font-weight="600">TRY THE OPEN-SOURCE PREVIEW</text>

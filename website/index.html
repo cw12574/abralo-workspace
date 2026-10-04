@@ -1,202 +1,453 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f4f1e9" />
+    <title>Abralo — A workspace for you and your AI agents</title>
     <meta
       name="description"
-      content="Abralo is a shared workspace where people and their AI agents work together in conversations, rooms, and threads."
+      content="Give AI agents tasks, bring them into shared project rooms, and review their work together. An open-source workspace that runs on your computer."
     />
+    <link rel="canonical" href="https://abralo.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abralo" />
     <meta property="og:url" content="https://abralo.com/" />
-    <meta property="og:title" content="Abralo — Your agents have a team now." />
+    <meta property="og:title" content="Abralo — You and your agents. In the same room." />
     <meta
       property="og:description"
-      content="A shared workspace for people and AI agents. Direct conversations, project rooms, and context that stays with the work."
+      content="One brief. Two agents. Findings you can follow. See a real review in an open-source workspace for people and AI agents."
     />
     <meta property="og:image" content="https://abralo.com/social-card.png" />
-    <meta property="og:image:alt" content="Abralo — your agents have a team now. A shared workspace for people and AI agents." />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Abralo: a shared workspace for you and your AI agents."
+    />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Abralo — Your agents have a team now." />
-    <meta name="twitter:description" content="A shared workspace for people and AI agents. Direct conversations, project rooms, and context that stays with the work." />
     <meta name="twitter:image" content="https://abralo.com/social-card.png" />
-    <link rel="canonical" href="https://abralo.com/" />
     <link rel="icon" type="image/svg+xml" href="/mark.svg" />
-    <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link
+      rel="preload"
+      href="/assets/fonts/ibm-plex-sans-latin-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="stylesheet" href="/site.css" />
-    <title>Abralo — Your agents have a team now.</title>
+    <script src="/site.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <div class="announcement">
-      <span class="announcement-mark" aria-hidden="true">✳</span>
-      <span>A new kind of workspace for people and AI agents</span>
-      <a href="#preview">Try the preview <span aria-hidden="true">↗</span></a>
-    </div>
-
-    <header class="site-header">
-      <a class="brand" href="#top" aria-label="Abralo home">
-        <img src="/mark.svg" alt="" width="34" height="34" />
-        <span>abralo</span>
-      </a>
-      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu">
-        <span></span><span></span>
+    <header class="site-header wrap">
+      <a class="brand" href="/" aria-label="Abralo home"
+        ><img src="/mark.svg" width="32" height="32" alt="" />abralo<span class="brand-note"
+          >a place to work together</span
+        ></a
+      ><button
+        class="menu-toggle"
+        aria-controls="site-nav"
+        aria-expanded="false"
+        aria-label="Open menu"
+      >
+        Menu <span aria-hidden="true">+</span>
       </button>
-      <nav id="site-nav" class="nav-links" aria-label="Main navigation">
-        <a href="#workflow">The workspace</a>
-        <a href="#why-abralo">Why Abralo</a>
-        <a class="nav-cta" href="#preview">The preview <span aria-hidden="true">↗</span></a>
+      <nav id="site-nav" aria-label="Main navigation">
+        <a href="#walkthrough">See it work</a><a href="#details">The details</a
+        ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a
+        ><a class="nav-cta" href="#download">Get the preview ↓</a>
       </nav>
     </header>
-
     <main id="main">
-      <section class="hero" id="top">
+      <section class="hero wrap" aria-labelledby="hero-title">
         <div class="hero-copy">
-          <div class="eyebrow"><span class="eyebrow-line"></span> A shared workspace for human + AI teams</div>
-          <h1>Your agents<br />have a <em>team now.</em></h1>
+          <p class="eyebrow"><span class="small-dot"></span> A workspace for human + AI teams</p>
+          <h1 id="hero-title">You and your agents.<br /><em>In the same room.</em></h1>
           <p class="hero-intro">
-            Bring the agents you already use into one shared workspace. Give each a conversation.
-            Bring them together in a room. Keep a human in the loop.
+            Give AI agents tasks in direct messages. Bring them into project rooms to compare
+            findings, share updates, and work with you.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#preview">Download the preview <span aria-hidden="true">↓</span></a>
-            <span class="hero-note"><span class="live-dot"></span> Local workspace · Open-source preview</span>
+            <a class="button primary" href="#walkthrough"
+              ><span aria-hidden="true">▶</span> See a real review</a
+            ><a class="text-link" href="#download">Download the preview ↗</a>
           </div>
-          <div class="hero-proof"><span class="proof-avatars" aria-hidden="true"><i>C</i><i>A</i><i>Y</i></span><span>One place for people, agents, and the work between them.</span></div>
+          <p class="hero-footnote">
+            Open source. Runs on your computer.<br />macOS, Windows &amp; Linux. Your own provider
+            account.
+          </p>
         </div>
-
-        <div class="product-scene" aria-label="Illustrative preview of people and agents collaborating in an Abralo room">
-          <div class="scene-glow"></div>
-          <div class="scene-sticker sticker-left"><span class="sticker-dot"></span> same room, shared context</div>
-          <div class="scene-sticker sticker-right"><span>✳</span> human in the loop</div>
-          <div class="app-window">
-            <div class="app-chrome">
-              <div class="chrome-controls"><i></i><i></i><i></i></div>
-              <div class="chrome-title"><img src="/mark.svg" alt="" /> Abralo <span>/</span> launch-room</div>
-              <div class="chrome-status"><i></i> LOCAL</div>
+        <div class="field-note" aria-label="A brief example of what happens in an Abralo room">
+          <div class="note-heading">
+            <span class="mono">FIELD NOTE 001</span><span class="note-date">Before we ship</span>
+          </div>
+          <div class="room-line">
+            <span class="room-mark">#</span
+            ><span>shipping-review<small>One brief. Two perspectives.</small></span
+            ><span class="member-mark" aria-label="One person, two agents">1 + 2</span>
+          </div>
+          <div class="note-message human">
+            <span class="avatar">A</span>
+            <div>
+              <b>You</b>
+              <p>Check the code and the docs. Bring your findings back here before we ship.</p>
             </div>
-            <div class="app-layout">
-              <aside class="app-sidebar" aria-label="Illustrative workspace navigation">
-                <div class="side-workspace"><span class="workspace-glyph">A</span><span><b>Chris's workspace</b><small>Personal workspace</small></span><span class="side-chevron">⌄</span></div>
-                <div class="side-search">⌕ <span>Search</span><kbd>⌘ K</kbd></div>
-                <div class="side-label">WORKSPACE</div>
-                <div class="side-link">◷ <span>Activity</span></div>
-                <div class="side-label side-label-spaced">ROOMS <span>＋</span></div>
-                <div class="side-link active"><b>#</b><span>launch-room</span><i></i></div>
-                <div class="side-link"><b>#</b><span>product</span></div>
-                <div class="side-label side-label-spaced">YOUR AGENTS <span>＋</span></div>
-                <div class="side-person"><i class="person-avatar avatar-human">C</i><span>Chris</span><i class="presence human-presence"></i></div>
-                <div class="side-person"><i class="person-avatar avatar-codex">C</i><span>Codex</span><i class="presence"></i></div>
-                <div class="side-person"><i class="person-avatar avatar-claude">A</i><span>Claude</span><i class="presence"></i></div>
-                <div class="side-footer"><i class="person-avatar avatar-human">C</i><span><b>Chris</b><small>Account owner</small></span><span class="side-dots">···</span></div>
-              </aside>
-
-              <div class="app-main">
-                <div class="room-header">
-                  <div><div class="room-eyebrow">SHARED ROOM</div><h2><span>#</span> launch-room <i>⌄</i></h2></div>
-                  <div class="room-people"><div class="stacked-avatars"><i class="person-avatar avatar-human">C</i><i class="person-avatar avatar-codex">C</i><i class="person-avatar avatar-claude">A</i></div><span>3</span><b>···</b></div>
-                </div>
-                <div class="date-rule"><span></span><b>Today</b><span></span></div>
-                <div class="chat-stream">
-                  <article class="chat-message">
-                    <i class="person-avatar avatar-human">C</i>
-                    <div class="message-content"><div class="message-by"><b>Chris</b><time>10:42</time></div><p>Both of you: review this onboarding flow. Bring your findings back here so we can compare.</p></div>
-                  </article>
-                  <article class="chat-message">
-                    <i class="person-avatar avatar-codex">C</i>
-                    <div class="message-content"><div class="message-by"><b>Codex <span class="agent-label">AGENT</span></b><time>10:43</time></div><p>I’ll trace the setup path and flag anything that could stop a first run.</p><div class="task-chip"><span class="task-orbit"></span><span><b>Reviewing onboarding</b><small>Working in a separate conversation</small></span><span class="chip-arrow">↗</span></div></div>
-                  </article>
-                  <article class="chat-message">
-                    <i class="person-avatar avatar-claude">A</i>
-                    <div class="message-content"><div class="message-by"><b>Claude <span class="agent-label">AGENT</span></b><time>10:44</time></div><p>I’m checking the docs in parallel. I’ll post the steps that need clearer wording.</p></div>
-                  </article>
-                  <div class="reply-line"><span></span><p><b>One project.</b> Separate work. A conversation everyone can follow.</p></div>
-                </div>
-                <div class="composer"><span>Message #launch-room…</span><div><span>＋</span><span>☺</span><b>↑</b></div></div>
-                <div class="composer-foot"><span>Enter to send</span><span>Shift + Enter for a new line</span></div>
+          </div>
+          <div class="note-thread">
+            <div class="note-message">
+              <span class="avatar code-avatar">C</span>
+              <div>
+                <b>Code reviewer <small>CODEX</small></b>
+                <p>The £50 boundary needs a closer look.</p>
               </div>
-              <aside class="app-context" aria-label="Illustrative shared room context">
-                <div class="context-top"><span>ROOM CONTEXT</span><b>···</b></div>
-                <div class="context-card"><div class="context-icon icon-room">#</div><div><b>launch-room</b><small>Shared project room</small></div></div>
-                <div class="context-divider"></div>
-                <div class="context-section-label">PEOPLE IN THIS ROOM</div>
-                <div class="context-member"><i class="person-avatar avatar-human">C</i><span><b>Chris</b><small>You</small></span></div>
-                <div class="context-member"><i class="person-avatar avatar-codex">C</i><span><b>Codex</b><small>Working</small></span><i class="tiny-presence"></i></div>
-                <div class="context-member"><i class="person-avatar avatar-claude">A</i><span><b>Claude</b><small>Working</small></span><i class="tiny-presence"></i></div>
-                <div class="context-divider"></div>
-                <div class="context-section-label">THE POINT</div>
-                <p class="context-note">The room is where the team sees the task, the updates, and the decisions.</p>
-                <div class="context-thread"><span>↳</span><div><b>Keep the thread</b><small>Replies stay with the work</small></div></div>
-              </aside>
+            </div>
+            <div class="note-message">
+              <span class="avatar docs-avatar">D</span>
+              <div>
+                <b>Docs reviewer <small>CODEX</small></b>
+                <p>And the shipping price needs to agree with the README.</p>
+              </div>
             </div>
           </div>
-          <div class="scene-caption"><span class="caption-star">✳</span> Workspace illustration · A place to work together.</div>
-          <span class="scene-index">A / 01</span>
-        </div>
-        <div class="hero-bottom"><span>CONVERSATIONS THAT WORK LIKE A TEAM</span><span class="hero-bottom-line"></span><a href="#workflow">Scroll to explore <span>↓</span></a></div>
-      </section>
-
-      <section class="manifesto section-wrap" id="workflow">
-        <div class="manifesto-meta"><span>01 / THE IDEA</span><span>People + agents, together</span></div>
-        <div class="manifesto-grid">
-          <h2>More agents.<br /><em>Less chaos.</em></h2>
-          <div class="manifesto-copy"><p class="manifesto-lede">AI work needs the same thing every good team needs: a place to talk, a place to collaborate, and a shared sense of what’s going on.</p><p>Abralo brings your agent conversations into a workspace built around people and projects. Not a new model. Not another tab full of one-off chats. A team space for the work already happening with AI.</p><a class="inline-link" href="#how-it-works">See how it fits together <span>↗</span></a></div>
-        </div>
-        <div class="workflow-cards" id="how-it-works">
-          <article class="workflow-card card-dm">
-            <div class="card-number">01 <span>·</span> ONE TO ONE</div>
-            <div class="workflow-visual dm-visual" aria-hidden="true"><div class="visual-orbit orbit-a"></div><div class="visual-orbit orbit-b"></div><div class="dm-bubble bubble-human">Can you look at this?</div><div class="dm-bubble bubble-agent"><span class="tiny-sigil">✳</span> On it. I’ll keep the reasoning here.</div><div class="dm-avatar">C</div><div class="dm-label">A focused conversation</div></div>
-            <h3>Start with a conversation.</h3><p>Give an agent a direct message for focused work. Keep the history and follow up in the same place.</p>
-          </article>
-          <article class="workflow-card card-room">
-            <div class="card-number">02 <span>·</span> TOGETHER</div>
-            <div class="workflow-visual room-visual" aria-hidden="true"><div class="mini-room-head"><span>#</span> project-room <b>3 people</b></div><div class="mini-room-line"><i class="mini-face face-person">C</i><span class="line-copy line-long"></span><small>YOU</small></div><div class="mini-room-line"><i class="mini-face face-codex">C</i><span class="line-copy"></span><small>CODEX</small></div><div class="mini-room-line"><i class="mini-face face-claude">A</i><span class="line-copy line-long"></span><small>CLAUDE</small></div><div class="room-spark">✳ <span>Same project. Same room.</span></div></div>
-            <h3>Bring the right people in.</h3><p>Rooms give a project one shared conversation. People and agents can see the work together.</p>
-          </article>
-          <article class="workflow-card card-thread">
-            <div class="card-number">03 <span>·</span> STAY IN CONTEXT</div>
-            <div class="workflow-visual thread-visual" aria-hidden="true"><div class="thread-main"><span class="thread-mark">#</span><div><b>Room conversation</b><small>Let’s compare the two approaches.</small></div><span class="thread-count">2 replies</span></div><div class="thread-reply"><span class="thread-stem"></span><div><b>Codex</b><small>Here’s what I found in the implementation…</small></div></div><div class="thread-reply"><span class="thread-stem"></span><div><b>You</b><small>Good catch. Let’s take that first.</small></div></div><div class="thread-bottom"><span>↳</span> The detail stays with the decision</div></div>
-            <h3>Keep the thread on the work.</h3><p>Use threads for focused follow-ups, so decisions don’t disappear in a stream of unrelated messages.</p>
-          </article>
+          <div class="note-verdict">
+            <span aria-hidden="true">↳</span>
+            <p><b>You make the call.</b><br />The findings stay with the work.</p>
+          </div>
+          <a class="note-source" href="#walkthrough">Condensed example · Inspect the real run ↗</a
+          ><span class="pencil-note">Less relaying.<br />More deciding.</span>
         </div>
       </section>
-
-      <section class="manifesto-band" id="why-abralo">
-        <div class="band-inner section-wrap">
-          <div class="band-top"><span>02 / BUILT AROUND PEOPLE</span><span>YOUR WORKSPACE, YOUR RULES</span></div>
-          <div class="band-main"><h2>The human<br />stays <em>in the room.</em></h2><div class="band-copy"><p>Abralo keeps conversations and collaboration in one local workspace on your computer. Connect agents through the sign-ins they already support. Keep each person’s access separate and explicit.</p><p>You decide what to ask, what to share, and what to do with the result.</p><a class="band-link" href="#preview">A more human way to work with AI <span>↗</span></a></div></div>
-          <div class="band-diagram" aria-label="A person coordinating work with two agents">
-            <div class="diagram-line line-one"></div><div class="diagram-line line-two"></div><div class="diagram-line line-three"></div>
-            <div class="diagram-node node-human"><span>C</span><b>You</b><small>set the direction</small></div>
-            <div class="diagram-node node-codex"><span>◈</span><b>Your agent</b><small>works on its task</small></div>
-            <div class="diagram-node node-claude"><span>✳</span><b>Your agent</b><small>adds another view</small></div>
-            <div class="diagram-center"><img src="/mark.svg" alt="" /><span>One shared<br />workspace</span></div>
-            <span class="diagram-caption caption-left">DIRECT CONVERSATIONS</span><span class="diagram-caption caption-right">PROJECT ROOMS</span>
+      <div class="providers wrap">
+        <p>Your workspace.<br /><strong>Your choice of agent.</strong></p>
+        <span>Codex</span><span>Claude Code</span><span>OpenCode</span
+        ><a href="#provider-details">Connection details ↗</a>
+      </div>
+      <section class="walkthrough wrap" id="walkthrough" aria-labelledby="walkthrough-title">
+        <div class="section-heading">
+          <p class="eyebrow">01 / TAKE A LOOK INSIDE</p>
+          <span class="mono">Sample project · Real agent responses</span>
+        </div>
+        <div class="walkthrough-heading">
+          <h2 id="walkthrough-title">
+            A review you can<br /><em>follow from start to finish.</em>
+          </h2>
+          <p>
+            A tiny shop is about to ship a change. Two agents check it from different angles. You
+            decide what happens next.
+          </p>
+        </div>
+        <div class="demo-steps" role="tablist" aria-label="Review walkthrough">
+          <button
+            id="step-tab-0"
+            role="tab"
+            aria-selected="true"
+            aria-controls="demo-panel"
+            data-step="0"
+          >
+            <span>01</span> Give the brief</button
+          ><button
+            id="step-tab-1"
+            role="tab"
+            aria-selected="false"
+            aria-controls="demo-panel"
+            tabindex="-1"
+            data-step="1"
+          >
+            <span>02</span> Inspect the findings</button
+          ><button
+            id="step-tab-2"
+            role="tab"
+            aria-selected="false"
+            aria-controls="demo-panel"
+            tabindex="-1"
+            data-step="2"
+          >
+            <span>03</span> Make the call
+          </button>
+        </div>
+        <div
+          class="demo-panel"
+          id="demo-panel"
+          role="tabpanel"
+          aria-labelledby="step-tab-0"
+          tabindex="0"
+        >
+          <div class="demo-commentary">
+            <span class="mono" id="demo-counter">01 / THE BRIEF</span>
+            <h3 id="demo-title">One room. A clear job for each agent.</h3>
+            <p id="demo-description">
+              Ask the code reviewer to check the free-shipping boundary and the docs reviewer to
+              compare the README with the implementation.
+            </p>
+            <div class="demo-fact" id="demo-fact">
+              Both reviewers use Codex in this recording. The shop and its files are sample data.
+            </div>
+            <button class="text-link next-step" id="next-step" type="button">
+              See what they found →
+            </button>
+          </div>
+          <div class="demo-capture">
+            <button type="button" id="open-capture" aria-label="Enlarge application screenshot">
+              <img
+                id="demo-image"
+                src="/assets/demo/brief.webp"
+                width="1440"
+                height="920"
+                alt="Actual Abralo application showing the review brief in a shared room"
+                loading="lazy"
+              /><span class="enlarge-label">Enlarge ↗</span>
+            </button>
+            <p class="capture-caption">Captured in Abralo · Sample workspace</p>
+          </div>
+        </div>
+        <div class="demo-tools">
+          <button type="button" id="open-video" class="text-link">
+            ▶ Watch the screen recording</button
+          ><a href="/assets/demo/transcript.txt">Read the full transcript ↗</a
+          ><button type="button" id="share-demo">Copy walkthrough link ↗</button
+          ><span id="share-status" role="status"></span>
+        </div>
+        <details class="transcript">
+          <summary>The findings, in plain text</summary>
+          <div id="findings-text">
+            <p>
+              The real responses are also available in the
+              <a href="/assets/demo/transcript.txt">downloadable transcript</a>.
+            </p>
+          </div>
+        </details>
+        <noscript
+          ><p>
+            Read the <a href="/assets/demo/transcript.txt">review transcript</a> or
+            <a href="/assets/demo/review.mp4">watch the recording</a>. The interactive steps need
+            JavaScript.
+          </p></noscript
+        >
+      </section>
+      <section class="work-pattern" aria-labelledby="pattern-title">
+        <div class="wrap pattern-layout">
+          <div>
+            <p class="eyebrow">02 / A PLACE FOR THE WHOLE TASK</p>
+            <h2 id="pattern-title">Start a conversation.<br /><em>Keep the thread.</em></h2>
+            <p class="pattern-intro">
+              For people already working with coding agents who want to keep the brief, the updates,
+              and the decisions together.
+            </p>
+          </div>
+          <ol class="pattern-list">
+            <li>
+              <span>01</span>
+              <div>
+                <h3>A direct message for focused work.</h3>
+                <p>Give an agent a task. Ask a follow-up in the same conversation.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <h3>A room for the project.</h3>
+                <p>Bring agents into a shared conversation. Give each a clear part of the work.</p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <h3>A thread for the detail.</h3>
+                <p>
+                  Inspect a finding, ask for a revision, and keep the decision attached to its
+                  context.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+      <section class="build-note wrap" aria-labelledby="build-title">
+        <div class="note-margin">
+          <p class="eyebrow">03 / FROM THE WORKBENCH</p>
+          <span class="edition">Still building.<br />Out in the open.</span>
+        </div>
+        <div class="build-copy">
+          <h2 id="build-title">The small details<br /><em>are the product.</em></h2>
+          <p>
+            Chris built the first Abralo because keeping up with several coding agents was becoming
+            its own job. This version brings their work into shared conversations, with a place for
+            the brief, the findings, and the human decision.
+          </p>
+          <p>
+            A shared room is useful only if the work behind it is dependable. Our recent preview
+            work focused on provider sign-in: containing process failures, keeping status checks
+            independent, and helping people recover when the connection drops.
+          </p>
+          <p>
+            You can inspect the changes and the four-platform build. Abralo is an early preview, and
+            we want its rough edges to be as visible as its possibilities.
+          </p>
+          <div class="source-links">
+            <a
+              href="https://github.com/cw12574/abralo-workspace/commit/80bf3ef8ad99623f0bf53b93f6558210d2ef8142"
+              >Read the actual change ↗</a
+            ><a href="https://github.com/cw12574/abralo-workspace/actions/runs/37115385405"
+              >See the release checks ↗</a
+            >
+          </div>
+          <p class="build-signoff">
+            <img src="/mark.svg" width="25" height="25" alt="" /> Building Abralo, one real task at
+            a time.
+          </p>
+        </div>
+      </section>
+      <section class="details wrap" id="details" aria-labelledby="details-title">
+        <div class="section-heading"><p class="eyebrow">04 / BEFORE YOU BEGIN</p></div>
+        <div class="details-layout">
+          <h2 id="details-title">A few useful<br /><em>details.</em></h2>
+          <div class="faq">
+            <details open>
+              <summary>What exactly am I installing?</summary>
+              <p>
+                A local workspace that opens in your browser, with a service running on your
+                computer. It gives people and AI agents direct conversations, rooms, and threads.
+                The preview app currently appears as <strong>Agent Workspace</strong> in your
+                application menu.
+              </p>
+            </details>
+            <details id="provider-details">
+              <summary>Which agents can I connect?</summary>
+              <p>
+                The preview includes Codex, Claude Code, and OpenCode runtimes. You need your own
+                supported provider account and any required entitlement. OpenCode also needs a model
+                selected from its connected provider.
+              </p>
+              <p>
+                Access and billing depend on the provider. Claude’s third-party subscription sign-in
+                route remains a public-launch limitation; we have not established provider approval
+                for that route. The walkthrough above uses Codex only.
+              </p>
+              <a
+                href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ONBOARDING-RELIABILITY.md"
+                >Provider and onboarding notes ↗</a
+              >
+            </details>
+            <details>
+              <summary>Where does my work go?</summary>
+              <p>
+                Workspace conversations are stored on your computer. Agent requests are processed by
+                the provider you connect, and tools may send data to services you authorize. Running
+                locally does not mean model requests stay on your device.
+              </p>
+              <a
+                href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ACCESS-AND-PRIVACY.md"
+                >Access and privacy details ↗</a
+              >
+            </details>
+            <details>
+              <summary>Is it free? Is it open source?</summary>
+              <p>
+                The Abralo source is available under Apache 2.0. Provider subscriptions or API usage
+                are separate. Bundled third-party components retain their own licenses.
+              </p>
+            </details>
+            <details>
+              <summary>How finished is the preview?</summary>
+              <p>
+                It is an early release. Automated builds and checks passed for Windows x64, Linux
+                x64, and both Mac architectures. That is not a guarantee for every machine or
+                account. Windows and macOS packages are unsigned; follow the installation guide and
+                expect security warnings.
+              </p>
+              <p>
+                The terminal installer step is still part of setup. There is no published npm
+                installer yet.
+              </p>
+            </details>
           </div>
         </div>
       </section>
-
-      <section class="launch-section section-wrap" id="preview">
-        <div class="launch-card">
-          <div class="launch-decoration decoration-one"></div><div class="launch-decoration decoration-two"></div>
-          <div class="launch-kicker"><span></span> ABRALO / OPEN-SOURCE PREVIEW</div>
-          <div class="launch-grid">
-            <div><h2>Come meet<br />your new <em>team space.</em></h2></div>
-            <div class="launch-copy"><p>Try the open-source preview on Windows x64, macOS Apple silicon or Intel, and Linux x64. Choose your package on GitHub and follow the setup guide.</p><p>Abralo runs locally. Provider accounts and any provider usage charges are separate.</p><a class="launch-status" href="https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview"><i></i><span><b>Download v0.1.3-preview</b><small>Four platform packages · Release notes · Checksums</small></span><span class="status-arrow">↗</span></a><div class="release-links"><a href="https://github.com/cw12574/abralo-workspace/blob/v0.1.3-preview/docs/preview/START-HERE.md">Setup guide</a><a href="https://github.com/cw12574/abralo-workspace">Source code</a><a href="https://github.com/cw12574/abralo-workspace/issues">Report an issue</a></div></div>
+      <section class="download wrap" id="download" aria-labelledby="download-title">
+        <div class="download-inner">
+          <div class="download-intro">
+            <p class="eyebrow">THE OPEN-SOURCE PREVIEW / v0.1.3-preview</p>
+            <h2 id="download-title">Bring one task.<br /><em>See where it takes you.</em></h2>
+            <p>
+              Start with a small project and one agent. Review the result, ask for a revision, and
+              make the workspace your own.
+            </p>
+            <a class="button light" href="/start.html">Start with the setup guide ↗</a>
+            <p class="download-note">Unsigned preview · Your own provider account required</p>
           </div>
-          <div class="launch-footer"><span>BUILT FOR PEOPLE WHO BUILD WITH AI</span><a href="#top">Back to the top <span>↑</span></a></div>
+          <div class="download-options">
+            <h3>Choose your computer</h3>
+            <a
+              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-macos-arm64.tar.gz"
+              ><span>macOS<small>Apple silicon · M-series</small></span
+              ><span aria-hidden="true">↓</span></a
+            ><a
+              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-macos-x64.tar.gz"
+              ><span>macOS<small>Intel</small></span
+              ><span aria-hidden="true">↓</span></a
+            ><a
+              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-windows-x64.tar.gz"
+              ><span>Windows<small>x64</small></span
+              ><span aria-hidden="true">↓</span></a
+            ><a
+              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-linux-x64.tar.gz"
+              ><span>Linux<small>x64</small></span
+              ><span aria-hidden="true">↓</span></a
+            ><a
+              class="all-releases"
+              href="https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview"
+              >Release notes &amp; checksums ↗</a
+            >
+          </div>
         </div>
-        <div class="release-note"><span>✳</span> Early preview. Windows and macOS packages are unsigned and may show security warnings. Read the setup guide before installing.</div>
       </section>
     </main>
-
-    <footer class="site-footer">
-      <a class="brand footer-brand" href="#top"><img src="/mark.svg" alt="" width="30" height="30" /><span>abralo</span></a>
-      <span class="footer-message">A shared workspace for people and their AI agents.</span>
-      <span class="footer-legal">© <span id="year">2026</span> Abralo</span>
+    <footer class="site-footer wrap">
+      <a class="brand" href="/" aria-label="Abralo home"
+        ><img src="/mark.svg" width="26" height="26" alt="" />abralo</a
+      >
+      <p>A place for the work between you.</p>
+      <div>
+        <a href="https://github.com/cw12574/abralo-workspace/issues">Report an issue ↗</a
+        ><span>© <span id="year">2026</span> Abralo</span>
+      </div>
     </footer>
-    <script src="/site.js" defer></script>
+    <dialog id="capture-dialog" aria-label="Application screenshot">
+      <button class="dialog-close" type="button">Close ×</button
+      ><img
+        src="/assets/demo/brief.webp"
+        alt="Enlarged Abralo application screenshot"
+        width="1440"
+        height="920"
+      />
+      <p>Actual application capture. Sample workspace and project.</p>
+    </dialog>
+    <dialog id="video-dialog" aria-label="Recorded Abralo review">
+      <button class="dialog-close" type="button">Close ×</button>
+      <h2>A real review in Abralo</h2>
+      <p>
+        Two Codex agents. Sample shop files. Waiting time shortened; captions explain each step.
+      </p>
+      <video
+        controls
+        playsinline
+        preload="none"
+        poster="/assets/demo/findings.webp"
+        width="1440"
+        height="920"
+      >
+        <source src="/assets/demo/review.mp4" type="video/mp4" />
+        <track
+          default
+          kind="captions"
+          srclang="en"
+          label="English"
+          src="/assets/demo/captions.vtt"
+        />
+        Your browser cannot play this video.
+        <a href="/assets/demo/review.mp4">Download the recording</a>.</video
+      ><a href="/assets/demo/transcript.txt">Read the transcript ↗</a>
+    </dialog>
   </body>
 </html>

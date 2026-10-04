@@ -1,0 +1,36 @@
+Abralo website walkthrough ? 4 October 2026
+
+Actual Codex responses in a disposable Abralo workspace. Sunday shop is fictional. Both agents used Codex. This is a read-only review; no project files were modified. The operator entered the brief and final decision. The screen recording shortens a section of waiting time to 4x speed.
+
+SAMPLE FILE: shipping.js
+// Domestic shipping, in GBP. Orders of ?50 or more ship free.
+export function shipping(total) { return total > 50 ? 0 : 4.99; }
+
+SAMPLE FILE: README.md
+# Sunday shop
+Domestic orders of ?50 or more ship free. Otherwise shipping is ?3.99.
+
+BRIEF
+@Code reviewer check the free-shipping boundary. @Docs reviewer compare the README with the implementation. Read only; bring your findings back here before we ship.
+
+Code reviewer (Codex)
+I’ll check the free-shipping boundary against the README.
+
+
+Two discrepancies in `shipping.js:2`:
+
+- At exactly £50, shipping costs £4.99; the README and code comment promise free shipping. The condition should be `total >= 50`.
+- Below £50, the implementation charges £4.99; the README specifies £3.99.
+
+Files unchanged.
+
+Docs reviewer (Codex)
+The README disagrees with `shipping.js` in two places:
+
+- It promises free shipping at £50, but the implementation charges £4.99 at exactly £50; only totals above £50 ship free.
+- It lists standard shipping as £3.99, while the implementation charges £4.99.
+
+Read-only review; no files changed.
+
+OPERATOR DECISION
+Thanks. Hold the release: fix the ?50 boundary and confirm the shipping price before updating the README.
