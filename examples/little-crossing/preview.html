@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2ead9">
+  <title>The Little Crossing — a city in your hands</title>
+  <style>
+    :root { color-scheme: light; --paper:#f2ead9; --ink:#35483d; --muted:#67715e; --rule:#cfc5ae; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.5 system-ui,sans-serif; }
+    main { width:min(1180px, 100%); margin:auto; padding:34px 30px 24px; }
+    header { display:flex; align-items:end; justify-content:space-between; gap:28px; padding-bottom:23px; }
+    .eyebrow { margin:0 0 7px; font-size:11px; font-weight:700; letter-spacing:.17em; text-transform:uppercase; }
+    h1 { margin:0; font:normal clamp(34px, 4.5vw, 58px)/1.05 Georgia,serif; letter-spacing:-.045em; }
+    .intro { max-width:345px; margin:0 0 2px; color:var(--muted); font-size:14px; }
+    .scene { position:relative; border-block:1px solid var(--rule); }
+    canvas { display:block; width:100%; aspect-ratio:1100/640; touch-action:pan-y; }
+    .map-note { position:absolute; top:11px; left:12px; margin:0; color:#64715c; font-size:10px; letter-spacing:.1em; text-transform:uppercase; pointer-events:none; }
+    .controls { display:flex; align-items:center; flex-wrap:wrap; gap:14px 22px; padding:19px 0; border-bottom:1px solid var(--rule); }
+    fieldset { padding:0; margin:0; border:0; min-width:0; }
+    legend,.small-label { display:block; padding:0; margin-bottom:7px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); }
+    .bridge-buttons,.playback { display:flex; gap:7px; flex-wrap:wrap; }
+    button,select { font:inherit; color:var(--ink); border:1px solid #aeb39a; border-radius:5px; background:#f8f1e2; min-height:44px; padding:9px 13px; cursor:pointer; }
+    button:hover,select:hover { background:#e4e7d2; }
+    button:focus-visible,select:focus-visible { outline:3px solid #4b7374; outline-offset:3px; }
+    .bridge-buttons button { font-size:13px; }
+    .bridge-buttons button::before { content:'↔'; margin-right:7px; font-size:16px; }
+    .bridge-buttons button[aria-pressed="true"] { background:#eed5c2; border-color:#a5634b; color:#763b2b; }
+    .bridge-buttons button[aria-pressed="true"]::before { content:'×'; }
+    .playback-group { margin-left:auto; }
+    .stats { display:flex; flex-wrap:wrap; gap:18px 34px; padding:19px 0 12px; margin:0; }
+    .stats div { display:flex; align-items:baseline; gap:8px; }
+    dt { font-size:12px; color:var(--muted); }
+    dd { order:-1; margin:0; font:26px/1 Georgia,serif; font-variant-numeric:tabular-nums; }
+    footer { display:flex; justify-content:space-between; gap:20px; font-size:11px; color:var(--muted); }
+    footer p { margin:8px 0; }
+    #announcement { min-height:1.5em; margin:6px 0 0; font-size:12px; color:#765540; }
+    .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+    @media(max-width:700px) {
+      main { padding:23px 16px 16px; } header { display:block; padding-bottom:16px; }
+      .intro { max-width:440px; margin-top:13px; font-size:13px; }
+      canvas { aspect-ratio:1.45; } .map-note { font-size:8px; left:5px; top:5px; }
+      .controls { gap:13px; } .bridge-group { width:100%; }
+      .bridge-buttons { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+      .bridge-buttons button { padding:8px 4px; font-size:11px; }
+      .bridge-buttons button::before { margin-right:3px; }
+      .playback-group { margin-left:auto; } .stats { gap:13px 20px; }
+      footer { display:block; }
+    }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><p class="eyebrow">A small place with somewhere to go</p><h1>The Little Crossing</h1></div>
+    <p class="intro">Three bridges. Two banks. A town on the move.<br>Close a crossing and watch the little cars find another way.</p>
+  </header>
+  <section class="scene" aria-label="City map">
+    <p class="map-note">A living miniature · tap a bridge</p>
+    <canvas id="city" role="img" aria-label="Miniature city with traffic crossing three river bridges" aria-describedby="map-description">Use the bridge controls below and the traffic statistics to explore the simulation.</canvas>
+    <p id="map-description" class="sr-only">Willow bridge is north, Market bridge is central, and Foundry bridge is south. The buttons below open and close each crossing. Cars already on a closed bridge finish crossing; others find another route at junctions.</p>
+  </section>
+  <div class="controls">
+    <fieldset class="bridge-group"><legend>Close a crossing</legend><div class="bridge-buttons">
+      <button type="button" data-bridge="north" aria-pressed="false" aria-label="Close Willow bridge">Willow · open</button>
+      <button type="button" data-bridge="central" aria-pressed="false" aria-label="Close Market bridge">Market · open</button>
+      <button type="button" data-bridge="south" aria-pressed="false" aria-label="Close Foundry bridge">Foundry · open</button>
+    </div></fieldset>
+    <label><span class="small-label">Traffic demand</span><select id="demand"><option value="calm">Sunday stroll</option><option value="busy">Rush hour</option></select></label>
+    <div class="playback-group"><span class="small-label">Take your time</span><div class="playback"><button id="pause" type="button" aria-pressed="false">Pause</button><button id="reset" type="button">Reset</button></div></div>
+  </div>
+  <p id="announcement" role="status" aria-live="polite" aria-atomic="true">All crossings open. Try closing Market bridge.</p>
+  <dl class="stats" aria-label="Live traffic statistics">
+    <div><dt>on the road</dt><dd id="active">0</dd></div><div><dt>waiting</dt><dd id="waiting">0</dd></div>
+    <div><dt>arrived</dt><dd id="arrived">0</dd></div><div><dt>route changes</dt><dd id="rerouted">0</dd></div>
+  </dl>
+  <footer><p>A playful model of routes and queues. Every car is a real trip in the simulation.</p><p>Built from lines, little roofs, and a few patient ducks.</p></footer>
+  <noscript>This city needs JavaScript to run its traffic simulation.</noscript>
+</main>
+<script type="module">
+  import { createCity } from './city-engine.mjs';
+  import { drawCity, bridgeHitTest } from './city-view.mjs';
+  const city = createCity();
+  const canvas = document.querySelector('#city');
+  const context = canvas.getContext('2d');
+  const bridgeButtons = [...document.querySelectorAll('[data-bridge]')];
+  const pauseButton = document.querySelector('#pause');
+  const demandSelect = document.querySelector('#demand');
+  const announcement = document.querySelector('#announcement');
+  const statElements = Object.fromEntries(['active','waiting','arrived','rerouted'].map(k => [k, document.getElementById(k)]));
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let paused = reducedMotion, previous = null, statsAt = -Infinity;
+  let width = 0, height = 0, ratio = 1, frame = city.snapshot();
+
+  function announce(message) { announcement.textContent = message; }
+  function syncControls() {
+    for (const bridge of frame.bridges) {
+      const button = bridgeButtons.find(b => b.dataset.bridge === bridge.id);
+      button.textContent = `${bridge.name.replace(' bridge', '')} · ${bridge.open ? 'open' : 'closed'}`;
+      button.setAttribute('aria-pressed', String(!bridge.open));
+      button.setAttribute('aria-label', `${bridge.name}, ${bridge.open ? 'open' : 'closed'}. ${bridge.open ? 'Close' : 'Open'} crossing`);
+    }
+    demandSelect.value = frame.demand;
+    pauseButton.textContent = paused ? 'Play' : 'Pause';
+    pauseButton.setAttribute('aria-pressed', String(paused));
+    pauseButton.setAttribute('aria-label', paused ? 'Resume traffic' : 'Pause traffic');
+  }
+  function paint() {
+    if (width > 0 && height > 0 && context) drawCity(context, frame, { width, height, pixelRatio: ratio });
+  }
+  function updateStats() {
+    for (const [key, element] of Object.entries(statElements)) element.textContent = String(frame.stats[key]);
+  }
+  function refresh() { frame = city.snapshot(); syncControls(); updateStats(); paint(); }
+  function resize() {
+    const bounds = canvas.getBoundingClientRect();
+    width = bounds.width; height = bounds.height; ratio = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
+    context?.setTransform(ratio, 0, 0, ratio, 0, 0); paint();
+  }
+  function toggleBridge(id) {
+    const bridge = frame.bridges.find(b => b.id === id);
+    city.setBridgeOpen(id, !bridge.open); refresh();
+    const allClosed = frame.bridges.every(b => !b.open);
+    announce(`${bridge.name} ${bridge.open ? 'closed' : 'opened'}.${allClosed ? ' All crossings are closed; trips will wait until one reopens.' : ''}${paused ? ' Traffic is paused.' : ''}`);
+  }
+  bridgeButtons.forEach(button => button.addEventListener('click', () => toggleBridge(button.dataset.bridge)));
+  canvas.addEventListener('click', event => {
+    const bounds = canvas.getBoundingClientRect();
+    const id = bridgeHitTest(event.clientX - bounds.left, event.clientY - bounds.top, bounds.width, bounds.height);
+    if (id) toggleBridge(id);
+  });
+  canvas.addEventListener('pointermove', event => {
+    const b = canvas.getBoundingClientRect();
+    canvas.style.cursor = bridgeHitTest(event.clientX - b.left, event.clientY - b.top, b.width, b.height) ? 'pointer' : 'default';
+  });
+  pauseButton.addEventListener('click', () => {
+    paused = !paused; previous = null; syncControls();
+    announce(paused ? 'Traffic paused. You can still change the bridges.' : 'Traffic running.');
+  });
+  demandSelect.addEventListener('change', () => {
+    city.setDemand(demandSelect.value); refresh();
+    announce(`${frame.demand === 'busy' ? 'Rush hour' : 'Sunday stroll'} demand selected.${paused ? ' Traffic is paused.' : ''}`);
+  });
+  document.querySelector('#reset').addEventListener('click', () => {
+    city.reset(); previous = null; statsAt = -Infinity; refresh();
+    announce(`City reset. All crossings open, Sunday stroll demand.${paused ? ' Traffic is paused.' : ''}`);
+  });
+  document.addEventListener('visibilitychange', () => { previous = null; });
+  new ResizeObserver(resize).observe(canvas);
+  window.addEventListener('resize', resize);
+  function tick(now) {
+    if (!paused && !document.hidden && previous !== null) {
+      city.step((now - previous) / 1000); frame = city.snapshot(); paint();
+    }
+    previous = now;
+    if (now - statsAt >= 500) { updateStats(); statsAt = now; }
+    requestAnimationFrame(tick);
+  }
+  refresh(); resize();
+  if (reducedMotion) announce('Traffic starts paused to respect reduced motion. Press Play when ready.');
+  if (!context) announce('Canvas is unavailable in this browser. Traffic controls and statistics remain available.');
+  requestAnimationFrame(tick);
+</script>
+</body>
+</html>

@@ -12,6 +12,20 @@ const publicFiles = new Set([
   'mark.svg',
   'social-card.svg',
   'social-card.png',
+  'beacon.html',
+  'beacon.css',
+  'beacon.js',
+  'city.js',
+]);
+const cityFiles = new Set([
+  'city-engine.mjs',
+  'city-view.mjs',
+  'journal.json',
+  'brief.txt',
+  'review.txt',
+  'validation.txt',
+  'poster.webp',
+  'room.webp',
 ]);
 const demoFiles = new Set([
   'brief.webp',
@@ -32,6 +46,7 @@ const types = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.webp': 'image/webp',
@@ -62,7 +77,9 @@ const server = createServer(async (request, response) => {
     const font = /^assets\/fonts\/[a-zA-Z0-9_-]+\.woff2$/.test(relative);
     const demo =
       relative.startsWith('assets/demo/') && demoFiles.has(relative.slice('assets/demo/'.length));
-    if (!publicFiles.has(relative) && !font && !demo) return fail(404, 'Not found');
+    const city =
+      relative.startsWith('assets/city/') && cityFiles.has(relative.slice('assets/city/'.length));
+    if (!publicFiles.has(relative) && !font && !demo && !city) return fail(404, 'Not found');
     const file = join(root, relative);
     const info = await stat(file);
     if (!info.isFile()) return fail(404, 'Not found');

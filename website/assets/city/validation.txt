@@ -1,0 +1,39 @@
+The Little Crossing — verification record
+Build captured 4 October 2026 in the real Abralo application.
+
+The Simulation engineer, Cartographer and Reviewer were actual Codex employees
+in an isolated workspace. The operator supplied a detailed BRIEF.md and integrated
+the output. The agent review and its 14 passing tests are in review.txt and in the
+repository. This is a toy project, not a claim of autonomous production readiness.
+
+Website integration adds responsive controls, a deterministic 45-second pre-roll,
+keyboard equivalents for the canvas actions, reduced-motion initial pause,
+offscreen/hidden-tab suspension and a static-image failure fallback.
+The operator added an optional OffscreenCanvas cache to the renderer so buildings
+are not repainted every frame. The original review fingerprints precede that edit.
+
+This model uses seeded trips, shortest open road paths, lane following distance,
+simple junction admission and a maximum of 120 active cars. It omits pedestrian
+behavior, real traffic signals, turning physics and transport demand modeling.
+Rerouted counts changed route plans, not unique vehicles. Waiting counts vehicles
+that did not move on the latest model tick. No provider calls happen while playing.
+
+All agent work in this example used Codex. This is not evidence of a Claude Code
+or OpenCode build. Browser checks are automated Chromium checks on this workstation;
+they do not establish physical-device, screen-reader or every-browser compatibility.
+
+Operator verification completed locally on 4 October 2026:
+- The published source, including the cached renderer, passed all 14 Node tests.
+- Chromium website checks passed at 320, 390, 768 and 1440 CSS pixels (including
+  DPR 2 at 390): movement, pause, keyboard/touch bridge actions, demand, deterministic
+  reset, offscreen suspension, notebook loading, navigation and setup-page layout.
+- Reduced-motion initial pause and explicit play passed. Blocking the drawing
+  module produced the still-image fallback. No-JavaScript content stayed available.
+- The Beacon archive played. Public asset boundaries, module MIME types, HEAD and
+  video byte-range checks passed. Desktop and mobile screenshots were inspected.
+- In one local Chromium drawing measurement with 60 active cars at 1240x520,
+  120 sampled draws including model stepping/snapshot had approximately 0.4ms
+  median and 0.9ms p95 after caching. This is a workstation observation, not a
+  cross-device benchmark or a guaranteed frame rate.
+
+Final deployment verification is recorded in the launch conversation.
