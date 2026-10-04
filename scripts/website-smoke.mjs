@@ -86,7 +86,14 @@ try {
     ['/health', 200],
     ['/assets/demo/transcript.txt', 200],
     ['/assets/demo/responses.json', 200],
-    ['/%', 404],
+    // Railway rejects invalid percent escapes at its edge. Exercise our malformed
+    // decoder locally; on a public origin use the valid encoding of a percent sign.
+    [
+      new URL(base).hostname === '127.0.0.1' || new URL(base).hostname === 'localhost'
+        ? '/%'
+        : '/%25',
+      404,
+    ],
     ['/server.mjs', 404],
     ['/package.json', 404],
     ['/assets/demo/../../../server.mjs', 404],

@@ -42,4 +42,6 @@ node scripts/website-smoke.mjs http://127.0.0.1:4387
 
 The same command accepts a deployed origin. It checks 320/390/768/1440px layouts, keyboard tabs, screenshot/video dialogs, video playback and seeking, captions, setup navigation, public-file restrictions and byte ranges. Inspect desktop and mobile captures visually too.
 
+Raw invalid percent escapes are checked against the local server. Railway returns an edge error for some such requests before they reach the app, so the public-origin check uses a correctly encoded percent sign. Health remains available after either request.
+
 Human comprehension and first-install testing remain separate: show the page to five unfamiliar people, then observe two first tasks. Automated browser checks do not establish either result. No visitor analytics or outside outreach was added.
