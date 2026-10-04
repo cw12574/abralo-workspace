@@ -1,77 +1,74 @@
 # Abralo website
 
-Standalone HTML, CSS and JavaScript served by a small Node server. The website runs
-separately from the desktop application. IBM Plex fonts are self-hosted under their
-included SIL Open Font Licenses. No visitor analytics or external font requests.
+Standalone HTML, CSS and JavaScript served by a small Node server. The homepage
+explains people and coding agents collaborating in shared rooms. It uses the
+product's dark palette from `apps/web/src/style.css`, the same IBM Plex fonts,
+the exact app icon from `apps/web/public/icon.svg`, and its seeded pixel-avatar
+algorithm. Keep these aligned when the product branding changes.
+
+Fonts are self-hosted with their included SIL Open Font Licenses. The page makes
+no model calls and adds no visitor analytics or third-party font requests.
+
+## Workflow illustration
+
+The main room is explicitly labeled **Interactive illustration · sample messages**.
+It is an explanatory HTML recreation using shortened, invented messages, not a
+live agent session, product recording, or evidence of test results. The three
+states explain delegation, agent-to-agent handoff and human review. A separate
+link opens the actual recorded three-agent Beacon build.
+
+The walkthrough advances after eight seconds per state, then stops on Review.
+Manual tab selection pauses it. Native buttons support keyboard, pointer and
+touch; arrow keys, Home and End navigate the tabs. Reduced motion starts paused.
+Offscreen and hidden-tab states suspend the timer without losing remaining time.
+With JavaScript disabled, the first example, explanation, navigation and downloads
+remain available. The illustrated message composer is deliberately not an input.
 
 ## Run and verify
 
-From this directory: `npm start`. With the site on port 4387, run from the repo root:
+Run `npm start` in this directory, setting PORT to 4388 for the local smoke default.
+From the repository root:
 
 ```sh
-node scripts/website-smoke.mjs http://127.0.0.1:4387
-node --test examples/little-crossing/tests/integration.mjs
+node scripts/website-smoke.mjs http://127.0.0.1:4388
 ```
 
-The smoke also accepts a public origin. It checks widths 320, 390, 768 and 1440,
-including DPR 2; actual canvas motion, pause, keyboard/touch bridge controls, rush
-hour, deterministic reset, offscreen suspension, notebook loading, navigation,
-setup layout, reduced motion, module-failure and no-JavaScript fallbacks, the
-Beacon archive, asset boundaries and byte ranges. Inspect screenshots as well.
-Both commands passed locally on 4 October 2026. The engine suite has 14 tests.
-Physical-device, screen-reader and cross-browser verification remain separate.
+The same command accepts a public origin. It checks 320, 390, 768 and 1440 CSS
+pixels, including DPR 2; every workflow state, touch/click and keyboard tabs,
+pause/resume, offscreen suspension, timed progression and stop/replay, reduced
+motion, no-JavaScript layout, navigation, setup, asset boundaries and both archive
+demos. All passed locally on 4 October 2026. Desktop/mobile screenshots and the
+sharing image were inspected. A tablet overflow in the decorative team diagram
+was fixed before that passing run. Physical-device, screen-reader and full
+cross-browser testing remain separate.
 
-## The Little Crossing
+## Prior examples
 
-The illustration is a playable graph-and-queue traffic toy. The engine, drawing
-and independent integration suite were built by three actual Codex employees in
-an isolated Abralo room on 4 October 2026. The initial folder contained BRIEF.md.
-The launch operator supplied that brief, then integrated and polished the website.
-Alex is the fictional account used to operate the recorded workspace.
+- `beacon.html`, `beacon.css` and `beacon.js` preserve the actual recorded developer
+  demo, with video, captions, transcript and checks in `assets/demo`. Source is in
+  `examples/beacon`. Three actual Codex employees built it in an isolated workspace.
+- `crossing.html`, `crossing.css`, `crossing.js` and `city.js` preserve the previous
+  playable traffic-town page. Its source, real room messages and review remain in
+  `examples/little-crossing` and `assets/city`. That page's 14 integration tests
+  passed after its renderer integration. It is no longer the main product pitch.
 
-The engine handles seeded trips, shortest open paths, bridge closures, lane gaps,
-simple junction admission and bounded active traffic. Counters reflect that model.
-The site starts at 45 simulated seconds with seed 20261005; reset reproduces it.
-This is a toy, not a transport planning model or a production-readiness benchmark.
-Playing the town makes no model calls. All three agents used Codex; no claim is
-made here about a Claude Code or OpenCode demonstration.
-
-The exact room messages are in `assets/city/journal.json`. Original brief and agent
-review are `brief.txt` and `review.txt`. Local paths are replaced with a placeholder
-in the journal. No workspace database or credentials are shipped. `room.webp` is
-an actual application screenshot. The source is in `../examples/little-crossing`.
-
-`city.js` adds accessible button equivalents, motion preferences, responsive DPR,
-offscreen/hidden-tab lifecycle and failure fallback. The operator also added an
-optional OffscreenCanvas cache to the drawing. The agent review fingerprints
-precede that edit; the complete published example passed the suite afterward.
-See `assets/city/validation.txt` for coverage and limitations. The original native
-build capture remains local; the homepage presents the actual playable result.
-
-## Beacon archive
-
-`beacon.html` preserves the previous technical homepage and its 56-second edited
-recording, full recording, captions and transcript under `assets/demo`. That
-separate example was also built by three real Codex employees in an isolated
-workspace. Its controlled HTTP fixtures, source and review are in `../examples/beacon`.
-The edited video omits waiting intervals; the full capture retains them. Its
-validation notes and limitations remain available alongside the recording.
+These real examples used Codex only. Neither establishes Claude Code or OpenCode
+execution. Their original verification limits remain in the archived evidence.
 
 ## Railway
 
 Production domains abralo.com and www.abralo.com belong to service **Service**
 (`2d368d7c-59cb-4887-9531-dd46be7cb79e`), project Abralo, production environment.
-The similarly named abralo-web service does not own these domains. Deploy only
+The similarly named abralo-web service does not own those domains. Deploy only
 this directory:
 
 ```sh
 railway up ./website --path-as-root --project 411e6cdc-97ba-4f74-8f72-175697f6df9b --environment production --service 2d368d7c-59cb-4887-9531-dd46be7cb79e --detach
 ```
 
-The preceding successful deployment was fd18b103-64b4-43c8-b64f-e269dd3386f9.
+The preceding successful deployment was e9bd8b5c-cef0-4eb2-b21e-178e2bec0c97.
 GitHub pushes alone do not deploy this service. Verify Railway SUCCESS, both
-domains, /health, smoke checks and matching asset hashes. The server binds PORT;
-the Dockerfile defaults to 8080. Public files use exact allowlists; ES modules have
-JavaScript MIME types. Video supports HEAD and byte ranges. The setup guide and
-desktop downloads remain on v0.1.3-preview. This is a website deployment, not a new
-desktop release.
+domains, health, browser smoke and published asset hashes after deployment.
+The server binds PORT, defaulting to 8080 in Docker. Public files use an exact
+allowlist; archived videos support HEAD and byte ranges. Downloads still target
+v0.1.3-preview. This deployment changes the website, not the desktop release.

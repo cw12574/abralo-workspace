@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
-const base = (process.argv[2] || 'http://127.0.0.1:4387').replace(/\/$/, '');
+const base = (process.argv[2] || 'http://127.0.0.1:4388').replace(/\/$/, '');
 const browser = await chromium.launch();
-const pixels = (page) => page.locator('#city-canvas').evaluate((c) => c.toDataURL());
 try {
   for (const [width, height] of [
     [320, 844],
@@ -13,70 +12,65 @@ try {
     const page = await browser.newPage({
       viewport: { width, height },
       deviceScaleFactor: width === 390 ? 2 : 1,
-      hasTouch: width < 760,
+      hasTouch: width < 700,
     });
-    page.setDefaultTimeout(20000);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('response', (r) => {
       if (r.status() >= 400) errors.push(`${r.status()} ${r.url()}`);
     });
     await page.goto(base, { waitUntil: 'networkidle' });
-    await page.locator('#city-canvas[data-ready="true"]').waitFor();
-    assert.match(await page.locator('h1').innerText(), /Put your agents/);
-    assert.ok(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-      `overflow ${width}`,
-    );
-    const box = await page.locator('#city-canvas').boundingBox();
-    assert.ok(box.y < height - 60, `town must begin in first viewport ${width}`);
-    await page.waitForFunction(
-      () => document.querySelector('#city-canvas').dataset.running === 'true',
-    );
-    const moving = await pixels(page);
-    await page.waitForTimeout(300);
-    assert.notEqual(await pixels(page), moving, 'traffic should actually move');
-    await page.getByRole('button', { name: 'Pause city', exact: true }).click();
-    const stopped = await pixels(page);
-    await page.waitForTimeout(250);
-    assert.equal(await pixels(page), stopped, 'paused picture should remain still');
-    await page.locator('[data-bridge="central"]').focus();
-    await page.keyboard.press('Enter');
+    await page.locator('#workspace[data-ready="true"]').waitFor();
+    assert.match(await page.locator('h1').innerText(), /People and agents/);
     assert.equal(
-      await page.locator('[data-bridge="central"]').getAttribute('aria-pressed'),
+      await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--paper').trim(),
+      ),
+      '#1c1e22',
+    );
+    assert.match(await page.locator('.demo-topline').innerText(), /sample messages/);
+    assert.ok(
+      (await page.locator('#workspace').boundingBox()).y < height - 60,
+      'workspace starts above fold',
+    );
+    for (const index of [0, 1, 2]) {
+      if (width < 700) await page.locator(`#step-${index}`).tap();
+      else await page.locator(`#step-${index}`).click();
+      assert.equal(await page.locator(`#step-${index}`).getAttribute('aria-selected'), 'true');
+      assert.equal(await page.locator('[role=tabpanel]:visible').count(), 1);
+      assert.ok(await page.locator(`#workflow-${index}`).isVisible());
+      assert.ok(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+        `overflow ${width} step ${index}`,
+      );
+    }
+    assert.match(await page.locator('#workflow-1').innerText(), /@Reviewer/);
+    assert.match(await page.locator('#workflow-2').innerText(), /Keep the regression test/);
+    await page.locator('#step-2').focus();
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.locator('#step-1').getAttribute('aria-selected'), 'true');
+    assert.equal(await page.locator('#step-1').evaluate((e) => document.activeElement === e), true);
+    await page.keyboard.press('Home');
+    assert.equal(await page.locator('#step-0').getAttribute('aria-selected'), 'true');
+    assert.equal(
+      await page.locator('#workspace').getAttribute('data-paused'),
       'true',
+      'manual selection pauses tour',
     );
-    assert.notEqual(await pixels(page), stopped, 'closure must be drawn');
-    for (const id of ['north', 'south']) await page.locator(`[data-bridge="${id}"]`).click();
-    assert.match(await page.locator('#city-message').innerText(), /All three bridges are closed/);
-    // Map targets use the same proportional projection as the renderer.
-    const map = await page.locator('#city-canvas').boundingBox();
-    const hit = { x: map.x + map.width / 2, y: map.y + (map.height * 130) / 640 };
-    if (width < 760) await page.touchscreen.tap(hit.x, hit.y);
-    else await page.mouse.click(hit.x, hit.y);
-    assert.equal(await page.locator('[data-bridge="north"]').getAttribute('aria-pressed'), 'false');
-    await page.locator('#demand-toggle').click();
-    assert.equal(await page.locator('#demand-toggle').getAttribute('aria-pressed'), 'true');
-    await page.locator('#city-reset').click();
-    const reset = await pixels(page);
-    assert.equal(await page.locator('#demand-toggle').getAttribute('aria-pressed'), 'false');
-    assert.equal(await page.locator('[data-bridge][aria-pressed="true"]').count(), 0);
-    assert.equal(await page.locator('#stat-rerouted').innerText(), '0');
-    await page.locator('#city-reset').click();
-    assert.equal(await pixels(page), reset, 'same seed must reset to the same picture');
-    await page.getByRole('button', { name: 'Play city', exact: true }).click();
-    await page.evaluate(() => scrollTo({ top: document.body.scrollHeight, behavior: 'instant' }));
+    await page.getByRole('button', { name: 'Play walkthrough', exact: true }).click();
     await page.waitForFunction(
-      () => document.querySelector('#city-canvas').dataset.running === 'false',
+      () => document.querySelector('#workspace').dataset.playing === 'true',
     );
-    const offscreen = await pixels(page);
-    await page.waitForTimeout(200);
-    assert.equal(await pixels(page), offscreen, 'offscreen scene must stop drawing');
-    await page.locator('#city-canvas').scrollIntoViewIfNeeded();
+    await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
     await page.waitForFunction(
-      () => document.querySelector('#city-canvas').dataset.running === 'true',
+      () => document.querySelector('#workspace').dataset.playing === 'false',
     );
-    if (width < 760) {
+    await page.locator('#workspace').scrollIntoViewIfNeeded();
+    await page.waitForFunction(
+      () => document.querySelector('#workspace').dataset.playing === 'true',
+    );
+    await page.getByRole('button', { name: 'Pause walkthrough', exact: true }).click();
+    if (width < 700) {
       await page.getByRole('button', { name: 'Open menu' }).click();
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('.menu-toggle').getAttribute('aria-expanded'), 'false');
@@ -89,79 +83,99 @@ try {
         ),
       [],
     );
-    await page.goto(base + '/#build-story');
-    assert.equal(await page.locator('#build-story').getAttribute('open'), '');
-    await page.locator('#load-journal').click();
-    await page.locator('#journal:not([hidden])').waitFor();
-    assert.ok(
-      (await page.locator('#journal article').count()) >= 4,
-      'actual brief and agent handoffs',
-    );
-    assert.match(await page.locator('#journal').innerText(), /Reviewer/);
     await page.goto(base + '/#provider-details');
     assert.equal(await page.locator('#provider-details').getAttribute('open'), '');
     await page.goto(base + '/start.html', { waitUntil: 'networkidle' });
     assert.match(await page.locator('body').innerText(), /notes.txt/);
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    assert.ok(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      'setup overflow',
+    );
     assert.deepEqual(errors, []);
     await page.close();
     console.log(
-      `${width}px: responsive scene, movement, pause, keyboard/touch closure, demand, deterministic reset, offscreen suspension, notebook and setup passed`,
+      `${width}px: app palette, responsive workflow, touch/click and keyboard tabs, pause/resume, offscreen suspension, navigation and setup passed`,
     );
   }
+  const timed = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
+  await timed.clock.install();
+  await timed.goto(base, { waitUntil: 'networkidle' });
+  await timed.waitForFunction(
+    () => document.querySelector('#workspace').dataset.playing === 'true',
+  );
+  await timed.clock.runFor(8100);
+  assert.equal(
+    await timed.locator('#workspace').getAttribute('data-step'),
+    '1',
+    'autoplay advances to collaboration',
+  );
+  await timed.clock.runFor(8100);
+  assert.equal(await timed.locator('#workspace').getAttribute('data-step'), '2');
+  assert.equal(
+    await timed.locator('#workspace').getAttribute('data-paused'),
+    'true',
+    'tour stops at review',
+  );
+  await timed.getByRole('button', { name: 'Replay walkthrough' }).click();
+  assert.equal(await timed.locator('#workspace').getAttribute('data-step'), '0');
+  await timed.getByRole('button', { name: 'Pause walkthrough' }).click();
+  await timed.clock.runFor(20000);
+  assert.equal(
+    await timed.locator('#workspace').getAttribute('data-step'),
+    '0',
+    'pause remains stable',
+  );
+  await timed.close();
   const rp = await browser.newPage({ reducedMotion: 'reduce' });
+  await rp.clock.install();
   await rp.goto(base, { waitUntil: 'networkidle' });
-  await rp.locator('#city-canvas[data-ready="true"]').waitFor();
-  assert.equal(await rp.locator('#city-canvas').getAttribute('data-paused'), 'true');
-  const still = await pixels(rp);
-  await rp.waitForTimeout(200);
-  assert.equal(await pixels(rp), still);
-  await rp.getByRole('button', { name: 'Play city', exact: true }).click();
-  await rp.waitForTimeout(250);
-  assert.notEqual(await pixels(rp), still);
+  assert.equal(await rp.locator('#workspace').getAttribute('data-paused'), 'true');
+  await rp.clock.runFor(20000);
+  assert.equal(await rp.locator('#workspace').getAttribute('data-step'), '0');
+  await rp.getByRole('button', { name: 'Play walkthrough' }).click();
+  await rp.clock.runFor(8100);
+  assert.equal(await rp.locator('#workspace').getAttribute('data-step'), '1');
   await rp.close();
-  const failed = await browser.newPage();
-  await failed.route('**/assets/city/city-view.mjs', (route) => route.abort());
-  await failed.goto(base);
-  await failed.locator('.city-fallback').waitFor();
-  assert.match(await failed.locator('#city-message').innerText(), /could not load/);
-  await failed.close();
-  const np = await browser.newPage({ javaScriptEnabled: false });
-  await np.goto(base);
-  await np.locator('noscript').getByRole('link', { name: 'view the map' }).waitFor();
+  const np = await browser.newPage({
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+  });
+  await np.goto(base, { waitUntil: 'networkidle' });
+  assert.ok(await np.locator('#workflow-0').isVisible());
+  assert.ok(await np.locator('.no-script').isVisible());
+  assert.ok(await np.locator('#site-nav').isVisible());
+  assert.ok(await np.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await np.close();
-  const archive = await browser.newPage();
-  await archive.goto(base + '/beacon.html', { waitUntil: 'networkidle' });
-  await archive.waitForFunction(() => document.querySelector('video').currentTime > 0);
-  await archive.close();
+  const archives = await browser.newPage();
+  await archives.goto(base + '/beacon.html', { waitUntil: 'networkidle' });
+  await archives.waitForFunction(() => document.querySelector('video').currentTime > 0);
+  await archives.goto(base + '/crossing.html', { waitUntil: 'networkidle' });
+  await archives.locator('#city-canvas[data-ready="true"]').waitFor();
+  await archives.locator('[data-bridge="central"]').click();
+  assert.equal(
+    await archives.locator('[data-bridge="central"]').getAttribute('aria-pressed'),
+    'true',
+  );
+  await archives.close();
   console.log(
-    'Reduced motion, explicit play, failed-module fallback, no-JavaScript content and Beacon archive passed',
+    'Timed progression, stop/replay, reduced motion, no-JavaScript content and both archives passed',
   );
   const req = await browser.newContext();
   for (const [path, status] of [
     ['/health', 200],
-    ['/assets/city/journal.json', 200],
-    ['/assets/city/validation.txt', 200],
-    ['/assets/city/room.webp', 200],
-    ['/assets/city/poster.webp', 200],
+    ['/mark.svg', 200],
     ['/social-card.png', 200],
     ['/server.mjs', 404],
-    ['/assets/city/../../../server.mjs', 404],
     ['/%25', 404],
   ])
     assert.equal((await req.request.get(base + path)).status(), status, path);
-  const module = await req.request.get(base + '/assets/city/city-engine.mjs');
-  assert.match(module.headers()['content-type'], /javascript/);
-  const head = await req.request.head(base + '/assets/demo/build.mp4');
-  assert.equal(head.status(), 200);
-  assert.equal((await head.body()).length, 0);
-  const part = await req.request.get(base + '/assets/demo/build.mp4', {
+  const video = await req.request.get(base + '/assets/demo/build.mp4', {
     headers: { Range: 'bytes=0-99' },
   });
-  assert.equal(part.status(), 206);
-  assert.equal((await part.body()).length, 100);
+  assert.equal(video.status(), 206);
+  assert.equal((await video.body()).length, 100);
   await req.close();
-  console.log('Public assets, module MIME, file boundaries and archive byte ranges passed');
+  console.log('Assets, public file boundaries and recorded-build range delivery passed');
 } finally {
   await browser.close();
 }

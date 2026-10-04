@@ -16,6 +16,9 @@ const publicFiles = new Set([
   'beacon.css',
   'beacon.js',
   'city.js',
+  'crossing.html',
+  'crossing.css',
+  'crossing.js',
 ]);
 const cityFiles = new Set([
   'city-engine.mjs',

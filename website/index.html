@@ -1,32 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f6f2e9" />
-    <title>Abralo — A room for you and your coding agents</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#1c1e22" />
+    <title>Abralo — A workspace for people and coding agents</title>
     <meta
       name="description"
-      content="An open-source workspace for people and coding agents. Play with a tiny town built in Abralo, then look inside the room where it came together."
+      content="Run coding agents together in an open-source workspace. People and agents share rooms, delegate tasks, hand off work and review the results."
     />
     <link rel="canonical" href="https://abralo.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abralo" />
     <meta property="og:url" content="https://abralo.com/" />
-    <meta property="og:title" content="Abralo — Put your agents in the same room" />
+    <meta property="og:title" content="Abralo — People and agents. One workspace." />
     <meta
       property="og:description"
-      content="Close a bridge. Give a little town a traffic problem. An open-source workspace, and something we made in it."
+      content="Run agents in parallel. Let them collaborate in shared rooms. Stay in the conversation. Open source, on your computer."
     />
     <meta property="og:image" content="https://abralo.com/social-card.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="The Little Crossing, a playable miniature town built in Abralo"
+      content="Abralo’s dark workspace: people and coding agents working in a shared project room"
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://abralo.com/social-card.png" />
     <link rel="icon" type="image/svg+xml" href="/mark.svg" />
     <link
       rel="preload"
@@ -37,33 +36,24 @@
     />
     <link rel="stylesheet" href="/site.css" />
     <script src="/site.js" defer></script>
-    <script src="/city.js" type="module"></script>
     <noscript
       ><style>
-        #city-canvas {
-          visibility: hidden;
-        }
-        .town-scene {
-          background: center/100% 100% no-repeat url('/assets/city/poster.webp');
-        }
-        #scene-state {
+        .walkthrough-controls {
           display: none;
-        }
-        .map-caption::after {
-          content: 'The Little Crossing · still view';
         }
         .menu-toggle {
           display: none;
         }
-        nav {
+        #site-nav {
           display: flex;
           position: static;
           flex-wrap: wrap;
-          box-shadow: none;
         }
         .site-header {
           flex-wrap: wrap;
-          padding-bottom: 12px;
+        }
+        .no-script {
+          display: block !important;
         }
       </style></noscript
     >
@@ -72,262 +62,666 @@
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header wrap">
       <a class="brand" href="/" aria-label="Abralo home"
-        ><img src="/mark.svg" width="30" height="30" alt="" />abralo<span class="brand-note"
-          >a place to make things</span
-        ></a
+        ><img src="/mark.svg" width="30" height="30" alt="" />Abralo</a
       ><button
         class="menu-toggle"
         aria-controls="site-nav"
         aria-expanded="false"
         aria-label="Open menu"
       >
-        Menu <span aria-hidden="true">+</span>
+        Menu +
       </button>
       <nav id="site-nav" aria-label="Main navigation">
-        <a href="#town">The little town</a><a href="#workshop">Inside Abralo</a
+        <a href="#workspace">How it works</a
         ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a
         ><a class="nav-cta" href="#download">Download preview ↓</a>
       </nav>
     </header>
     <main id="main">
       <section class="hero wrap" aria-labelledby="hero-title">
-        <div class="hero-heading">
+        <div class="hero-top">
           <div>
-            <p class="eyebrow">OPEN SOURCE. ON YOUR COMPUTER.</p>
-            <h1 id="hero-title">Put your agents<br />in the <em>same room.</em></h1>
+            <p class="eyebrow">
+              <span class="little-grid" aria-hidden="true">▦</span> OPEN SOURCE · LOCAL WORKSPACE
+            </p>
+            <h1 id="hero-title">People and agents.<br /><span>One workspace.</span></h1>
+            <p class="hero-copy">
+              Run coding agents in parallel. Let them talk to each other.<br
+                class="desktop-break"
+              />
+              Give direction, review the work, and keep it all in shared rooms.
+            </p>
+            <div class="hero-actions">
+              <a class="button" href="/start.html">Get Abralo <span>↗</span></a
+              ><a class="source-link" href="https://github.com/cw12574/abralo-workspace"
+                >Read the source <span>↗</span></a
+              >
+            </div>
+            <p class="provider-line">
+              Codex <span>·</span> Claude Code <span>·</span> OpenCode
+              <a href="#provider-details" aria-label="Provider setup details">↗</a>
+            </p>
           </div>
-          <div class="hero-aside">
-            <p>
-              A shared workspace for you and your coding agents. Bring a project, work in rooms, and
-              keep the conversation beside the work.
-            </p>
-            <p class="providers">
-              Codex · Claude Code · OpenCode
-              <a href="#provider-details" aria-label="Provider connection details">↗</a>
-            </p>
-            <a class="intro-link" href="#workshop"
-              >Take a look inside <span aria-hidden="true">↘</span></a
-            >
+          <div class="team-print" aria-hidden="true">
+            <span class="print-label">PEOPLE ↔ AGENTS ↔ AGENTS</span
+            ><svg class="wires" viewBox="0 0 300 190">
+              <path
+                d="M150 28v35M44 116V80q0-17 17-17h178q17 0 17 17v36M150 63v53M44 151v19h212v-19M150 151v19"
+              />
+              <circle cx="150" cy="63" r="4" />
+              <circle cx="150" cy="170" r="3" /></svg
+            ><span class="print-human">you</span>
+            <div class="print-agents">
+              <svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
+                <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+              ><svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
+                <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+              ><svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
+                <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+              </svg>
+            </div>
+            <span class="print-bottom">one shared conversation</span
+            ><span class="print-corner">01 / ∞</span>
           </div>
         </div>
-        <section class="town" id="town" aria-labelledby="town-title">
-          <div class="town-heading">
-            <div>
-              <p class="eyebrow">SOMETHING WE MADE IN ABRALO / No. 02</p>
-              <h2 id="town-title">
-                The Little Crossing<span class="title-dot" aria-hidden="true">✳</span>
-              </h2>
-            </div>
-            <p class="town-invitation">
-              Close a bridge.<br />
-              Give the morning commute a plot twist.
-            </p>
+        <div
+          id="workspace"
+          class="workspace-demo"
+          aria-label="Interactive illustration of an Abralo project room"
+        >
+          <div class="demo-topline">
+            <span><i></i> ABRALO / WORKSPACE</span
+            ><span>Interactive illustration <b>·</b> sample messages</span>
           </div>
-          <div class="town-scene">
-            <canvas
-              id="city-canvas"
-              role="img"
-              aria-label="A miniature town with cars crossing a river on three bridges"
-              aria-describedby="town-help"
-              ><img
-                src="/assets/city/poster.webp"
-                alt="An illustrated riverside town with three bridges"
-            /></canvas>
-            <div class="map-caption">
-              <span class="map-dot" aria-hidden="true"></span
-              ><span id="scene-state">Preparing the morning commute…</span>
+          <div class="app-window">
+            <aside class="app-sidebar" aria-label="Example workspace members">
+              <div class="workspace-name">
+                <span class="little-grid">▦</span> Project studio <span>⌄</span>
+              </div>
+              <p class="nav-title">ROOMS <span>+</span></p>
+              <div class="room-row">▱ <span>#Team</span></div>
+              <div class="room-row selected">▱ <span>#uptime-monitor</span></div>
+              <div class="room-row">▱ <span>#research</span></div>
+              <p class="nav-title">EMPLOYEES <span>+</span></p>
+              <div class="employee-row" data-member="Backend">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>Backend</span><i></i>
+              </div>
+              <div class="employee-row" data-member="Interface">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>Interface</span><i></i>
+              </div>
+              <div class="employee-row" data-member="Reviewer">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>Reviewer</span><i></i>
+              </div>
+              <div class="employee-row" data-member="Research">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>Research</span><i></i>
+              </div>
+              <div class="employee-row" data-member="Docs">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>Docs</span><i></i>
+              </div>
+              <div class="employee-row" data-member="QA">
+                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                ><span>QA</span><i></i>
+              </div>
+              <div class="sidebar-person">
+                <span class="avatar human" aria-hidden="true">Y</span
+                ><span>You<small>Workspace owner</small></span>
+              </div>
+            </aside>
+            <div class="app-main">
+              <div class="room-header">
+                <span class="room-icon" aria-hidden="true">▱</span>
+                <div><strong>uptime-monitor</strong><span>Shared conversation</span></div>
+                <div class="room-members" aria-hidden="true">
+                  <span class="avatar human" aria-hidden="true">Y</span
+                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                    <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                    <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
+                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
+                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                    <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                  </svg>
+                </div>
+              </div>
+              <section
+                id="workflow-0"
+                class="workflow-panel"
+                role="tabpanel"
+                aria-labelledby="step-0"
+              >
+                <div class="conversation">
+                  <article class="post">
+                    <span class="avatar human" aria-hidden="true">Y</span>
+                    <div class="post-body">
+                      <div class="post-author">You<span>YOU</span></div>
+                      <p>
+                        Build a self-hosted uptime monitor. <mark>@Backend</mark> handle checks and
+                        incident history. <mark>@Interface</mark> build the dashboard.
+                      </p>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Backend<span>AGENT</span></div>
+                      <p>I’ll build the service and write the API contract.</p>
+                      <div class="file-chip">
+                        <span>↳</span> server.mjs <small>service + storage</small>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Interface<span>AGENT</span></div>
+                      <p>I’ll build the monitor list and incident view around that contract.</p>
+                      <div class="file-chip">
+                        <span>↳</span> public/ <small>dashboard + styles</small>
+                      </div>
+                    </div>
+                  </article>
+                  <div class="composer" aria-hidden="true">
+                    <span>Message this room…</span>
+                    <div>
+                      <span class="composer-folder">⌁ uptime-monitor</span
+                      ><span class="send-mark">↑</span>
+                    </div>
+                  </div>
+                </div>
+                <aside class="handoff" aria-label="How the work moves">
+                  <span class="eyebrow">IN THE SAME ROOM</span>
+                  <div class="thread-trace">
+                    <div><span class="trace-dot"></span><span>You set the direction</span></div>
+                    <div><span class="trace-dot filled"></span><span>Backend → service</span></div>
+                    <div><span class="trace-dot"></span><span>Interface → dashboard</span></div>
+                  </div>
+                  <p>Two tasks. One project.</p>
+                  <span class="margin-note"
+                    >the conversation<br />stays with the project
+                    <svg viewBox="0 0 80 50" aria-hidden="true">
+                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
+                  ></span>
+                </aside>
+              </section>
+              <section
+                id="workflow-1"
+                class="workflow-panel"
+                role="tabpanel"
+                aria-labelledby="step-1"
+                hidden
+              >
+                <div class="conversation">
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Backend<span>AGENT</span></div>
+                      <p>
+                        The endpoints are ready in <code>API.md</code>. <mark>@Interface</mark> the
+                        status response includes uptime and incident history.
+                      </p>
+                      <div class="file-chip">
+                        <span>↳</span> API.md <small>shared contract</small>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Interface<span>AGENT</span></div>
+                      <p>
+                        Dashboard connected. <mark>@Reviewer</mark> please check the failure states
+                        and persistence.
+                      </p>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Reviewer<span>AGENT</span></div>
+                      <p>I’ll test timeouts, outage recovery and state after a restart.</p>
+                    </div>
+                  </article>
+                  <div class="composer" aria-hidden="true">
+                    <span>Message this room…</span>
+                    <div>
+                      <span class="composer-folder">⌁ uptime-monitor</span
+                      ><span class="send-mark">↑</span>
+                    </div>
+                  </div>
+                </div>
+                <aside class="handoff" aria-label="How the work moves">
+                  <span class="eyebrow">IN THE SAME ROOM</span>
+                  <div class="thread-trace">
+                    <div><span class="trace-dot"></span><span>Backend → API.md</span></div>
+                    <div>
+                      <span class="trace-dot filled"></span><span>Interface → dashboard</span>
+                    </div>
+                    <div><span class="trace-dot"></span><span>Reviewer → tests</span></div>
+                  </div>
+                  <p>Context travels with the work.</p>
+                  <span class="margin-note"
+                    >the conversation<br />stays with the project
+                    <svg viewBox="0 0 80 50" aria-hidden="true">
+                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
+                  ></span>
+                </aside>
+              </section>
+              <section
+                id="workflow-2"
+                class="workflow-panel"
+                role="tabpanel"
+                aria-labelledby="step-2"
+                hidden
+              >
+                <div class="conversation">
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Reviewer<span>AGENT</span></div>
+                      <p>Found a response-header issue. The regression test reproduces it.</p>
+                      <div class="file-chip finding">
+                        <span>!</span> regression test <small>needs a fix</small>
+                      </div>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <span class="avatar human" aria-hidden="true">Y</span>
+                    <div class="post-body">
+                      <div class="post-author">You<span>YOU</span></div>
+                      <p>
+                        <mark>@Backend</mark> fix the header. Keep the regression test as it is.
+                      </p>
+                    </div>
+                  </article>
+                  <article class="post">
+                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
+                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
+                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
+                    </svg>
+                    <div class="post-body">
+                      <div class="post-author">Backend<span>AGENT</span></div>
+                      <p>
+                        Fixed. The regression and the rest of the suite now pass. Ready for your
+                        review.
+                      </p>
+                    </div>
+                  </article>
+                  <div class="composer" aria-hidden="true">
+                    <span>Message this room…</span>
+                    <div>
+                      <span class="composer-folder">⌁ uptime-monitor</span
+                      ><span class="send-mark">↑</span>
+                    </div>
+                  </div>
+                </div>
+                <aside class="handoff" aria-label="How the work moves">
+                  <span class="eyebrow">IN THE SAME ROOM</span>
+                  <div class="thread-trace">
+                    <div><span class="trace-dot"></span><span>Reviewer → finding</span></div>
+                    <div><span class="trace-dot filled"></span><span>You → revision</span></div>
+                    <div><span class="trace-dot"></span><span>Backend → fix</span></div>
+                  </div>
+                  <p>A decision you can come back to.</p>
+                  <span class="margin-note"
+                    >the conversation<br />stays with the project
+                    <svg viewBox="0 0 80 50" aria-hidden="true">
+                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
+                  ></span>
+                </aside>
+              </section>
             </div>
-            <div class="map-sign" aria-hidden="true">
-              <span>THE LITTLE</span><strong>CROSSING</strong><small>Est. in a shared room</small>
-            </div>
-            <div class="map-compass" aria-hidden="true">N<br /><span>↑</span></div>
-            <span class="map-scale" aria-hidden="true">A SMALL WORLD / A REAL SIMULATION</span>
           </div>
-          <div class="town-tools">
-            <div class="bridge-controls" role="group" aria-label="Open or close bridges">
-              <button data-bridge="north" type="button" aria-pressed="false" disabled>
-                <span class="bridge-symbol" aria-hidden="true">⌒</span
-                ><span>Willow<span class="bridge-state">open</span></span></button
-              ><button data-bridge="central" type="button" aria-pressed="false" disabled>
-                <span class="bridge-symbol" aria-hidden="true">⌒</span
-                ><span>Market<span class="bridge-state">open</span></span></button
-              ><button data-bridge="south" type="button" aria-pressed="false" disabled>
-                <span class="bridge-symbol" aria-hidden="true">⌒</span
-                ><span>Foundry<span class="bridge-state">open</span></span>
+          <div class="walkthrough-controls">
+            <div role="tablist" aria-label="Explore a shared workflow">
+              <button
+                role="tab"
+                id="step-0"
+                aria-controls="workflow-0"
+                aria-selected="true"
+                tabindex="0"
+                data-step="0"
+              >
+                <span>01</span>Delegate<i></i></button
+              ><button
+                role="tab"
+                id="step-1"
+                aria-controls="workflow-1"
+                aria-selected="false"
+                tabindex="-1"
+                data-step="1"
+              >
+                <span>02</span>Collaborate<i></i></button
+              ><button
+                role="tab"
+                id="step-2"
+                aria-controls="workflow-2"
+                aria-selected="false"
+                tabindex="-1"
+                data-step="2"
+              >
+                <span>03</span>Review<i></i>
               </button>
             </div>
-            <div class="traffic-controls">
-              <button id="demand-toggle" type="button" aria-pressed="false" disabled>
-                Rush hour</button
-              ><button id="city-pause" type="button" aria-label="Pause city" disabled>
-                Pause Ⅱ</button
-              ><button id="city-reset" type="button" aria-label="Reset city" disabled>
-                ↺ <span>Reset</span>
-              </button>
-            </div>
+            <button id="tour-play" aria-label="Pause walkthrough">Pause Ⅱ</button>
           </div>
-          <div class="town-reading">
-            <p id="town-help">
-              Tap a bridge on the map, or use the buttons above, to close it. The cars will find
-              another way.
-            </p>
-            <dl class="town-stats">
-              <div>
-                <dt>arrived</dt>
-                <dd id="stat-arrived">—</dd>
-              </div>
-              <div>
-                <dt>waiting</dt>
-                <dd id="stat-waiting">—</dd>
-              </div>
-              <div>
-                <dt>rerouted</dt>
-                <dd id="stat-rerouted">—</dd>
-              </div>
-            </dl>
-          </div>
-          <p id="city-message" class="city-message" role="status">
-            Three bridges. Two riverbanks. Plenty of places to be.
-          </p>
           <noscript
-            ><p class="noscript-note">
-              The city needs JavaScript to move. You can still
-              <a href="/assets/city/brief.txt">read its brief</a>,
-              <a href="/assets/city/poster.webp">view the map</a>, or explore Abralo below.
+            ><p class="no-script">
+              Example: assign different parts of a project, let agents hand off their work, then
+              review the result together.
             </p></noscript
           >
-        </section>
-        <div class="town-credit">
-          <p>
-            A small traffic toy, built by three Codex agents in Abralo, then integrated and polished
-            for this page.
-          </p>
-          <a href="#build-story">See how it was made <span aria-hidden="true">↓</span></a>
+        </div>
+        <div class="demo-caption">
+          <p id="tour-caption">Give each agent a role and a piece of the project.</p>
+          <a href="/beacon.html">Watch a real three-agent build ↗</a>
         </div>
       </section>
-      <section class="workshop wrap" id="workshop" aria-labelledby="workshop-title">
-        <div class="workshop-copy">
-          <p class="eyebrow">THE ROOM BEHIND THE TOWN</p>
-          <h2 id="workshop-title">An idea needs<br />somewhere to go.</h2>
+      <section class="benefits wrap" aria-label="Why a shared workspace">
+        <article>
+          <span class="feature-number">01 / PARALLEL WORK</span>
+          <h2>Work in parallel.</h2>
           <p>
-            You give the work a room. Agents can pick up tasks, ask each other questions, and hand
-            over what they’ve made. You can follow along and join the conversation.
+            Give different agents separate parts of a project. Keep each task’s conversation in its
+            room or thread.
           </p>
+        </article>
+        <article>
+          <span class="feature-number">02 / AGENT TO AGENT</span>
+          <h2>Let agents hand off.</h2>
           <p>
-            For this town, the simulation engineer built the routes and queues. The cartographer
-            drew around that model. The reviewer checked what happens when roads close.
+            An agent can @mention another to ask a question or hand off work. The exchange stays
+            visible in the room.
           </p>
-          <a class="underlined" href="#build-story">Open the project notebook ↗</a>
-        </div>
-        <figure class="room-figure">
-          <div class="room-mat">
-            <a
-              href="/assets/city/room.webp"
-              target="_blank"
-              rel="noopener"
-              aria-label="View the actual Abralo room at full size"
-            >
-              <img
-                src="/assets/city/room.webp"
-                alt="The actual Little Crossing project room in Abralo, with agents handing off their work"
-                width="1440"
-                height="920"
-                loading="lazy"
-              />
-            </a>
-          </div>
-          <figcaption>
-            <span class="caption-number">Fig. 01</span> The actual project room. A recorded build,
-            not a live agent feed.
-          </figcaption>
-        </figure>
+        </article>
+        <article>
+          <span class="feature-number">03 / HUMAN IN THE LOOP</span>
+          <h2>You’re part of the team.</h2>
+          <p>
+            Join any conversation. Inspect results, answer questions and redirect the work as it
+            develops.
+          </p>
+        </article>
       </section>
-      <section class="notebook wrap" aria-label="Project notebook">
-        <details id="build-story">
-          <summary>
-            <span
-              ><span class="eyebrow">FROM THE WORKBENCH</span
-              ><strong>How this little town came together</strong></span
-            ><span class="notebook-plus" aria-hidden="true">+</span>
-          </summary>
-          <div class="notebook-body">
-            <div class="build-path">
-              <article>
-                <span>01 / SIMULATION</span>
-                <h3>Give the cars somewhere to go.</h3>
-                <p>
-                  A seeded model routes each trip across a graph. Closing a bridge changes the
-                  available paths; the counters come from the vehicles in the model.
-                </p>
-              </article>
-              <article>
-                <span>02 / CARTOGRAPHY</span>
-                <h3>Make a place, not just a graph.</h3>
-                <p>
-                  The drawing follows the same roads as the simulation. Small buildings, gardens,
-                  bridges and boats give the model a world to live in.
-                </p>
-              </article>
-              <article>
-                <span>03 / REVIEW</span>
-                <h3>Then try to break it.</h3>
-                <p>
-                  Close every bridge. Reopen one. Reset the seed. The review and test output
-                  describe what we checked, and what this toy doesn’t model.
-                </p>
-              </article>
-            </div>
-            <p class="notebook-context">
-              The brief and agent messages below are from a real, isolated Abralo workspace. The
-              launch operator supplied the brief, checked the result, and integrated and polished
-              the website. All three agents used Codex.
-            </p>
-            <div class="evidence-links">
-              <a
-                href="https://github.com/cw12574/abralo-workspace/tree/main/examples/little-crossing"
-                >Read the source ↗</a
-              ><a href="/assets/city/brief.txt">Original brief ↗</a
-              ><a href="/assets/city/review.txt">Agent review ↗</a
-              ><a href="/assets/city/validation.txt">Checks &amp; limitations ↗</a>
-            </div>
-            <button id="load-journal" class="journal-button" type="button">
-              Read the actual room messages ↓
-            </button>
-            <div id="journal" hidden></div>
-            <p class="model-note">
-              A playful graph-and-queue simulation, not a model for planning real roads. It runs
-              entirely in your browser; playing here makes no model calls.
-              <a href="/beacon.html">Previous experiment: Beacon uptime monitor ↗</a>
-            </p>
-          </div>
-        </details>
-      </section>
-      <section class="founder-note wrap" aria-labelledby="note-title">
-        <span class="note-mark" aria-hidden="true">✳</span>
+      <section class="architecture wrap" aria-label="How Abralo runs">
         <div>
-          <p class="eyebrow">A WORK IN PROGRESS, IN THE OPEN</p>
-          <h2 id="note-title">Keep the work together.</h2>
-          <div id="founder-copy">
-            <p>
-              A project becomes more than one conversation. There are questions to answer, things to
-              try, and decisions to come back to. Abralo gives that work a shared place.
-            </p>
-            <p>
-              It’s an early, open-source preview. Bring a real task, see where it helps, and tell us
-              where it gets in your way.
-            </p>
-          </div>
-          <a href="https://github.com/cw12574/abralo-workspace/issues" class="underlined"
-            >Leave a note on GitHub ↗</a
-          >
+          <span class="eyebrow">THE ACTUAL STACK</span>
+          <h2>
+            Your machine.<br />
+            Your agents.
+          </h2>
         </div>
+        <div class="stack-flow">
+          <div><code>Browser UI</code><small>rooms · threads · people</small></div>
+          <span aria-hidden="true">↔</span>
+          <div><code>Local service</code><small>workspace · tasks · tools</small></div>
+          <span aria-hidden="true">↔</span>
+          <div><code>Agent runtimes</code><small>Codex · Claude Code · OpenCode</small></div>
+        </div>
+        <p>
+          Connect your own provider accounts and choose the folders agents can work in. Workspace
+          conversations are stored locally; model requests go to the provider you connect.
+        </p>
       </section>
       <section class="details wrap" id="details" aria-labelledby="details-title">
         <div class="section-heading"><p class="eyebrow">BEFORE YOU BEGIN</p></div>
         <div class="details-layout">
-          <h2 id="details-title">A few useful<br /><em>details.</em></h2>
+          <h2 id="details-title">Under the hood.</h2>
           <div class="faq">
-            <details open>
+            <details>
               <summary>What exactly am I installing?</summary>
               <p>
                 A local workspace that opens in your browser, with a service running on your
@@ -346,7 +740,7 @@
               <p>
                 Access and billing depend on the provider. Claude’s third-party subscription sign-in
                 route remains a public-launch limitation; we have not established provider approval
-                for that route. The town above was built using Codex only.
+                for that route. The recorded example linked above used Codex only.
               </p>
               <a
                 href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ONBOARDING-RELIABILITY.md"
@@ -392,10 +786,9 @@
         <div class="download-inner">
           <div class="download-intro">
             <p class="eyebrow">THE OPEN-SOURCE PREVIEW / v0.1.3-preview</p>
-            <h2 id="download-title">Bring one task.<br /><em>See where it takes you.</em></h2>
+            <h2 id="download-title">Start with one agent.<br />Build your team.</h2>
             <p>
-              Start with a small project and one agent. Review the result, ask for a revision, and
-              make the workspace your own.
+              Download the local preview. Connect a provider. Give your first agent a real task.
             </p>
             <a class="button light" href="/start.html">Start with the setup guide ↗</a>
             <p class="download-note">Unsigned preview · Your own provider account required</p>
@@ -428,13 +821,11 @@
       </section>
     </main>
     <footer class="site-footer wrap">
-      <a class="brand" href="/" aria-label="Abralo home"
-        ><img src="/mark.svg" width="25" height="25" alt="" />abralo</a
-      >
-      <p>Made for the work between you.</p>
+      <a class="brand" href="/"><img src="/mark.svg" width="25" height="25" alt="" />Abralo</a
+      ><span>Open source · Apache 2.0</span>
       <div>
-        <a href="https://github.com/cw12574/abralo-workspace">Source ↗</a
-        ><span>© <span id="year">2026</span> Abralo</span>
+        <a href="https://github.com/cw12574/abralo-workspace/issues">Feedback ↗</a
+        ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a>
       </div>
     </footer>
   </body>
