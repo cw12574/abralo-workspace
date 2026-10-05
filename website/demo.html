@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Inside an Abralo build — from a brief to a tiny world</title>
+    <meta
+      name="description"
+      content="Play with a real agent-built simulation, compare two possible mornings, and inspect the Abralo room behind it."
+    />
+    <link rel="icon" href="/mark.svg" />
+    <link rel="stylesheet" href="/demo.css" />
+    <script type="module" src="/demo.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#lab">Skip to the experiment</a>
+    <header>
+      <a class="brand" href="/"><img src="/mark.svg" width="28" height="28" alt="" />Abralo</a>
+      <nav aria-label="Main">
+        <a href="#inside">Inside the workspace</a
+        ><a href="https://github.com/cw12574/abralo-workspace">Source ↗</a
+        ><a class="download" href="/start.html">Try Abralo</a>
+      </nav>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">MADE THROUGH ABRALO / EXPLORE THE RESULT</p>
+          <h1>One brief.<br />A team. <em>A tiny world.</em></h1>
+        </div>
+        <div class="intro-copy">
+          <p>
+            A simulation engineer built the rules. A cartographer drew the city. A reviewer checked
+            their work. All in one Abralo room.
+          </p>
+          <p>
+            Now take their working city somewhere new:
+            <strong>compare two possible mornings.</strong>
+          </p>
+          <a href="#inside">See the actual product and handoffs ↓</a>
+        </div>
+      </section>
+      <section id="lab" class="lab" aria-labelledby="lab-title">
+        <div class="lab-heading">
+          <div>
+            <p class="eyebrow">THE EXPERIMENT / RUNS IN YOUR BROWSER</p>
+            <h2 id="lab-title">What happens if this bridge disappears?</h2>
+          </div>
+          <span id="clock">+00:00</span>
+        </div>
+        <div class="lab-toolbar">
+          <div class="scenario-buttons" role="group" aria-label="Experiment controls">
+            <button id="close-market" disabled>Close Market bridge</button
+            ><button id="rush" aria-pressed="false" disabled>Rush hour</button
+            ><button id="isolate" disabled>Close every bridge</button
+            ><button id="restore" disabled>Reopen all bridges</button>
+          </div>
+          <div class="transport">
+            <button id="play" disabled>Pause</button
+            ><label
+              >Speed
+              <select id="speed" disabled>
+                <option value="1">1×</option>
+                <option value="4" selected>4×</option>
+              </select></label
+            ><button id="reset" disabled>Reset</button>
+          </div>
+        </div>
+        <div class="worlds">
+          <article class="world">
+            <div class="world-title">
+              <span class="dot baseline"></span>
+              <h3>The morning you started with</h3>
+              <span>BASELINE</span>
+            </div>
+            <div class="map">
+              <img
+                src="/assets/city/poster.webp"
+                alt="Illustrated city with three river crossings"
+                class="fallback"
+              /><canvas id="baseline" hidden aria-label="Baseline city, all bridges open"></canvas>
+            </div>
+            <dl>
+              <div>
+                <dt>Trips completed</dt>
+                <dd id="a-arrived">—</dd>
+              </div>
+              <div>
+                <dt>Cars waiting</dt>
+                <dd id="a-waiting">—</dd>
+              </div>
+              <div>
+                <dt>On the road</dt>
+                <dd id="a-active">—</dd>
+              </div>
+            </dl>
+          </article>
+          <article class="world changed">
+            <div class="world-title">
+              <span class="dot experiment"></span>
+              <h3>The morning you change</h3>
+              <span>YOUR EXPERIMENT</span>
+            </div>
+            <div class="map">
+              <img
+                src="/assets/city/poster.webp"
+                alt="Same city, ready for your interventions"
+                class="fallback"
+              /><canvas
+                id="experiment"
+                hidden
+                aria-label="Experimental city, bridge controls below"
+              ></canvas>
+            </div>
+            <dl>
+              <div>
+                <dt>Trips completed</dt>
+                <dd id="b-arrived">—</dd>
+              </div>
+              <div>
+                <dt>Cars waiting</dt>
+                <dd id="b-waiting">—</dd>
+              </div>
+              <div>
+                <dt>On the road</dt>
+                <dd id="b-active">—</dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+        <div class="experiment-bottom">
+          <div class="crossings" role="group" aria-label="Individual bridges">
+            <span>IN YOUR CITY</span
+            ><button data-bridge="north" aria-pressed="false" disabled>Willow <b>open</b></button
+            ><button data-bridge="central" aria-pressed="false" disabled>Market <b>open</b></button
+            ><button data-bridge="south" aria-pressed="false" disabled>Foundry <b>open</b></button>
+          </div>
+          <button id="step" disabled>Advance 15 simulated seconds →</button>
+        </div>
+        <p id="announcement" role="status">
+          Two identical cities, one shared starting seed. Change a crossing in the right-hand city.
+        </p>
+        <div class="analysis">
+          <div>
+            <div class="chart-title">
+              <h3>Trips completed over time</h3>
+              <span
+                ><i class="dot baseline"></i> Baseline <i class="dot experiment"></i> Your
+                city</span
+              >
+            </div>
+            <svg
+              id="chart"
+              viewBox="0 0 600 120"
+              role="img"
+              aria-label="Trip completion comparison; current values shown above"
+            >
+              <path class="grid" d="M10 10H590 M10 55H590 M10 100H590" />
+              <path id="line-a" />
+              <path id="line-b" />
+              <text id="chart-start" x="10" y="117">0s</text>
+              <text id="chart-end" x="590" y="117" text-anchor="end">0s</text>
+            </svg>
+            <p id="difference">Both cities start with identical traffic.</p>
+          </div>
+          <div class="experiment-log">
+            <h3>Your interventions</h3>
+            <ol id="events">
+              <li>The same morning, 45 simulated seconds after sunrise.</li>
+            </ol>
+            <button id="export" disabled>Download experiment JSON ↓</button>
+          </div>
+        </div>
+        <details class="model-note">
+          <summary>What this experiment does—and what it measures</summary>
+          <p>
+            This is a seeded traffic toy, not a calibrated transport model. Both cities begin after
+            the same 45-second warm-up and receive the same demand setting. Only your city receives
+            bridge closures. Cars already on a bridge finish crossing; others replan at junctions.
+            Closing all bridges can stop new trips being admitted, so fewer waiting cars does not
+            necessarily mean a better result.
+          </p>
+          <p>
+            The original engine caps each city at 120 active cars. Capacity differences can change
+            subsequent admitted trips. Counters include the warm-up; time above starts at the
+            beginning of your experiment. Charts retain 300 simulated seconds; the export retains up
+            to 200 interventions. Reset reproduces the initial state. The comparison, controls,
+            chart and export were added by the launch operator to the team's original city. No
+            agents or accounts run in your browser.
+          </p>
+        </details>
+        <noscript
+          ><p class="notice">
+            JavaScript enables the experiment. You can still inspect the actual workspace
+            screenshots, original messages, source and review below.
+          </p></noscript
+        >
+      </section>
+      <section id="inside" class="inside">
+        <div class="section-head">
+          <p class="eyebrow">THIS IS THE PRODUCT</p>
+          <h2>Abralo is where the team works.</h2>
+          <p>
+            The simulation is an output. Abralo is the shared room where you give the brief, agents
+            hand work to one another, and you review the result.
+          </p>
+        </div>
+        <a href="/assets/showcase/workspace.png"
+          ><img
+            class="product-shot"
+            src="/assets/showcase/workspace.webp"
+            width="1100"
+            height="760"
+            alt="Real Abralo dark-theme workspace showing the city build and its three agents"
+            loading="lazy"
+        /></a>
+        <p class="caption">
+          Actual Abralo interface, reopened on the recorded sample workspace in dark mode. Fictional
+          operator Alex; real Codex runs.
+          <a href="/assets/showcase/provenance.txt">Capture and authorship details ↗</a>
+        </p>
+        <div class="workflow">
+          <article>
+            <span>01 / DEFINE THE WORK</span>
+            <h3>A shared brief</h3>
+            <p>
+              A working traffic engine, a drawn city, keyboard controls and verifiable behavior. The
+              operator supplies the requirements and role boundaries.
+            </p>
+            <a href="/assets/city/brief.txt">Read the original brief ↗</a>
+          </article>
+          <article>
+            <span>02 / HAND OFF THE CONTRACT</span>
+            <h3>Different jobs. One room.</h3>
+            <p>
+              The engineer hands the routing API to the cartographer. The cartographer hands the
+              engine and interface to the reviewer.
+            </p>
+            <a href="/assets/city/journal.json">Read the exact room messages ↗</a>
+          </article>
+          <article>
+            <span>03 / INSPECT THE RESULT</span>
+            <h3>Tests, review, decisions</h3>
+            <p>
+              The reviewer adds 14 integration checks. The operator then checks the browser and
+              integrates the result. Contributions remain inspectable.
+            </p>
+            <a href="https://github.com/cw12574/abralo-workspace/tree/main/examples/little-crossing"
+              >Read the source and review ↗</a
+            >
+          </article>
+        </div>
+      </section>
+      <section class="breadth">
+        <div class="section-head">
+          <p class="eyebrow">MORE THAN ONE KIND OF PROJECT</p>
+          <h2>The same workspace. A different challenge.</h2>
+          <p>
+            In another recorded session, backend, interface and review agents built Beacon: a
+            working HTTP monitor with incident history. The reviewer found a defect; the backend
+            agent fixed it without changing the regression test.
+          </p>
+        </div>
+        <div class="breadth-grid">
+          <a href="/beacon.html" class="beacon-card"
+            ><img
+              src="/assets/demo/result.webp"
+              width="1440"
+              height="920"
+              alt="Beacon application built by three agents, showing monitored services and an outage"
+              loading="lazy"
+            /><span>Watch the actual build and recovery →</span></a
+          >
+          <div class="usage-card">
+            <h3>See how the work is shared.</h3>
+            <img
+              src="/assets/showcase/usage.webp"
+              width="600"
+              height="460"
+              alt="Actual Abralo Usage view: Interface engineer 40%, Backend engineer 39%, Reviewer 21% of 275 thousand reported tokens"
+              loading="lazy"
+            />
+            <p>
+              Actual reported token shares from the recorded Beacon workspace. Provider allowance
+              was not queried for this capture. Tokens are not a bill or a fixed project-cost
+              estimate.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="closing">
+        <p class="eyebrow">YOUR BRIEF GOES HERE</p>
+        <h2>What would you build with a team?</h2>
+        <p>
+          Start with one useful task. Give your agents different jobs.<br />Keep the work, handoffs
+          and decisions together.
+        </p>
+        <a class="download" href="/start.html">Download the preview →</a
+        ><a href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/TRY-IT.md"
+          >Try a reproducible build ↗</a
+        >
+        <p class="caption">
+          Local workspace · Your provider accounts · Open source · Early preview
+        </p>
+      </section>
+    </main>
+    <footer>
+      <a href="/">Abralo</a><span>Real work. Inspectable evidence. Room for your ideas.</span
+      ><a href="/assets/showcase/provenance.txt">Provenance</a>
+    </footer>
+  </body>
+</html>

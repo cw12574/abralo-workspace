@@ -1,0 +1,18 @@
+ABRALO — VISUAL README AND INTERACTIVE DEMO
+5 October 2026
+
+workspace.png / workspace.webp: screenshot of the actual Abralo web app, in dark mode, reopening a copy of the isolated Little Crossing demonstration workspace recorded on 4 October. Original messages are unchanged. This capture does not show a new agent run.
+
+usage.webp: actual Usage component displaying recorded token data from the isolated Beacon workspace. Six recorded runs contain usage reports: Interface engineer 109,628; Backend engineer 108,262; Reviewer 57,478 tokens. These are the application's observed-token figures, not a price, billing total or benchmark. Live provider-account status/allowance retrieval was disabled for the screenshot, so no account quota is depicted.
+
+connections.webp: actual Connected accounts screen in the isolated Beacon workspace. It has no connected external accounts. It depicts the real starting point for conversation-led setup, not a completed sign-in.
+
+The captures use a copy of the demonstration database, without dispatching agents, changing the original messages or fetching live provider data. These disposable examples contain a fictional operator Alex and real Codex employees. No customer conversations or credentials are included in the assets.
+
+demo.html: the launch operator extended the recorded team's Little Crossing into a side-by-side, seeded traffic experiment. The original agent-produced engine and map are reused, including the previously documented operator-added renderer cache. The comparison wrapper, controls, chart, export, page and media edit are operator contributions on 5 October. They are not attributed to the original three agents. No new multi-agent build was performed for this update.
+
+tour.gif / tour.mp4: an edited tour of the reopened actual workspace, the working browser experiment and recorded Usage view. Captions identify each. The experiment is recorded at 4x simulation speed, not a claimed agent build speed. Static screenshot holds and cuts are part of the edit. No replies or activity have been fabricated.
+
+Original city brief, exact room messages and validation: /assets/city/brief.txt, /assets/city/journal.json and /assets/city/validation.txt. Source and review: examples/little-crossing in the public repository. The new experiment is a toy model, not a transport-planning forecast; its UI explains the seed, warm-up, admission limits and retained history.
+
+Beacon recording: /beacon.html; original full room video: /assets/demo/full-build.mp4; exact messages: /assets/demo/build-transcript.txt. The sample passed 17 final tests. Docker execution was not verified. All recorded agent runs used Codex; no Claude/OpenCode or mixed-provider performance claim.

@@ -84,6 +84,38 @@ deep links, focus, no-JavaScript access and no network side effects from control
 The fresh project generator and role instructions are documented in
 `examples/beacon/TRY-IT.md`; it makes no model calls and refuses existing folders.
 
+## Visual README and comparison demo
+
+`demo.html` makes the recorded Little Crossing output playable as two synchronized
+experiments. Both branches reuse the unchanged agent-built traffic engine and
+the map with its previously documented operator cache. The launch operator added
+`assets/city/experiment.mjs`, the comparison page, chart, controls and JSON export.
+This is an extension of the existing recorded work, not a new multi-agent build.
+The page also shows the actual app and the separate Beacon example.
+
+The simulation starts after a deterministic 45-second warm-up. Bridge changes
+affect only the experimental branch; demand changes affect both. Capacity limits
+can change admitted trips, so this is a toy comparison, not a transport forecast.
+The UI and exported report state the model and retained-history limits.
+The model uses fixed 20Hz ticks; rendering is capped at 30fps with DPR capped at 2.
+Reduced motion starts paused; offscreen and hidden-tab states suspend animation.
+The Advance control provides a still-frame alternative. Static maps and evidence
+remain available without JavaScript or when canvas cannot initialize.
+
+`assets/showcase` contains actual dark-mode product captures, a 23-second edited
+tour (single-play GIF and MP4), a static experiment view and detailed provenance.
+The app was reopened on copies of the existing disposable demo databases, without
+dispatching new agents or querying live provider allowance. Usage shows recorded
+Beacon token reports. Connections shows the actual empty setup starting screen.
+No fabricated messages or connected accounts were added. These files are explicitly
+allowlisted by the server; the Dockerfile includes the new page and all assets.
+
+Run `node scripts/experiment-check.mjs` and
+`node scripts/demo-smoke.mjs http://127.0.0.1:4392`. The latter checks four widths,
+DPR2, keyboard controls, interruption/recovery, reset, export, reduced motion,
+offscreen pause, no-JavaScript fallback, assets and read-only same-origin requests.
+The original independent city tests still run from `examples/little-crossing`.
+
 ## Prior examples
 
 - `beacon.html`, `beacon.css` and `beacon.js` preserve the actual recorded developer

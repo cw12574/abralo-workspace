@@ -20,3 +20,11 @@ The launch website has its own browser checks in `scripts/website-smoke.mjs`.
 
 This is a small graph-and-queue toy. It is not a transport planning model or a
 production-readiness benchmark. See `REVIEW.md` for exact coverage and limitations.
+
+On 5 October, the launch operator added `website/demo.html` and
+`website/assets/city/experiment.mjs`: two independent instances of this unchanged
+engine, a shared demand control, bridge interventions on one branch, a comparison
+chart and JSON export. This presentation extension is operator-authored, not part
+of the original three-agent session. The original renderer is also unchanged in
+that update. The new model wrapper has separate branch/reset/recovery checks in
+`scripts/experiment-check.mjs` and browser checks in `scripts/demo-smoke.mjs`.

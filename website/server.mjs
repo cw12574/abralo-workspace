@@ -18,6 +18,9 @@ const publicFiles = new Set([
   'replay.html',
   'replay.css',
   'replay.js',
+  'demo.html',
+  'demo.css',
+  'demo.js',
   'city.js',
   'crossing.html',
   'crossing.css',
@@ -26,6 +29,7 @@ const publicFiles = new Set([
 const cityFiles = new Set([
   'city-engine.mjs',
   'city-view.mjs',
+  'experiment.mjs',
   'journal.json',
   'brief.txt',
   'review.txt',
@@ -48,6 +52,16 @@ const demoFiles = new Set([
   'build-transcript.txt',
   'validation.txt',
 ]);
+const showcaseFiles = new Set([
+  'workspace.png',
+  'workspace.webp',
+  'usage.webp',
+  'connections.webp',
+  'tour.gif',
+  'experiment.webp',
+  'tour.mp4',
+  'provenance.txt',
+]);
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -56,6 +70,7 @@ const types = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  '.gif': 'image/gif',
   '.woff2': 'font/woff2',
   '.mp4': 'video/mp4',
   '.vtt': 'text/vtt; charset=utf-8',
@@ -85,7 +100,11 @@ const server = createServer(async (request, response) => {
       relative.startsWith('assets/demo/') && demoFiles.has(relative.slice('assets/demo/'.length));
     const city =
       relative.startsWith('assets/city/') && cityFiles.has(relative.slice('assets/city/'.length));
-    if (!publicFiles.has(relative) && !font && !demo && !city) return fail(404, 'Not found');
+    const showcase =
+      relative.startsWith('assets/showcase/') &&
+      showcaseFiles.has(relative.slice('assets/showcase/'.length));
+    if (!publicFiles.has(relative) && !font && !demo && !city && !showcase)
+      return fail(404, 'Not found');
     const file = join(root, relative);
     const info = await stat(file);
     if (!info.isFile()) return fail(404, 'Not found');
