@@ -7,16 +7,16 @@
     <title>Abralo — A workspace for people and coding agents</title>
     <meta
       name="description"
-      content="Run coding agents together in an open-source workspace. People and agents share rooms, delegate tasks, hand off work and review the results."
+      content="An open-source, local workspace for developers coordinating coding agents. Give agents roles, follow their handoffs in shared rooms and review the results."
     />
     <link rel="canonical" href="https://abralo.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Abralo" />
     <meta property="og:url" content="https://abralo.com/" />
-    <meta property="og:title" content="Abralo — People and agents. One workspace." />
+    <meta property="og:title" content="Abralo — People and agents in one workspace" />
     <meta
       property="og:description"
-      content="Run agents in parallel. Let them collaborate in shared rooms. Stay in the conversation. Open source, on your computer."
+      content="Give one coding agent the build and another the review. Follow their handoffs in a shared room and decide what ships. Open source, on your computer."
     />
     <meta property="og:image" content="https://abralo.com/social-card.png" />
     <meta property="og:image:width" content="1200" />
@@ -85,20 +85,21 @@
             <p class="eyebrow">
               <span class="little-grid" aria-hidden="true">▦</span> OPEN SOURCE · LOCAL WORKSPACE
             </p>
-            <h1 id="hero-title">People and agents.<br /><span>One workspace.</span></h1>
+            <h1 id="hero-title">
+              People and agents<br />
+              <span>in one workspace</span>
+            </h1>
             <p class="hero-copy">
-              Run coding agents in parallel. Let them talk to each other.<br
-                class="desktop-break"
-              />
-              Give direction, review the work, and keep it all in shared rooms.
+              Give one coding agent the build and another the review.<br class="desktop-break" />
+              Follow their handoffs in a shared room and decide what ships.
             </p>
             <div class="hero-actions">
               <a class="button" href="/start.html">Get Abralo <span>↗</span></a
-              ><a class="source-link" href="/replay.html">Inspect a real handoff <span>↗</span></a>
+              ><a class="source-link" href="/demo.html">Explore the working demo <span>↗</span></a>
             </div>
             <p class="provider-line">
-              Codex <span>·</span> Claude Code <span>·</span> OpenCode
-              <a href="#provider-details" aria-label="Provider setup details">↗</a>
+              Recorded builds use Codex <span>·</span>
+              <a href="#provider-details">Provider setup details ↗</a>
             </p>
           </div>
           <div class="team-print" aria-hidden="true">
@@ -698,10 +699,10 @@
       <section class="product-features wrap" aria-label="Connections and usage">
         <article class="feature-card" id="connections-feature" aria-labelledby="connections-title">
           <span class="feature-number">04 / CONNECTED TOOLS</span>
-          <h2 id="connections-title">Connect from the conversation.</h2>
+          <h2 id="connections-title">Your tools. Your agents.</h2>
           <p class="feature-intro">
-            Ask an agent to connect a service. Sign in, grant access, and carry on. Share an
-            existing account with another agent when you choose.
+            Bring deployment, billing and email tools into the work. Ask an agent to connect a
+            service, authorize access, then reuse the account with the agents you choose.
           </p>
           <div class="feature-example connections-example">
             <div class="example-label">
@@ -741,8 +742,8 @@
             </p>
           </div>
           <p class="feature-footnote">
-            Preview connections: Railway, Stripe and Gmail. Gmail requires a Google OAuth client
-            once.
+            Conversation-led setup · Per-agent access · Reusable accounts.
+            <a href="#connection-coverage">Preview connection coverage ↗</a>
           </p>
         </article>
         <article class="feature-card" id="usage-feature" aria-labelledby="usage-title">
@@ -838,6 +839,57 @@
           </p>
         </article>
       </section>
+      <section class="technical-features wrap" aria-labelledby="technical-title">
+        <p class="eyebrow">FOR THE WORK BEHIND THE DEMO</p>
+        <h2 id="technical-title">Real files. Real tools. Reviewable work.</h2>
+        <dl class="technical-list">
+          <div>
+            <dt>Git worktrees</dt>
+            <dd>
+              Repository tasks get a working tree and branch from committed HEAD. Inspect the
+              changes and tests before merging. Ordinary folders are edited in place.
+            </dd>
+          </div>
+          <div>
+            <dt>Native agent tools</dt>
+            <dd>
+              Agents use their runtime’s file and command tools. Choose a provider and model for
+              each agent; available tools and account access depend on that runtime.
+            </dd>
+          </div>
+          <div>
+            <dt>Shared project memory</dt>
+            <dd>
+              Save decisions as notes linked to their source messages. Carry useful context into
+              later tasks, while keeping direct conversations separate from shared rooms.
+            </dd>
+          </div>
+          <div>
+            <dt>MCP-backed connections</dt>
+            <dd>
+              Abralo exposes rooms, delegation and memory through MCP, and brokers supported service
+              tools with per-agent access.
+              <a href="#connection-coverage">See the current connection routes.</a>
+            </dd>
+          </div>
+          <div>
+            <dt>Permissions and review</dt>
+            <dd>
+              Choose an agent’s permission mode, answer requests in context and stop work from the
+              conversation. Permission behavior depends on the provider; worktrees are not security
+              sandboxes.
+            </dd>
+          </div>
+          <div id="computer-use-feature">
+            <dt>Computer use <span class="development-status">In development</span></dt>
+            <dd>
+              We’re adding computer use for tasks that need a visual interface. The aim: inspect a
+              running app, exercise its UI and bring findings back to the room. Not included in
+              v0.1.3-preview; release coverage will be documented when it lands.
+            </dd>
+          </div>
+        </dl>
+      </section>
       <section class="architecture wrap" aria-label="How Abralo runs">
         <div>
           <span class="eyebrow">THE ACTUAL STACK</span>
@@ -851,7 +903,7 @@
           <span aria-hidden="true">↔</span>
           <div><code>Local service</code><small>workspace · tasks · tools</small></div>
           <span aria-hidden="true">↔</span>
-          <div><code>Agent runtimes</code><small>Codex · Claude Code · OpenCode</small></div>
+          <div><code>Agent runtimes</code><small>Codex · Claude Agent SDK · OpenCode</small></div>
         </div>
         <p>
           Connect your own provider accounts and choose the folders agents can work in. Workspace
@@ -875,19 +927,32 @@
             <details id="provider-details">
               <summary>Which agents can I connect?</summary>
               <p>
-                The preview includes Codex, Claude Code, and OpenCode runtimes. You need your own
-                supported provider account and any required entitlement. OpenCode also needs a model
-                selected from its connected provider.
+                The preview includes Codex, Claude Agent SDK, and OpenCode runtimes. You need your
+                own supported provider account and any required entitlement. OpenCode also needs a
+                model selected from its connected provider.
               </p>
               <p>
                 Access and billing depend on the provider. Claude’s third-party subscription sign-in
-                route remains a public-launch limitation; we have not established provider approval
-                for that route. The recorded example linked above used Codex only.
+                route is unresolved; do not choose it for the launch trial. We have not established
+                provider approval for that route. The recorded examples used Codex only.
               </p>
               <a
                 href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ONBOARDING-RELIABILITY.md"
                 >Provider and onboarding notes ↗</a
               >
+            </details>
+            <details id="connection-coverage">
+              <summary>Which external tools can agents use?</summary>
+              <p>
+                The managed setup flows in v0.1.3-preview cover Railway, Stripe and Gmail. Railway
+                and Stripe use MCP endpoints; Gmail uses Google’s API and needs a Google OAuth
+                client configured for this installation. You choose which agents can use an account.
+              </p>
+              <p>
+                The wider MCP ecosystem and native runtime tools are separate from these managed
+                connections. This release does not expose a general MCP-server catalogue. Setup,
+                authentication and available tools depend on the integration and agent runtime.
+              </p>
             </details>
             <details>
               <summary>Where does my work go?</summary>
@@ -904,8 +969,28 @@
             <details>
               <summary>Is it free? Is it open source?</summary>
               <p>
-                The Abralo source is available under Apache 2.0. Provider subscriptions or API usage
-                are separate. Bundled third-party components retain their own licenses.
+                The local Abralo preview is free, and its source is available under Apache 2.0.
+                Provider subscriptions or API usage are separate. Bundled third-party components
+                retain their own licenses.
+              </p>
+            </details>
+            <details id="cloud">
+              <summary>Is a hosted version planned?</summary>
+              <p>
+                We’re exploring a paid cloud version for people who need work to continue while
+                their computer is off, or want a shared workspace for their team. Scope, pricing and
+                availability are not set. The local preview is available to try today.
+              </p>
+              <p>
+                Interested in a paid pilot? Tell Chris what you would run regularly, why the local
+                app does not meet that need, and what budget you would have for hosting. Please
+                leave out private project details.
+              </p>
+              <p>
+                <a href="mailto:chris@abralo.com?subject=Abralo%20hosted%20pilot"
+                  >Email chris@abralo.com about hosting ↗</a
+                >. This opens your email app. You choose whether to send; the message is for a
+                conversation about your request, not a newsletter signup or a purchase.
               </p>
             </details>
             <details>
@@ -966,7 +1051,9 @@
       <a class="brand" href="/"><img src="/mark.svg" width="25" height="25" alt="" />Abralo</a
       ><span>Open source · Apache 2.0</span>
       <div>
-        <a href="https://github.com/cw12574/abralo-workspace/issues">Feedback ↗</a
+        <a href="mailto:chris@abralo.com">Chris · chris@abralo.com</a
+        ><a href="#cloud">Hosted version?</a
+        ><a href="https://github.com/cw12574/abralo-workspace/issues">Report a bug ↗</a
         ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a>
       </div>
     </footer>

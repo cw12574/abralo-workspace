@@ -4,6 +4,17 @@ Repository review: 5 October 2026. This is an evidence record, not a claim that 
 
 Follow-up: Chris reports completing the independent first-use recommendation. The message does not specify the OS/provider matrix, so this record does not infer coverage of every platform. The repository website, topics and private vulnerability-reporting setting are now configured and verified. A read-only evidence replay and reproducible starter workflow have been added; see [launch-day references](LAUNCH-DAY.md).
 
+Preparation follow-up, 5 October: the website/README preparation edits focus on developers coordinating coding agents. The setup guide now supplies exact fictional input, a checkable first file, a revision/reopen check and a small agent-to-agent review before Beacon. These are instructions, not a newly observed live-account result. The hero points to the working city comparison with its existing authorship evidence. Provider approval and the platform/provider coverage of Chris's completed trial have been requested; neither is inferred. Anthropic's current SDK documentation still requires prior approval for the subscription route and uses **Claude Agent** branding for SDK integrations. The website copy now uses Claude Agent SDK; the shipped application still needs a separate provider-route and branding decision. Publication is verified separately against the committed files.
+
+| First-use evidence                 | Current status                                                                                            |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Chris's independent trial          | Reported completed; version, OS/CPU/browser, provider, task and assistance not yet recorded               |
+| Recorded Beacon and city builds    | Actual Codex tasks and outputs; already configured demonstration workspaces, not fresh-install acceptance |
+| Automated release checks           | Four target platforms passed; fixtures/runtime status checks do not establish real-account entitlement    |
+| New first-task/review instructions | Checked against current UI labels and website layout; live execution not yet observed                     |
+
+For each independent trial, record: package version → OS/CPU/browser → provider → first task/result → review handoff → reopen result → help needed. Use the voluntary [feedback sheet](FEEDBACK.md); omit credentials and private prompts.
+
 ## Release decision
 
 Keep `v0.1.3-preview` labeled as a prerelease. A Show HN can be early software, but readers must be able to try it: the [Show HN guidance](https://news.ycombinator.com/showhn.html) explicitly welcomes early work and discourages landing pages without a usable product. Removing the preview label does not establish reliability.

@@ -29,7 +29,7 @@
         This is an early, unsigned preview. Setup currently includes a terminal command. Use your
         own provider account; provider subscriptions or API charges are separate.
       </p>
-      <section>
+      <section id="download">
         <h2>01. Download the right package.</h2>
         <p>
           Choose your operating system and CPU on the
@@ -57,7 +57,7 @@
           <p>A checksum confirms file integrity; it does not verify the publisher.</p>
         </details>
       </section>
-      <section>
+      <section id="install">
         <h2>02. Extract and install.</h2>
         <p>
           Extract the <code>.tar.gz</code> archive. Open the resulting package directory that
@@ -101,7 +101,7 @@
           >. Do not disable system security protection.
         </p>
       </section>
-      <section>
+      <section id="connect">
         <h2>03. Connect one agent.</h2>
         <p>
           Open Abralo, enter your name, and choose a provider for Chief of Staff. Use the provider’s
@@ -111,38 +111,104 @@
         <p>
           The <a href="/beacon.html">recorded build</a> uses Codex. OpenCode requires a connected
           provider and model selection. Read the
-          <a href="/#provider-details">provider limitations</a> before choosing Claude Code.
+          <a href="/#provider-details">provider limitations</a>. The Claude subscription route is
+          unresolved; do not choose it for this trial.
         </p>
         <p>An objective can be a rough outcome; you can select a project folder later.</p>
       </section>
-      <section>
+      <section id="first-task">
         <h2>04. Ask for something you can check.</h2>
         <p>
-          Create a disposable folder with a short <code>notes.txt</code> file. Choose
-          <strong>Ask</strong> in the agent’s settings, select that folder in the conversation, and
-          try:
+          Create a folder named <code>abralo-first-task</code> outside an existing Git repository.
+          Save these fictional notes as <code>notes.txt</code> inside it:
+        </p>
+        <pre class="sample-notes">
+Project: Lantern reading club
+Meets on the first Tuesday of each month at 18:30.
+Location: the community library.
+Bring one book recommendation.
+Attendance is free; registration is not required.</pre
+        >
+        <p>
+          In the Chief of Staff conversation, choose <strong>Ask</strong> using the permission
+          control. Select the folder in the composer and grant access when prompted. Send:
         </p>
         <blockquote>
           <p>
-            Read notes.txt and draft a short README in this folder. Use only those notes, do not
-            browse or install anything, and show me what you changed.
+            Read notes.txt and create README.md in this folder with a title, a one-sentence
+            introduction and a "How to join" section. Include every fact in the notes and do not
+            invent any others. Do not browse or install anything. Show me the file you changed.
           </p>
         </blockquote>
         <p>
-          Review the result. Ask for one small revision. Then close and reopen the app and find the
-          conversation again.
+          Open <code>README.md</code> in that folder. Check the name, meeting day and time,
+          location, what to bring, and the free/no-registration rule. Ask:
+          <strong>Keep all the facts, but make "How to join" a bullet list.</strong>
         </p>
         <p>
-          When that works, create a project room and give another agent a specific review task. You
-          can start with one provider; you do not need accounts with every provider.
+          <strong>Success:</strong> the file matches the notes, the revision preserves the facts,
+          and you can find the conversation and file after closing and reopening the app. Wait until
+          the task finishes first. To cancel active work, use <strong>Stop</strong>; closing the tab
+          does not stop agents.
+        </p>
+      </section>
+      <section id="first-handoff">
+        <h2>05. Bring in a reviewer.</h2>
+        <p>
+          Use <strong>Add employee → Agent</strong> to create <strong>Reviewer</strong> with the
+          same provider. Set its instructions to:
+          <strong
+            >Compare documents with their source notes. Report omissions and unsupported claims. Do
+            not change files.</strong
+          >
+          Choose <strong>Ask</strong> for this agent too.
+        </p>
+        <p>
+          Create a room named <strong>first-review</strong> with Chief of Staff and Reviewer as
+          members. Select the same folder in the room’s composer. Mention only Chief of Staff using
+          the mention picker, so it can initiate the handoff. Use your agents’ actual names:
+        </p>
+        <blockquote>
+          <p>
+            @Chief of Staff read notes.txt and README.md in this folder, then ask Reviewer in this
+            room to check that the README matches every note and makes no unsupported promises. Do
+            not change files, browse or install anything. Bring the review back here for my
+            decision.
+          </p>
+        </blockquote>
+        <p>
+          <strong>Success:</strong> you see a handoff and the reviewer’s findings in the shared
+          room. Read the files yourself, then accept the result or ask for a correction. The
+          reviewer may find no defects. This step uses additional provider allowance.
+        </p>
+        <p>
+          Ready for a larger build?
+          <a href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/TRY-IT.md"
+            >Build Beacon with three agents</a
+          >, using the original brief and concrete checks for a working uptime monitor. You can
+          <a href="/replay.html">inspect the recorded handoff</a> first.
         </p>
       </section>
       <section>
         <h2>If something gets in the way.</h2>
         <p>
+          Need a hand getting started? Email Chris, Abralo’s creator, at
+          <a href="mailto:chris@abralo.com?subject=Abralo%20setup%20help">chris@abralo.com</a>.
+          Mention the step where you got stuck. This preview has no guaranteed support response
+          time.
+        </p>
+        <p>
           Note your OS, package version, the last successful step, and the exact error.
-          <a href="https://github.com/cw12574/abralo-workspace/issues">Report the issue</a> without
-          sharing passwords, sign-in codes, private prompts, or unredacted logs.
+          <a href="https://github.com/cw12574/abralo-workspace/issues/new/choose"
+            >Report the issue</a
+          >
+          without sharing passwords, sign-in codes, private prompts, or unredacted logs.
+        </p>
+        <p>
+          Suspected vulnerability? Use
+          <a href="https://github.com/cw12574/abralo-workspace/security/advisories/new"
+            >private security reporting</a
+          >. Please keep security details out of public issues.
         </p>
         <p>
           The
@@ -156,7 +222,7 @@
     </main>
     <footer class="site-footer wrap">
       <a class="brand" href="/">abralo</a>
-      <p>A place for the work between you.</p>
+      <div><a href="mailto:chris@abralo.com">Chris · chris@abralo.com</a></div>
     </footer>
   </body>
 </html>

@@ -16,8 +16,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMenu();
 });
 function revealDetails() {
-  if (location.hash === '#provider-details')
-    document.querySelector('#provider-details')?.setAttribute('open', '');
+  const target = document.getElementById(location.hash.slice(1));
+  if (target?.tagName === 'DETAILS') target.open = true;
 }
 window.addEventListener('hashchange', revealDetails);
 revealDetails();

@@ -1,8 +1,8 @@
 # Abralo
 
-**People and agents. One workspace.**
+**People and agents in one workspace**
 
-Give coding agents different jobs and bring them into a shared room. They can hand work to each other; you can join the conversation, inspect the result and decide what ships.
+Abralo is an open-source, local workspace for developers coordinating coding agents. Give one agent the build and another the review. Follow their handoffs in a shared room, join the conversation and decide what ships.
 
 [![Actual Abralo workspace: a simulation engineer, cartographer and reviewer build a working city](website/assets/showcase/workspace.webp)](https://abralo.com/demo.html#inside)
 
@@ -25,13 +25,17 @@ Another team built **[Beacon](https://abralo.com/beacon.html)**, a working HTTP 
 ## Keep the team and the work together
 
 - **Delegate in conversation.** Give agents roles and context. Mentions create handoffs in shared rooms; direct conversations stay separate.
-- **Review the result where it happened.** Keep messages, files and artifacts together. Repository tasks use dedicated Git worktrees; branches remain available for your review.
-- **Connect tools and understand usage.** Set up supported services in chat, choose which agents can reuse an account, and inspect reported usage by agent.
+- **Work on real code.** Agents use their native file and command tools. Repository tasks use dedicated Git worktrees; inspect the resulting branches, tests and artifacts before merging.
+- **Give agents access to your tools.** Bring deployment, billing and email services into the same workflow. Request a connection in chat, grant access to selected agents, and reuse the account across your team. Abralo uses MCP for its workspace tools and supported service integrations; see [connection coverage](#providers-and-preview-limits).
+- **Keep context between tasks.** Save project decisions as source-linked workspace notes. Keep private conversations separate from shared rooms and their handoffs.
+- **Control execution and inspect usage.** Choose the agent's provider, model and permission mode. Review requests in context and see reported token shares, allowance and reset times. Provider capabilities and reporting vary.
+
+**Computer use — in development.** We're adding computer use so agents can work through visual interfaces as part of a task. The aim is to inspect a running app, exercise its interface and bring findings back to the room. It is not included in the downloadable v0.1.3-preview; platform and provider coverage will be documented with its release.
 
 <table>
 <tr><th>Connections begin in conversation</th><th>See the work by agent</th></tr>
 <tr><td><a href="website/assets/showcase/connections.webp"><img src="website/assets/showcase/connections.webp" alt="Actual Abralo Connected accounts screen, inviting you to request Railway, Stripe or Gmail setup" width="440"></a></td><td><a href="website/assets/showcase/usage.webp"><img src="website/assets/showcase/usage.webp" alt="Actual recorded Beacon token shares: interface 40%, backend 39%, reviewer 21%" width="440"></a></td></tr>
-<tr><td>The real setup starting screen; no account is connected in this capture. Built-in setup supports Railway, Stripe and Gmail.</td><td>Real reported tokens from the Beacon workspace. Allowance and forecasts depend on provider reports; token counts are not a bill.</td></tr>
+<tr><td>Connect in conversation. Choose which agents can use an account, then reuse it across your team. Actual setup view; <a href="website/assets/showcase/provenance.txt">capture details</a>.</td><td>Real reported tokens from the Beacon workspace. Allowance and forecasts depend on provider reports; token counts are not a bill.</td></tr>
 </table>
 
 ## Install the preview
@@ -61,7 +65,7 @@ The npm/pnpm installer is **not published**. Use the archives, not GitHub's sour
 
 Provider charges are separate from Abralo. It does not silently switch to API billing. [Provider and onboarding evidence](docs/preview/ONBOARDING-RELIABILITY.md) explains the unresolved routes, including Anthropic's approval requirement.
 
-Built-in connections cover **Railway, Stripe and Gmail**. Gmail needs a Google OAuth client configured for this installation. Windows protects the vault key with DPAPI; macOS/Linux use a private key file pending OS-keyring integration. External connections remain outside the recommended first trial. Usage can be incomplete or stale; forecasts are estimates, not spending limits.
+The managed connection flows in **v0.1.3-preview** cover **Railway, Stripe and Gmail**. Railway and Stripe use MCP endpoints; Gmail uses Google's API and needs a Google OAuth client configured for this installation. The wider MCP ecosystem and tools available through a native runtime are separate from Abralo's managed account setup; this release does not expose a general MCP-server catalogue. Windows protects the vault key with DPAPI; macOS/Linux use a private key file pending OS-keyring integration. External connections remain outside the recommended first trial. Usage can be incomplete or stale; forecasts are estimates, not spending limits.
 
 ## How it works
 
@@ -75,6 +79,10 @@ Requires Node 24.16+ (24.x) and pnpm. Run `pnpm install`, `pnpm build`, `pnpm te
 
 [Development, local operation and packaging](docs/preview/OPERATIONS.md) · [Contributing](CONTRIBUTING.md) · [Recovery and removal](docs/preview/RECOVERY.md) · [Launch readiness](docs/preview/LAUNCH-READINESS.md)
 
-[Report a bug](https://github.com/cw12574/abralo-workspace/issues/new/choose) with your version, platform, provider and a minimal reproduction. Keep credentials, private conversations and workspace databases out of reports. Use [private security reporting](SECURITY.md) for vulnerabilities.
+Need help or want to share feedback? Email Chris, Abralo's creator, at [chris@abralo.com](mailto:chris@abralo.com). For a reproducible bug, [open an issue](https://github.com/cw12574/abralo-workspace/issues/new/choose) with your version, platform, provider and the failing step. Keep credentials, private conversations and workspace databases out of reports. Use [private security reporting](SECURITY.md) for vulnerabilities. There is no guaranteed support response time during preview.
+
+## Hosted version
+
+The local preview is free. We're exploring a **paid cloud version** for work that continues while your computer is off and for shared team access. Scope, pricing and availability are not set. Interested in a paid pilot? [Email Chris](mailto:chris@abralo.com?subject=Abralo%20hosted%20pilot) with the recurring task, why local execution does not meet your needs, and a hosting budget. This starts a conversation; it is not a purchase or newsletter signup.
 
 Apache-2.0 — see [LICENSE](LICENSE). Native provider binaries retain their vendors' terms.

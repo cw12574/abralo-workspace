@@ -26,6 +26,11 @@ remain available. The illustrated message composer is deliberately not an input.
 
 ## Connections and usage examples
 
+The feature copy leads with service access and account reuse; version-specific
+coverage is in the `connection-coverage` disclosure. The release's managed setup
+routes must not be confused with a runtime's additional tools or the wider MCP
+registry. A registry listing alone is not evidence of Abralo compatibility.
+
 The two feature panels follow the current preview implementation, checked against
 `apps/service/src/workspace-tools.ts`, `connections.ts`, `usage.ts` and the
 `Connections`/`Usage` components in `apps/web/src/main.tsx`. Those files match
@@ -68,6 +73,26 @@ sharing image were inspected. A tablet overflow in the decorative team diagram
 was fixed before that passing run. Physical-device, screen-reader and full
 cross-browser testing remain separate.
 
+### Launch preparation follow-up — 5 October 2026
+
+Local preparation now leads with a build/review handoff and links the working city
+demo from the hero. `start.html` supplies fictional notes, an explicit first-file
+check, a revision/reopen check and a two-agent review before the larger Beacon
+exercise. The provider copy keeps the unresolved Claude subscription route out
+of the recommended trial. The new hosted-version disclosure is a proposal with a
+mailto enquiry link, not a live cloud offering, signup backend or payment flow.
+Chris's email is also available for setup help and private security fallback.
+
+The existing website smoke passed locally at 320/390/768/1440, including its
+keyboard/touch, timing, reduced-motion, no-JavaScript, archive and asset checks.
+Additional browser checks passed for cloud deep links, keyboard disclosure,
+mailto destinations, first-task/handoff layout and no-JavaScript access. Observed
+requests were local GETs only; no email was sent. Sample notes wrap at 320px.
+Desktop/mobile captures were inspected. Documentation file destinations and the
+updated generated Beacon guide were checked; existing-directory refusal passed.
+Formatting and diff checks passed. This does not establish a new live-account trial, mail delivery or
+public deployment. Publication is checked separately against the committed assets.
+
 ## Read-only evidence replay
 
 `replay.html` opens at the actual Beacon review failure, followed by the operator's
@@ -101,6 +126,27 @@ The model uses fixed 20Hz ticks; rendering is capped at 30fps with DPR capped at
 Reduced motion starts paused; offscreen and hidden-tab states suspend animation.
 The Advance control provides a still-frame alternative. Static maps and evidence
 remain available without JavaScript or when canvas cannot initialize.
+
+## Technical capabilities and development status
+
+The technical section describes worktrees, native file/command tools, source-linked
+memory, MCP workspace/service tools and provider-dependent permissions. These were
+checked against task-context.ts, workspace-tools.ts and the runtime adapters in the
+launch checkout. The README connection caption describes account reuse and links
+the existing capture provenance instead of leading with the empty setup state.
+
+Chris reported on 5 October that computer use is being added. Both the homepage and
+README label it **in development**, separate from v0.1.3-preview; no platform or
+provider coverage is asserted. The launch source exposes three managed connection
+services; a broader catalogue was not verified. The separate connection-reliability
+work in the selected source folder also retains those configured recipes. Generated
+runtime protocol types are not proof that a feature is exposed by Abralo.
+
+The existing website smoke passed after this copy/layout update. Targeted checks
+passed at 320/390/768/1440 for the six capability entries, computer-use status,
+connection-coverage navigation and no overflow. The disclosure and feature content
+also work without JavaScript. Desktop and mobile screenshots were inspected. These
+checks do not test new external services or computer control.
 
 `assets/showcase` contains actual dark-mode product captures, a 23-second edited
 tour (single-play GIF and MP4), a static experiment view and detailed provenance.

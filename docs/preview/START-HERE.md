@@ -16,7 +16,7 @@ Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build`
 ## Before installing
 
 - Use your own provider account. Model requests use its allowance or the billing option you explicitly select. The application is local; model processing is performed by the selected provider.
-- The official packaged app includes the agent runtimes; you do not need to install them separately. You will need your own supported provider account. Read the [provider support table](../../README.md#provider-support) before choosing one: the Claude subscription authentication route remains unresolved; OpenCode also needs a model selection. The recorded build used Codex.
+- The official packaged app includes the agent runtimes; you do not need to install them separately. You will need your own supported provider account. Read the [provider support table](../../README.md#providers-and-preview-limits) before choosing one: the Claude subscription authentication route remains unresolved; OpenCode also needs a model selection. The recorded build used Codex.
 - Begin with disposable files containing no personal, customer or employer information. The preview has not had an independent security audit.
 - Start with one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
 - Leave external connections, remote access and schedules unused for this first trial. Do not run as administrator or use Bypass/Full access.
@@ -69,20 +69,52 @@ Open **Agent Workspace** in your desktop application menu. Do not use `sudo`. If
 
 ## First useful result
 
-1. Open the app and complete onboarding using your own provider sign-in. Never paste passwords or API keys into ordinary chat.
-2. Check the selected agent's settings and choose **Ask**. Give it access only to your disposable test folder when prompted.
-3. Try your own small task, or use this example with a short fictional notes file:
+### Make one file you can check
 
-   > Read notes.txt and draft a short README in this folder. Use only those notes, do not browse or install anything, and show me what you changed.
+1. Open the app, enter your name and connect a provider for **Chief of Staff**. Use the provider's sign-in screen; never paste credentials into ordinary chat. A connected account is the starting point; the task below checks whether it can actually run.
+2. Create an ordinary folder named `abralo-first-task`. Keep it outside an existing Git repository. Save the following fictional notes as `notes.txt` inside it:
 
-4. Review the permission request and actual result. Ask for one small revision.
-5. Close the tab, reopen the application, and check that you can find the conversation and result.
+   ```text
+   Project: Lantern reading club
+   Meets on the first Tuesday of each month at 18:30.
+   Location: the community library.
+   Bring one book recommendation.
+   Attendance is free; registration is not required.
+   ```
+
+3. Open the Chief of Staff conversation, choose **Ask** using the permission control, and choose this working folder in the composer. Grant the requested folder access when prompted.
+4. Send this task:
+
+   > Read notes.txt and create README.md in this folder with a title, a one-sentence introduction and a "How to join" section. Include every fact in the notes and do not invent any others. Do not browse or install anything. Show me the file you changed.
+
+5. Open `README.md` in the selected folder. Check the name, meeting day and time, location, what to bring, and the free/no-registration rule against the five lines above. Ask: **Keep all the facts, but make "How to join" a bullet list.** Inspect the revision.
+6. Wait for the task to finish. Close and reopen the app, find the same conversation, and reopen the file.
+
+**Success:** the file contains the supplied facts, the revision preserves them, and both the conversation and file remain available after reopening. Wording may vary. If a step fails, report that step; a sign-in check alone is not a successful first task.
 
 Git projects start from committed HEAD in a separate worktree. Uncommitted changes are not copied. Ordinary folders are edited directly. Inspect the work location and changes before using any output.
 
 Closing the tab does not stop agents. Use **Stop** in the conversation and wait for completion; see [recovery](RECOVERY.md) if it remains on “Stopping.”
 
+### Try one handoff
+
+Once the first task works:
+
+1. Use **Add employee → Agent** to create an agent named **Reviewer**, using the same connected provider. Set its instructions to: **Compare documents with their source notes. Report omissions and unsupported claims. Do not change files.** Choose **Ask** for this agent too.
+2. Create a room named **first-review**, selecting Chief of Staff and Reviewer as members. Choose the same `abralo-first-task` folder in the room's composer. An ordinary folder lets both agents inspect the same files.
+3. Send the following in the room, selecting Chief of Staff from the mention picker. If you renamed either agent, use its actual name. Mention only the first agent so it can initiate the handoff:
+
+   > @Chief of Staff read notes.txt and README.md in this folder, then ask Reviewer in this room to check that the README matches every note and makes no unsupported promises. Do not change files, browse or install anything. Bring the review back here for my decision.
+
+4. Look for the handoff and the review in the shared room. Read the files yourself and decide whether to accept the README or ask Chief of Staff for a correction. A review can find no defects; do not create one just to complete the exercise.
+
+**Success:** a named agent hands work to another, the reviewer reports its findings in the room, and you make the final decision. This uses additional provider allowance. If a handoff stalls, ask for the blocker before submitting another task.
+
+For a larger coding exercise, [build Beacon with three agents](../../examples/beacon/TRY-IT.md). The guide includes the original brief, role boundaries and checks for the finished monitor. You can [inspect the recorded handoff](https://abralo.com/replay.html) before running it yourself.
+
 ## Feedback
+
+For setup help or personal feedback, email Chris at [chris@abralo.com](mailto:chris@abralo.com?subject=Abralo%20setup%20help) and name the step where you got stuck. There is no guaranteed support response time during preview.
 
 For a reproducible problem, [open a bug report](https://github.com/cw12574/abralo-workspace/issues/new/choose) with the version, OS/CPU/browser, provider, last successful step and exact error. Include only reviewed, redacted evidence. For a suspected vulnerability, follow [the security policy](../../SECURITY.md).
 

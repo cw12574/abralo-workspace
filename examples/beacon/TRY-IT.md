@@ -4,7 +4,7 @@ Build a local uptime monitor with three agents in one Abralo room, then inspect 
 
 ## Before you start
 
-Install [Abralo](../../docs/preview/START-HERE.md), connect a supported account and complete one small task. Read the [provider limitations](../../README.md#provider-support). This exercise makes real model calls using your account allowance or explicitly selected API billing. There is no fixed cost or completion-time estimate. Stop when you need to; the recorded run is evidence of one outcome, not a quota guarantee.
+Install [Abralo](../../docs/preview/START-HERE.md), connect a supported account and complete [the first task and review handoff](../../docs/preview/START-HERE.md#first-useful-result). Read the [provider limitations](../../README.md#providers-and-preview-limits). This exercise makes real model calls using your account allowance or explicitly selected API billing. There is no fixed cost or completion-time estimate. Stop when you need to; the recorded run is evidence of one outcome, not a quota guarantee.
 
 Use Node 24 to run the resulting project. No package installation is needed for the recorded Beacon implementation. Keep the project and HTTP fixtures local; do not deploy it or monitor a third party's service.
 

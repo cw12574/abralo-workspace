@@ -4,7 +4,7 @@ Abralo is an early preview. It has not had an independent security audit, and it
 
 Please do not post suspected vulnerabilities, secrets, private files, workspace backups, or unreviewed logs in a public issue. Use [GitHub's private vulnerability reporting form](https://github.com/cw12574/abralo-workspace/security/advisories/new), also available through **Report a vulnerability** in the repository's Security tab. This feature was enabled and its setting verified on 5 October 2026.
 
-If that private form is unavailable, ask the repository owner for a private reporting route without including exploit details in public. An ordinary GitHub issue is not private.
+If that private form is unavailable, email [chris@abralo.com](mailto:chris@abralo.com?subject=Abralo%20private%20security%20report). An ordinary GitHub issue is not private. Start with a redacted summary; do not send credentials, private workspace databases or sensitive attachments.
 
 Include the affected version or commit, operating system, concise reproduction steps using disposable data, and the impact you observed. Redact account identifiers, tokens, personal data, and customer or employer information.
 
