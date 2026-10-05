@@ -8,4 +8,4 @@ Publication changes: the test file was renamed from tests/integration.test.mjs t
 
 Run with Node 24: npm test, then npm start. No npm install is needed. Keep this unauthenticated service on loopback and use only trusted targets. See README for SSRF/private-network and single-process storage limits.
 
-Watch the edited demonstration, read exact room messages and validation output, or download the full room recording at https://abralo.com/#walkthrough. The completed app was recorded separately against real local fixture servers. The highlight edit omits waits; the full room recording runs at normal speed. All agents used Codex; this is not a mixed-provider or speed benchmark.
+Watch the edited demonstration, read exact room messages and validation output, or download the full room recording at https://abralo.com/beacon.html. Inspect selected exact excerpts in the reconstructed read-only view at https://abralo.com/replay.html. The completed app was recorded separately against real local fixture servers. The highlight edit omits waits; the full room recording runs at normal speed. All agents used Codex; this is not a mixed-provider or speed benchmark.

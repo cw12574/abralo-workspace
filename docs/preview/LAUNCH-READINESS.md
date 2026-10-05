@@ -2,6 +2,8 @@
 
 Repository review: 5 October 2026. This is an evidence record, not a claim that a stable release has passed acceptance.
 
+Follow-up: Chris reports completing the independent first-use recommendation. The message does not specify the OS/provider matrix, so this record does not infer coverage of every platform. The repository website, topics and private vulnerability-reporting setting are now configured and verified. A read-only evidence replay and reproducible starter workflow have been added; see [launch-day references](LAUNCH-DAY.md).
+
 ## Release decision
 
 Keep `v0.1.3-preview` labeled as a prerelease. A Show HN can be early software, but readers must be able to try it: the [Show HN guidance](https://news.ycombinator.com/showhn.html) explicitly welcomes early work and discourages landing pages without a usable product. Removing the preview label does not establish reliability.
@@ -26,9 +28,9 @@ The repository can be prepared now. Broader launch readiness still requires a su
 ## Required before inviting a broad audience
 
 1. **Resolve the Claude route.** The existing implementation uses the Agent SDK with subscription sign-in. [Anthropic's documentation](https://code.claude.com/docs/en/agent-sdk/overview) requires prior approval for third-party claude.ai login/rate limits, otherwise API-key authentication. Establish approval or implement a supported route with explicit billing consent. Alternatively, remove this route from the launch build and claims; documentation alone does not disable it. Review the SDK branding requirements at the same time.
-2. **Finish independent first-use acceptance.** On each advertised platform, install the exact candidate in a clean OS profile, connect a real supported account, complete a small task, review a permission request, stop work, restart and recover the conversation. Include Safari on macOS. Record package version, OS/browser/provider, result and any intervention. Runtime status probes and already-signed-in demos are not substitutes. Live model calls require the account owner's agreement.
+2. **Record coverage of the completed first-use checks.** Chris reports completing the independent first-use recommendation. Preserve the candidate version, OS/browser/provider, result and any intervention from those trials. Fill any uncovered platform/authentication cases before claiming universal acceptance, including Safari on macOS. Runtime status probes and already-signed-in demos are not substitutes. Live model calls require the account owner's agreement.
 3. **Close the original onboarding report.** Obtain the affected tester's redacted log and environment, match the failure or reproduce it, and get a candidate retest. The fixes address verified defects, but the original incident cause remains unconfirmed. Do not describe it as conclusively resolved.
-4. **Make security reporting usable.** Enable and verify GitHub private vulnerability reporting; update `SECURITY.md` to match. Do not collect sensitive reports through public issue forms.
+4. **Security reporting is configured.** GitHub private vulnerability reporting was enabled and verified on 5 October, and `SECURITY.md` now links to the private form. Monitor this channel during launch; do not collect sensitive reports through public issue forms.
 5. **Choose an honest connection scope.** macOS/Linux currently store the vault key in a private file rather than the OS keyring. The existing trial excludes external connections. Complete keyring protection and connection acceptance before promoting this as a production-ready capability across platforms, or keep the trial boundary explicit. Gmail needs a per-installation Google OAuth client.
 
 These are acceptance requirements, not permission to make paid calls, contact testers, change provider billing, publish a release or deploy the website.

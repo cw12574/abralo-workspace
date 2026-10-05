@@ -68,6 +68,22 @@ sharing image were inspected. A tablet overflow in the decorative team diagram
 was fixed before that passing run. Physical-device, screen-reader and full
 cross-browser testing remain separate.
 
+## Read-only evidence replay
+
+`replay.html` opens at the actual Beacon review failure, followed by the operator's
+handoff, the backend fix and the final decision. It uses the current dark palette,
+fonts and icon. It is a reconstructed view containing exact selected excerpts,
+not a live connected workspace; no model calls or account actions are possible.
+The original full transcript, recording and source remain linked.
+
+Regenerate with `node scripts/build-beacon-replay.mjs`. The generator extracts
+excerpts from the published transcript, review, source and validation files and
+escapes their text. Run `node scripts/replay-smoke.mjs http://127.0.0.1:4389`
+against a running website. Checks cover four widths, keyboard activation, history,
+deep links, focus, no-JavaScript access and no network side effects from controls.
+The fresh project generator and role instructions are documented in
+`examples/beacon/TRY-IT.md`; it makes no model calls and refuses existing folders.
+
 ## Prior examples
 
 - `beacon.html`, `beacon.css` and `beacon.js` preserve the actual recorded developer

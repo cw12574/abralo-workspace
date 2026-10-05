@@ -4,7 +4,7 @@
 
 Give agents different jobs, bring them into a room, and let them hand work to each other. You can join the conversation, inspect their changes, and decide what ships. Abralo runs on your computer, with a browser interface and your own provider accounts. The source is [Apache-2.0](LICENSE).
 
-[Download](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview) · [Setup guide](docs/preview/START-HERE.md) · [Recorded build](https://abralo.com/beacon.html) · [Website](https://abralo.com) · [Report a bug](https://github.com/cw12574/abralo-workspace/issues/new/choose)
+[Download](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview) · [Setup guide](docs/preview/START-HERE.md) · [Inspect a real handoff](https://abralo.com/replay.html) · [Website](https://abralo.com) · [Report a bug](https://github.com/cw12574/abralo-workspace/issues/new/choose)
 
 > **Early preview:** v0.1.3-preview is the current downloadable build. Packages are unsigned, setup includes a terminal command, and live-account/platform acceptance is incomplete. Start with disposable files. Read the provider limits below before installing.
 
@@ -20,6 +20,8 @@ Give agents different jobs, bring them into a room, and let them hand work to ea
 In the [recorded Beacon example](https://abralo.com/beacon.html), three Codex agents build a local uptime monitor: backend, interface, then review. The reviewer finds a content-type validation defect; the backend agent fixes it, preserving the regression test. The final example suite passes 17 tests.
 
 Read the [brief](examples/beacon/BRIEF.md), [source](examples/beacon), [review](examples/beacon/REVIEW.md) and [provenance](examples/beacon/PROVENANCE.md). This is a controlled developer demonstration with an already-connected account, not a clean-install test or evidence for every provider. Docker execution remains unverified.
+
+[Inspect the review, handoff and fix without signing in](https://abralo.com/replay.html), or [rebuild the project with your own agents](examples/beacon/TRY-IT.md) from a fresh starter folder.
 
 ## Install the preview
 

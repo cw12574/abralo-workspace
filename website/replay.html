@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#1c1e22" />
+    <title>Abralo — Inside a real agent handoff</title>
+    <meta
+      name="description"
+      content="Inspect a real three-agent build: the review, a failing test, the handoff, and the verified fix. No account required."
+    />
+    <link rel="canonical" href="https://abralo.com/replay.html" />
+    <meta property="og:title" content="Abralo — Inside a real agent handoff" />
+    <meta
+      property="og:description"
+      content="The reviewer found a bug. Follow the handoff and inspect the fix."
+    />
+    <meta property="og:url" content="https://abralo.com/replay.html" />
+    <meta property="og:image" content="https://abralo.com/social-card.png" />
+    <link rel="icon" href="/mark.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/site.css" />
+    <link rel="stylesheet" href="/replay.css" />
+    <script src="/replay.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <a class="brand" href="/"><img src="/mark.svg" width="32" height="32" alt="" />Abralo</a
+      ><a href="/start.html">Get the preview ↗</a>
+    </header>
+    <main id="main" class="replay-wrap wrap">
+      <div class="replay-intro">
+        <div>
+          <p class="eyebrow">PEOPLE ↔ AGENTS ↔ AGENTS</p>
+          <h1>Inside a real handoff.</h1>
+        </div>
+        <p>Read-only replay · 4 October 2026<br />Three Codex agents. No sign-in needed.</p>
+      </div>
+      <div class="replay-shell">
+        <aside class="replay-sidebar">
+          <div class="room-name">
+            <span aria-hidden="true">▦</span> Beacon <small>Shared project room</small>
+          </div>
+          <nav aria-label="Recorded build chapters">
+            <a href="#defect" data-stage="defect"
+              ><span class="stage-number">01</span><span>The review</span></a
+            >
+            <a href="#handoff" data-stage="handoff"
+              ><span class="stage-number">02</span><span>The handoff</span></a
+            >
+            <a href="#fix" data-stage="fix"
+              ><span class="stage-number">03</span><span>The correction</span></a
+            >
+            <a href="#result" data-stage="result"
+              ><span class="stage-number">04</span><span>Human review</span></a
+            >
+          </nav>
+          <div class="room-team">
+            <p class="eyebrow">IN THIS ROOM</p>
+            <p>Alex <small>Operator</small></p>
+            <p>Backend engineer</p>
+            <p>Interface engineer</p>
+            <p>Reviewer</p>
+          </div>
+        </aside>
+        <div class="replay-content">
+          <section class="replay-stage" id="defect" aria-labelledby="defect-title">
+            <div class="stage-heading">
+              <p class="eyebrow">01 / RECORDED BUILD 001</p>
+              <h2 id="defect-title">An agent found the bug.</h2>
+              <p>
+                Three agents built Beacon, a local uptime monitor. The independent review caught an
+                API contract defect. Start here, then follow the handoff.
+              </p>
+              <span class="evidence-state failure">16 passed · 1 failed</span>
+            </div>
+            <div class="stage-columns">
+              <div class="room-message">
+                <article class="recorded-message">
+                  <span class="replay-avatar reviewer" aria-hidden="true">▦</span>
+                  <div>
+                    <div class="message-byline">
+                      <strong>Reviewer</strong><span>Exact excerpt · collected review message</span>
+                    </div>
+                    <blockquote>
+                      The validation check reproduced a defect: `Content-Type: application/jsonp`
+                      creates a monitor with HTTP 201, while API.md requires HTTP 415. The final
+                      suite has 16 passes and 1 failure. I’ll record this as a low-severity contract
+                      defect; it does not block normal dashboard use.
+                    </blockquote>
+                  </div>
+                </article>
+                <p class="read-only-label">Recorded messages · No connected account</p>
+              </div>
+              <aside class="replay-artifact">
+                <div class="artifact-label">tests / media-type regression</div>
+                <p>
+                  The API promised HTTP 415. The test received 201. This is the original, pre-fix
+                  failure.
+                </p>
+                <pre
+                  tabindex="0"
+                ><code>AssertionError [ERR_ASSERTION]: application/jsonp is not the documented application/json media type
+201 !== 415
+at tests/integration.test.mjs:117:10</code></pre>
+                <a
+                  href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/REVIEW.md"
+                  >Read the original ↗</a
+                >
+              </aside>
+            </div>
+            <div class="stage-footer">
+              <span>Follow the evidence →</span><a href="#handoff" data-step-link>The handoff →</a>
+            </div>
+          </section>
+          <section class="replay-stage" id="handoff" aria-labelledby="handoff-title">
+            <div class="stage-heading">
+              <p class="eyebrow">02 / RECORDED BUILD 001</p>
+              <h2 id="handoff-title">The human kept the fix focused.</h2>
+              <p>
+                The operator addressed the backend agent in the same room, preserving the reviewer’s
+                failing test and the scope of the task.
+              </p>
+              <span class="evidence-state">Operator → Backend engineer</span>
+            </div>
+            <div class="stage-columns">
+              <div class="room-message">
+                <article class="recorded-message">
+                  <span class="replay-avatar human" aria-hidden="true">A</span>
+                  <div>
+                    <div class="message-byline">
+                      <strong>Alex</strong><span>Operator · 16:09:15 UTC</span>
+                    </div>
+                    <blockquote>
+                      @Backend engineer the Reviewer reproduced a content-type contract defect:
+                      application/jsonp is accepted with 201 instead of 415. Please make a narrow
+                      fix in server.mjs so the media type is application/json exactly (valid
+                      parameters allowed), run the permanent suite, and report the actual result
+                      here. Do not modify the tests or expand scope.
+                    </blockquote>
+                  </div>
+                </article>
+                <p class="read-only-label">Recorded messages · No connected account</p>
+              </div>
+              <aside class="replay-artifact">
+                <div class="artifact-label">BRIEF.md / role boundaries</div>
+                <p>
+                  The original brief assigned the implementation and independent tests to different
+                  agents.
+                </p>
+                <pre
+                  tabindex="0"
+                ><code>Role file ownership: Backend engineer owns root service/package/API/docs/Docker; Interface engineer owns public/; Reviewer owns tests/ and REVIEW.md.</code></pre>
+                <a
+                  href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/BRIEF.md"
+                  >Read the original ↗</a
+                >
+              </aside>
+            </div>
+            <div class="stage-footer">
+              <a href="#defect" data-step-link>← The review</a
+              ><a href="#fix" data-step-link>The correction →</a>
+            </div>
+          </section>
+          <section class="replay-stage" id="fix" aria-labelledby="fix-title">
+            <div class="stage-heading">
+              <p class="eyebrow">03 / RECORDED BUILD 001</p>
+              <h2 id="fix-title">The code changed. The test stayed.</h2>
+              <p>
+                The backend agent reported the narrow fix and reran the unchanged regression. The
+                source below is the published implementation, not a simulated diff.
+              </p>
+              <span class="evidence-state success">17 passed · 0 failed</span>
+            </div>
+            <div class="stage-columns">
+              <div class="room-message">
+                <article class="recorded-message">
+                  <span class="replay-avatar backend" aria-hidden="true">▦</span>
+                  <div>
+                    <div class="message-byline">
+                      <strong>Backend engineer</strong><span>Recorded message · 16:10:12 UTC</span>
+                    </div>
+                    <blockquote>
+                      Fixed server.mjs: Content-Type now compares the normalized media type exactly
+                      to application/json, allowing parameters such as charset=utf-8.
+                      application/jsonp is rejected with 415. Ran npm test: 17 passed, 0 failed,
+                      exit code 0, including the content-type regression test. Only server.mjs was
+                      changed; tests were not modified.
+                    </blockquote>
+                  </div>
+                </article>
+                <p class="read-only-label">Recorded messages · No connected account</p>
+              </div>
+              <aside class="replay-artifact">
+                <div class="artifact-label">server.mjs / corrected check</div>
+                <p>
+                  Compare the normalized media type exactly; allow optional parameters. The recorded
+                  review documents the earlier prefix match.
+                </p>
+                <pre
+                  tabindex="0"
+                ><code>const mediaType = (req.headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+  if (mediaType !== 'application/json') throw new ApiError(415, 'Content-Type must be application/json.');</code></pre>
+                <a
+                  href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/server.mjs#L35"
+                  >Read the original ↗</a
+                >
+              </aside>
+            </div>
+            <div class="stage-footer">
+              <a href="#handoff" data-step-link>← The handoff</a
+              ><a href="#result" data-step-link>Human review →</a>
+            </div>
+          </section>
+          <section class="replay-stage" id="result" aria-labelledby="result-title">
+            <div class="stage-heading">
+              <p class="eyebrow">04 / RECORDED BUILD 001</p>
+              <h2 id="result-title">A result you can inspect.</h2>
+              <p>
+                The operator independently checked the result. The preserved review still records
+                its earlier failure; the provenance explains the later fix and validation.
+              </p>
+              <span class="evidence-state success">Accepted as a local demo</span>
+            </div>
+            <div class="stage-columns">
+              <div class="room-message">
+                <article class="recorded-message">
+                  <span class="replay-avatar human" aria-hidden="true">A</span>
+                  <div>
+                    <div class="message-byline">
+                      <strong>Alex</strong><span>Operator · 16:11:56 UTC</span>
+                    </div>
+                    <blockquote>
+                      Decision: accept this as a local developer demo. The review found a real
+                      content-type defect; the backend fix is in, and I independently reran all 17
+                      permanent tests successfully. Chromium create/check/delete and outage recovery
+                      checks also passed. Publish the source and evidence with the demo. Docker
+                      remains untested, and this is not approved for public or production hosting.
+                    </blockquote>
+                  </div>
+                </article>
+                <p class="read-only-label">Recorded messages · No connected account</p>
+              </div>
+              <aside class="replay-artifact">
+                <div class="artifact-label">validation.txt / final run</div>
+                <p>
+                  Actual saved output from the published example. This is not a live test runner.
+                </p>
+                <pre tabindex="0"><code>Exit code: 0
+✔ JSON content type accepts parameters but rejects a different media type with a matching prefix (9.8849ms)
+ℹ tests 17
+ℹ pass 17
+ℹ fail 0</code></pre>
+                <a href="/assets/demo/validation.txt">Read the original ↗</a>
+              </aside>
+            </div>
+            <div class="stage-footer">
+              <a href="#fix" data-step-link>← The correction</a
+              ><a href="/start.html">Try Abralo ↗</a>
+            </div>
+          </section>
+        </div>
+      </div>
+      <section class="replay-source" aria-label="Evidence and next steps">
+        <div>
+          <h2>Try the workflow yourself.</h2>
+          <p>
+            Start from the same brief in a fresh folder. Give each agent a role, keep the handoffs
+            in one room, and review the result.
+          </p>
+          <a href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/TRY-IT.md"
+            >Reproduce this workflow ↗</a
+          >
+        </div>
+        <div>
+          <h2>Inspect the whole build.</h2>
+          <p>
+            Selected excerpts from actual messages, presented in a reconstructed view. Alex is a
+            fictional operator directed by launch automation, not a customer. Streamed replies were
+            collected; their displayed order can differ from progress timing.
+          </p>
+          <div class="evidence-links">
+            <a href="/assets/demo/build-transcript.txt">Full transcript ↗</a
+            ><a href="/beacon.html">Original recording ↗</a
+            ><a
+              href="https://github.com/cw12574/abralo-workspace/blob/main/examples/beacon/PROVENANCE.md"
+              >Provenance ↗</a
+            >
+          </div>
+        </div>
+      </section>
+      <details class="replay-brief">
+        <summary>Read the original brief</summary>
+        <pre>
+# Beacon: local uptime monitor
+Build a small working product, not a mockup. Node 24, no third-party dependencies, vanilla browser UI.
+The service checks HTTP/HTTPS endpoints periodically, stores checks and incident history in a local JSON file, and shows a dashboard.
+Required UI: monitor list with current status, latency, last check and uptime percentage; create a monitor; check now; remove a monitor; inspect outage/recovery history.
+Required backend: bounded HTTP timeout, cancel response bodies, one in-flight check per monitor, validate URLs and inputs, cap retained history, persist mutations, static file allowlist, limit JSON bodies, useful errors.
+Choose and document a stable JSON API in API.md before handing off the frontend. Export createMonitorServer(options) for tests; importing must not listen. Allow port 0, configurable data file, configurable scheduler in tests. Default host 127.0.0.1; Docker may bind 0.0.0.0 explicitly.
+A checks result outside 200-399 is down. Group consecutive failures into one incident, resolve on recovery.
+Use package.json scripts: start (node server.mjs), test (node --test). Provide README.md, Dockerfile, .dockerignore.
+This is a LOCAL developer demo without authentication. Never claim it is safe for public hosting, multi-tenant use, arbitrary untrusted users, or production readiness. Document SSRF/private-network exposure and no provider telemetry.
+Work only in this folder. Do not install packages, browse, deploy, contact people, or read outside this directory. Local test HTTP fixtures are permitted.
+Role file ownership: Backend engineer owns root service/package/API/docs/Docker; Interface engineer owns public/; Reviewer owns tests/ and REVIEW.md.
+</pre
+        >
+      </details>
+      <p class="replay-limits">
+        The result is a local developer prototype, not a production service or speed benchmark.
+        Docker was not run. This page makes no model calls and cannot send messages, execute code or
+        connect an account.
+      </p>
+    </main>
+    <footer class="site-footer wrap">
+      <a class="brand" href="/">Abralo</a
+      ><a href="https://github.com/cw12574/abralo-workspace">Source on GitHub ↗</a>
+    </footer>
+  </body>
+</html>

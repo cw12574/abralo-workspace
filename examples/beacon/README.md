@@ -2,6 +2,8 @@
 
 # Beacon
 
+[Rebuild it with your own agents](TRY-IT.md) · [Inspect the recorded handoff](https://abralo.com/replay.html)
+
 A self-hosted, local uptime monitor using Node 24 and a vanilla browser dashboard. HTTP checks, latency, retained-check uptime, and grouped outage/recovery history are stored in a local JSON file. No npm dependencies or provider telemetry.
 
 ## Run
