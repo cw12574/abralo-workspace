@@ -81,8 +81,4 @@ Requires Node 24.16+ (24.x) and pnpm. Run `pnpm install`, `pnpm build`, `pnpm te
 
 Need help or want to share feedback? Email Chris, Abralo's creator, at [chris@abralo.com](mailto:chris@abralo.com). For a reproducible bug, [open an issue](https://github.com/cw12574/abralo-workspace/issues/new/choose) with your version, platform, provider and the failing step. Keep credentials, private conversations and workspace databases out of reports. Use [private security reporting](SECURITY.md) for vulnerabilities. There is no guaranteed support response time during preview.
 
-## Hosted version
-
-The local preview is free. We're exploring a **paid cloud version** for work that continues while your computer is off and for shared team access. Scope, pricing and availability are not set. Interested in a paid pilot? [Email Chris](mailto:chris@abralo.com?subject=Abralo%20hosted%20pilot) with the recurring task, why local execution does not meet your needs, and a hosting budget. This starts a conversation; it is not a purchase or newsletter signup.
-
 Apache-2.0 — see [LICENSE](LICENSE). Native provider binaries retain their vendors' terms.
