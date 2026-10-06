@@ -1,3 +1,8 @@
 {
-  "0.1.2-preview": {}
+  "0.1.3-preview": {
+    "abralo-linux-x64.tar.gz": "47f847a7369ecebce8ebd9c7284056ec0dd2604e9251aa40ef5084bcc771c3e7",
+    "abralo-macos-arm64.tar.gz": "6b7216fbc165b4f2d6829e20ecbb1c7a865c021a5e7d1a29560b576f15ea240f",
+    "abralo-macos-x64.tar.gz": "af475ce371a7548fb9c4af5079af30cd1329a4ddd636b2fdb361af650f312f68",
+    "abralo-windows-x64.tar.gz": "c701e52a11e9f4cb68bcfd426644ab74d4023d59a14f85d0ea05b7a840568796"
+  }
 }

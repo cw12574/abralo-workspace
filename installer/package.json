@@ -1,7 +1,15 @@
 {
   "name": "abralo",
-  "version": "0.1.2-preview",
-  "description": "Install the Abralo friends preview",
+  "version": "0.1.3-preview",
+  "description": "Install Abralo, an open-source workspace for people and coding agents",
+  "homepage": "https://abralo.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cw12574/abralo-workspace.git",
+    "directory": "installer"
+  },
+  "bugs": "https://github.com/cw12574/abralo-workspace/issues",
+  "keywords": ["ai-agents", "agent-workspace", "developer-tools", "local-first"],
   "license": "Apache-2.0",
   "type": "module",
   "bin": {

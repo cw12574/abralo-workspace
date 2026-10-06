@@ -17,6 +17,8 @@ if (process.env.CI !== 'true') throw new Error('This installer acceptance smoke 
 if (!process.argv[2]) throw new Error('Pass a packaged release directory.');
 
 const packageRoot = realpathSync(resolve(process.argv[2]));
+// Optional packed npm entry point: exercise the downloader instead of bypassing it.
+const npmInstaller = process.argv[3] ? realpathSync(resolve(process.argv[3])) : null;
 const manifest = JSON.parse(readFileSync(join(packageRoot, 'release.json'), 'utf8'));
 if (manifest.platform !== process.platform || manifest.arch !== process.arch)
   throw new Error(`Package ${manifest.platform}/${manifest.arch} does not match this runner.`);
@@ -105,7 +107,8 @@ try {
       throw new Error('A Workspace shortcut already exists on this runner; refusing to overwrite it.');
     ownedShortcuts = shortcuts;
 
-    run(
+    if (npmInstaller) run(process.execPath, [npmInstaller], { env });
+    else run(
       'pwsh.exe',
       [
         '-NoProfile',
@@ -123,6 +126,7 @@ try {
     const current = readFileSync(join(installRoot, 'current.txt'), 'utf8').trim();
     const installedRoot = assertInside(join(installRoot, 'versions'), current);
     verifyInstalledPayload(installedRoot);
+    if (npmInstaller) run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
     if (ownedShortcuts.some((path) => !existsSync(path)))
       throw new Error('The Windows installer did not create both expected shortcuts.');
     if (existsSync(startupShortcut))
@@ -134,7 +138,7 @@ try {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        `(Get-AuthenticodeSignature -LiteralPath '${join(packageRoot, 'scripts', 'install-windows.ps1').replaceAll("'", "''")}').Status.ToString()`,
+        `(Get-AuthenticodeSignature -LiteralPath '${join(installedRoot, 'scripts', 'install-windows.ps1').replaceAll("'", "''")}').Status.ToString()`,
       ],
       { encoding: 'utf8' },
     ).trim();
@@ -143,7 +147,8 @@ try {
     const runtime = join(packageRoot, 'runtime', 'node');
     if ((process.platform === 'darwin' ? 'darwin' : 'linux') !== manifest.platform)
       throw new Error('Unsupported POSIX installer target.');
-    run(runtime, [join(packageRoot, 'scripts', 'install-posix.mjs')], { cwd: packageRoot, env });
+    if (npmInstaller) run(process.execPath, [npmInstaller], { env });
+    else run(runtime, [join(packageRoot, 'scripts', 'install-posix.mjs')], { cwd: packageRoot, env });
     const programBase =
       process.platform === 'darwin'
         ? join(fixture, 'Library', 'Application Support', 'AgentWorkspaceProgram')
@@ -152,6 +157,7 @@ try {
     const installedRoot = realpathSync(readFileSync(join(programBase, 'current.txt'), 'utf8').trim());
     assertInside(programBase, installedRoot);
     const installedNode = verifyInstalledPayload(installedRoot);
+    if (npmInstaller) run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
     if (process.platform === 'darwin') {
       const app = join(fixture, 'Applications', 'Agent Workspace.app');
       const appExecutable = join(app, 'Contents', 'MacOS', 'AgentWorkspace');

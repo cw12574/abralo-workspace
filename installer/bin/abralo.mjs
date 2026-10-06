@@ -64,6 +64,7 @@ async function main() {
   const scratch = mkdtempSync(join(tmpdir(), 'abralo-install-'));
   try {
     const archivePath = join(scratch, archiveName);
+    console.log(`Downloading Abralo ${packageJson.version} for ${target} (approximately ${Math.ceil(archiveAsset.size / 1_000_000)} MB)...`);
     const archiveResponse = await get(
       archiveAsset.browser_download_url,
       'application/octet-stream',
@@ -99,6 +100,8 @@ async function main() {
       );
 
     const releaseJson = JSON.parse(readFileSync(join(packagePath, 'release.json'), 'utf8'));
+    if (releaseJson.version !== packageJson.version)
+      throw new Error(`Release version mismatch: expected ${packageJson.version}, received ${releaseJson.version}.`);
     if (releaseJson.platform !== process.platform || releaseJson.arch !== process.arch)
       throw new Error(
         `Release target mismatch: package is ${releaseJson.platform}/${releaseJson.arch}, this machine is ${process.platform}/${process.arch}.`,
@@ -111,6 +114,8 @@ async function main() {
             'powershell.exe',
             [
               '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
               '-File',
               join(packagePath, 'scripts', 'install-windows.ps1'),
               '-ReleaseDirectory',
@@ -125,6 +130,7 @@ async function main() {
           );
     if (result.error) throw result.error;
     if (result.status !== 0) process.exitCode = result.status || 1;
+    else console.log('Installation complete. Open Agent Workspace from your applications or Start menu.\nFirst-use guide: https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/START-HERE.md\nEarly preview: select Ask before your first task. Provider accounts and charges are separate.');
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
