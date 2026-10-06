@@ -126,7 +126,10 @@ try {
     const current = readFileSync(join(installRoot, 'current.txt'), 'utf8').trim();
     const installedRoot = assertInside(join(installRoot, 'versions'), current);
     verifyInstalledPayload(installedRoot);
-    if (npmInstaller) run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
+    if (npmInstaller) {
+      run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
+      run(process.execPath, ['scripts/provider-runtime-smoke.mjs', installedRoot]);
+    }
     if (ownedShortcuts.some((path) => !existsSync(path)))
       throw new Error('The Windows installer did not create both expected shortcuts.');
     if (existsSync(startupShortcut))
@@ -157,7 +160,10 @@ try {
     const installedRoot = realpathSync(readFileSync(join(programBase, 'current.txt'), 'utf8').trim());
     assertInside(programBase, installedRoot);
     const installedNode = verifyInstalledPayload(installedRoot);
-    if (npmInstaller) run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
+    if (npmInstaller) {
+      run(process.execPath, ['scripts/verify-package.mjs', installedRoot]);
+      run(process.execPath, ['scripts/provider-runtime-smoke.mjs', installedRoot]);
+    }
     if (process.platform === 'darwin') {
       const app = join(fixture, 'Applications', 'Agent Workspace.app');
       const appExecutable = join(app, 'Contents', 'MacOS', 'AgentWorkspace');

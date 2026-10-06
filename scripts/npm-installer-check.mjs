@@ -35,20 +35,23 @@ async function check(name, options = {}) {
         if (options.extractFailure) return { status: 1, stderr: 'fixture extraction error' };
         const destination = args[args.indexOf('-C') + 1];
         fs.writeFileSync(path.join(destination, 'release.json'), JSON.stringify({ version: options.wrongVersion ? '0.0.0' : version, platform: options.wrongPlatform ? 'unknown' : platform, arch }));
+        fs.writeFileSync(path.join(destination, 'native-fixture'), Buffer.from('7f454c46', 'hex'), { mode: 0o644 });
+        fs.writeFileSync(path.join(destination, 'text-fixture'), 'ordinary data', { mode: 0o644 });
+      } else if (platform !== 'win32' && process.platform !== 'win32') {
+        const destination = path.dirname(path.dirname(command));
+        assert.ok(fs.statSync(path.join(destination, 'native-fixture')).mode & 0o111);
+        assert.equal(fs.statSync(path.join(destination, 'text-fixture')).mode & 0o111, 0);
       }
       return { status: command === 'tar' ? 0 : (options.installFailure ? 7 : 0) };
     },
   };
   const context = createContext({
-    process: processFixture, URL,
+    process: processFixture, URL, Buffer,
     console: { log: (...args) => messages.push(args.join(' ')), error: (...args) => messages.push(args.join(' ')) },
     fetch: async (url) => {
       requests.push(url);
       if (options.httpFailure) return new Response('fixture failure', { status: 503 });
-      if (url.includes('/releases/tags/')) return Response.json({
-        tag_name: options.wrongTag ? 'wrong' : `v${version}`,
-        assets: options.missingAsset ? [] : [{ name: archive, size: bytes.length, browser_download_url: 'https://fixture.invalid/archive' }],
-      });
+      assert.equal(url, `https://github.com/cw12574/abralo-workspace/releases/download/v${version}/${archive}`);
       return new Response(bytes);
     },
   });
@@ -96,9 +99,7 @@ try {
     const [platform, arch] = target.split(':');
     await check(`install ${target}`, { platform, arch, success: true });
   }
-  await check('API failure', { httpFailure: true, calls: 0, exit: 1, match: /Download failed/ });
-  await check('wrong release tag', { wrongTag: true, calls: 0, exit: 1, match: /wrong release/ });
-  await check('missing archive', { missingAsset: true, calls: 0, exit: 1, match: /missing abralo/ });
+  await check('download failure', { httpFailure: true, calls: 0, exit: 1, match: /Download failed/ });
   await check('missing pinned hash', { noHash: true, calls: 0, exit: 1, match: /no pinned SHA-256/ });
   await check('tampered archive never extracted', { badHash: true, calls: 0, exit: 1, match: /SHA-256 mismatch/ });
   await check('extraction failure never installed', { extractFailure: true, calls: 1, exit: 1, match: /extraction error/ });

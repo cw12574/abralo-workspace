@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { createWriteStream, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createWriteStream, mkdirSync, mkdtempSync, readFileSync, rmSync, readdirSync, lstatSync, openSync, readSync, closeSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Transform } from 'node:stream';
@@ -35,6 +35,23 @@ async function get(url, accept = 'application/vnd.github+json') {
   return response;
 }
 
+// GitHub upload/download-artifact normalizes file permissions. Restore only
+// executable formats and shebang scripts in the checksum-verified payload.
+function restoreExecutables(directory) {
+  for (const name of readdirSync(directory)) {
+    const file = join(directory, name);
+    const stat = lstatSync(file);
+    if (stat.isDirectory()) restoreExecutables(file);
+    else if (stat.isFile()) {
+      const header = Buffer.alloc(4);
+      const fd = openSync(file, 'r');
+      try { readSync(fd, header, 0, 4, 0); } finally { closeSync(fd); }
+      if (['7f454c46', 'cffaedfe', 'cefaedfe', 'feedfacf', 'feedface', 'cafebabe', 'bebafeca'].includes(header.toString('hex')) || header.subarray(0, 2).toString() === '#!')
+        chmodSync(file, stat.mode | 0o111);
+    }
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
   if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) return usage();
@@ -45,16 +62,8 @@ async function main() {
   if (!target)
     throw new Error(`No preview package is available for ${process.platform}/${process.arch}.`);
   const tag = `v${packageJson.version}`;
-  const api = `https://api.github.com/repos/${repository}/releases/tags/${encodeURIComponent(tag)}`;
-  const release = await (await get(api)).json();
-  if (release.tag_name !== tag) throw new Error(`GitHub returned the wrong release for ${tag}.`);
-
   const archiveName = `abralo-${target}.tar.gz`;
-  const archiveAsset = release.assets?.find((asset) => asset.name === archiveName);
-  if (!archiveAsset)
-    throw new Error(
-      `Release ${tag} is missing ${archiveName}. Ask the maintainer to finish the release.`,
-    );
+  const archiveUrl = `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${archiveName}`;
   const expected = pinnedReleases[packageJson.version]?.[archiveName];
   if (!/^[a-f0-9]{64}$/i.test(expected || ''))
     throw new Error(
@@ -64,9 +73,9 @@ async function main() {
   const scratch = mkdtempSync(join(tmpdir(), 'abralo-install-'));
   try {
     const archivePath = join(scratch, archiveName);
-    console.log(`Downloading Abralo ${packageJson.version} for ${target} (approximately ${Math.ceil(archiveAsset.size / 1_000_000)} MB)...`);
+    console.log(`Downloading Abralo ${packageJson.version} for ${target} (326–376 MB)...`);
     const archiveResponse = await get(
-      archiveAsset.browser_download_url,
+      archiveUrl,
       'application/octet-stream',
     );
     if (!archiveResponse.body)
@@ -106,6 +115,8 @@ async function main() {
       throw new Error(
         `Release target mismatch: package is ${releaseJson.platform}/${releaseJson.arch}, this machine is ${process.platform}/${process.arch}.`,
       );
+
+    if (process.platform !== 'win32') restoreExecutables(packagePath);
 
     console.log(`Verified Abralo ${packageJson.version} for ${target}. Installing...`);
     const result =
