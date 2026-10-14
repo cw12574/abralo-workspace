@@ -3,7 +3,6 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import nodemailer from 'nodemailer';
 const root = fileURLToPath(new URL('.', import.meta.url));
 const publicFiles = new Set([
   'index.html',
@@ -80,20 +79,6 @@ const types = {
   '.json': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
 };
-const mailer = process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      disableFileAccess: true,
-      disableUrlAccess: true,
-    })
-  : null;
-
 async function readRequestBody(request) {
   const chunks = [];
   let size = 0;
@@ -136,20 +121,29 @@ const server = createServer(async (request, response) => {
         }
         if (originHost !== request.headers.host) return fail(403, 'Cross-origin requests are not allowed');
       }
-      if (!mailer) return json(response, 503, { error: 'Email delivery is not configured yet' });
+      if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
+        return json(response, 503, { error: 'Email delivery is not configured yet' });
 
       try {
         const body = await readRequestBody(request);
         const email = String(body?.email || '').trim();
         if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
           return json(response, 400, { error: 'Enter a valid email address' });
-        await mailer.sendMail({
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
-          to: 'chris@abralo.com',
-          replyTo: email,
-          subject: 'New Abralo early-access request',
-          text: `A visitor requested early access to Abralo.\n\nEmail: ${email}`,
+        const delivery = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM,
+            to: ['chris@abralo.com'],
+            reply_to: email,
+            subject: 'New Abralo early-access request',
+            text: `A visitor requested early access to Abralo.\n\nEmail: ${email}`,
+          }),
         });
+        if (!delivery.ok) throw new Error(`Resend returned HTTP ${delivery.status}`);
         return json(response, 200, { ok: true });
       } catch (error) {
         if (error.statusCode) return json(response, error.statusCode, { error: error.message });

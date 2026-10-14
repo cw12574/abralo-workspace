@@ -195,10 +195,9 @@ v0.1.3-preview. This deployment changes the website, not the desktop release.
 
 ### Early-access email delivery
 
-The landing-page form sends submissions to `chris@abralo.com` through SMTP and
-does not store visitor addresses. Configure `SMTP_HOST`, `SMTP_PORT` (587 by
-default), `SMTP_SECURE` (`true` for implicit TLS, `false` for STARTTLS),
-`SMTP_USER`, `SMTP_PASS` and, if needed, `SMTP_FROM` in Railway's service
-variables. `SMTP_FROM` must be an address accepted by the mail provider. The form
-shows an error when delivery is not configured or the mail server rejects a
-submission; it never reports success in those cases.
+The landing-page form sends submissions to `chris@abralo.com` through Resend and
+does not store visitor addresses. Railway's service needs `RESEND_API_KEY` and
+`EMAIL_FROM` configured; `EMAIL_FROM` must be a verified sender in Resend. The
+visitor's address is set as `reply_to`. The form shows an error when delivery is
+not configured or Resend rejects a submission; it never reports success in
+those cases.
