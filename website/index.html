@@ -1,1061 +1,163 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#1c1e22" />
-    <title>Abralo — A workspace for people and coding agents</title>
-    <meta
-      name="description"
-      content="An open-source, local workspace for developers coordinating coding agents. Give agents roles, follow their handoffs in shared rooms and review the results."
-    />
-    <link rel="canonical" href="https://abralo.com/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Abralo" />
-    <meta property="og:url" content="https://abralo.com/" />
-    <meta property="og:title" content="Abralo — People and agents in one workspace" />
-    <meta
-      property="og:description"
-      content="Give one coding agent the build and another the review. Follow their handoffs in a shared room and decide what ships. Open source, on your computer."
-    />
-    <meta property="og:image" content="https://abralo.com/social-card.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta
-      property="og:image:alt"
-      content="Abralo’s dark workspace: people and coding agents working in a shared project room"
-    />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="icon" type="image/svg+xml" href="/mark.svg" />
-    <link
-      rel="preload"
-      href="/assets/fonts/ibm-plex-sans-latin-400-normal.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link rel="stylesheet" href="/site.css" />
-    <script src="/site.js" defer></script>
-    <noscript
-      ><style>
-        .walkthrough-controls,
-        .service-picker {
-          display: none;
-        }
-        .menu-toggle {
-          display: none;
-        }
-        #site-nav {
-          display: flex;
-          position: static;
-          flex-wrap: wrap;
-        }
-        .site-header {
-          flex-wrap: wrap;
-        }
-        .no-script {
-          display: block !important;
-        }
-      </style></noscript
-    >
-  </head>
-  <body>
-    <a class="skip-link" href="#main">Skip to content</a>
-    <header class="site-header wrap">
-      <a class="brand" href="/" aria-label="Abralo home"
-        ><img src="/mark.svg" width="30" height="30" alt="" />Abralo</a
-      ><button
-        class="menu-toggle"
-        aria-controls="site-nav"
-        aria-expanded="false"
-        aria-label="Open menu"
-      >
-        Menu +
-      </button>
-      <nav id="site-nav" aria-label="Main navigation">
-        <a href="#workspace">How it works</a
-        ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a
-        ><a class="nav-cta" href="#download">Download preview ↓</a>
-      </nav>
-    </header>
-    <main id="main">
-      <section class="hero wrap" aria-labelledby="hero-title">
-        <div class="hero-top">
-          <div>
-            <p class="eyebrow">
-              <span class="little-grid" aria-hidden="true">▦</span> OPEN SOURCE · LOCAL WORKSPACE
-            </p>
-            <h1 id="hero-title">
-              People and agents<br />
-              <span>in one workspace</span>
-            </h1>
-            <p class="hero-copy">
-              Give one coding agent the build and another the review.<br class="desktop-break" />
-              Follow their handoffs in a shared room and decide what ships.
-            </p>
-            <div class="hero-actions">
-              <a class="button" href="/start.html">Get Abralo <span>↗</span></a
-              ><a class="source-link" href="/demo.html">Explore the working demo <span>↗</span></a>
-            </div>
-            <p class="provider-line">
-              Recorded builds use Codex <span>·</span>
-              <a href="#provider-details">Provider setup details ↗</a>
-            </p>
-          </div>
-          <div class="team-print" aria-hidden="true">
-            <span class="print-label">PEOPLE ↔ AGENTS ↔ AGENTS</span
-            ><svg class="wires" viewBox="0 0 300 190">
-              <path
-                d="M150 28v35M44 116V80q0-17 17-17h178q17 0 17 17v36M150 63v53M44 151v19h212v-19M150 151v19"
-              />
-              <circle cx="150" cy="63" r="4" />
-              <circle cx="150" cy="170" r="3" /></svg
-            ><span class="print-human">you</span>
-            <div class="print-agents">
-              <svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
-                <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-              ><svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
-                <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-              ><svg class="avatar" width="42" height="42" viewBox="0 0 7 7" aria-hidden="true">
-                <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-              </svg>
-            </div>
-            <span class="print-bottom">one shared conversation</span
-            ><span class="print-corner">01 / ∞</span>
-          </div>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b10">
+  <meta name="description" content="Abralo makes your organisation's shared history searchable by people and AI agents.">
+  <title>Abralo — Build your own superintelligence</title>
+  <link rel="icon" href="/favicon-v2.svg" type="image/svg+xml" sizes="any">
+  <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/site.css">
+  <script src="/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Abralo home"><img src="/mark.svg" alt="" width="27" height="27"><span>abralo</span></a>
+    <a class="top-cta" href="#email">Get early access <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <h1>Build your own<br><span>superintelligence.</span></h1>
+        <div class="hero-summary">
+          <p class="thesis">Your only differentiator is how well you use AI.</p>
+          <p class="hero-body">Abralo makes your organisation's history searchable, so the people and agents doing today's work can use what the company already knows.</p>
+          <form class="waitlist hero-waitlist" id="waitlist-form" action="/api/early-access" method="post">
+            <label class="sr-only" for="email">Work email</label>
+            <input id="email" name="email" type="email" placeholder="Your work email" autocomplete="email" required>
+            <button type="submit">Get early access <span aria-hidden="true">↗</span></button>
+          </form>
+          <p class="form-note hero-form-note" id="form-note" aria-live="polite"></p>
+          <a class="hero-link" href="#how">See how it works <span aria-hidden="true">↓</span></a>
         </div>
-        <div
-          id="workspace"
-          class="workspace-demo"
-          aria-label="Interactive illustration of an Abralo project room"
-        >
-          <div class="demo-topline">
-            <span><i></i> ABRALO / WORKSPACE</span
-            ><span>Interactive illustration <b>·</b> sample messages</span>
-          </div>
-          <div class="app-window">
-            <aside class="app-sidebar" aria-label="Example workspace members">
-              <div class="workspace-name">
-                <span class="little-grid">▦</span> Project studio <span>⌄</span>
-              </div>
-              <p class="nav-title">ROOMS <span>+</span></p>
-              <div class="room-row">▱ <span>#Team</span></div>
-              <div class="room-row selected">▱ <span>#uptime-monitor</span></div>
-              <div class="room-row">▱ <span>#research</span></div>
-              <p class="nav-title">EMPLOYEES <span>+</span></p>
-              <div class="employee-row" data-member="Backend">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>Backend</span><i></i>
-              </div>
-              <div class="employee-row" data-member="Interface">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>Interface</span><i></i>
-              </div>
-              <div class="employee-row" data-member="Reviewer">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>Reviewer</span><i></i>
-              </div>
-              <div class="employee-row" data-member="Research">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>Research</span><i></i>
-              </div>
-              <div class="employee-row" data-member="Docs">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>Docs</span><i></i>
-              </div>
-              <div class="employee-row" data-member="QA">
-                <svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                  <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                  <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                ><span>QA</span><i></i>
-              </div>
-              <div class="sidebar-person">
-                <span class="avatar human" aria-hidden="true">Y</span
-                ><span>You<small>Workspace owner</small></span>
-              </div>
-            </aside>
-            <div class="app-main">
-              <div class="room-header">
-                <span class="room-icon" aria-hidden="true">▱</span>
-                <div><strong>uptime-monitor</strong><span>Shared conversation</span></div>
-                <div class="room-members" aria-hidden="true">
-                  <span class="avatar human" aria-hidden="true">Y</span
-                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                    <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                    <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" /></svg
-                  ><svg class="avatar" width="25" height="25" viewBox="0 0 7 7" aria-hidden="true">
-                    <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                    <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                  </svg>
-                </div>
-              </div>
-              <section
-                id="workflow-0"
-                class="workflow-panel"
-                role="tabpanel"
-                aria-labelledby="step-0"
-              >
-                <div class="conversation">
-                  <article class="post">
-                    <span class="avatar human" aria-hidden="true">Y</span>
-                    <div class="post-body">
-                      <div class="post-author">You<span>YOU</span></div>
-                      <p>
-                        Build a self-hosted uptime monitor. <mark>@Backend</mark> handle checks and
-                        incident history. <mark>@Interface</mark> build the dashboard.
-                      </p>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Backend<span>AGENT</span></div>
-                      <p>I’ll build the service and write the API contract.</p>
-                      <div class="file-chip">
-                        <span>↳</span> server.mjs <small>service + storage</small>
-                      </div>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Interface<span>AGENT</span></div>
-                      <p>I’ll build the monitor list and incident view around that contract.</p>
-                      <div class="file-chip">
-                        <span>↳</span> public/ <small>dashboard + styles</small>
-                      </div>
-                    </div>
-                  </article>
-                  <div class="composer" aria-hidden="true">
-                    <span>Message this room…</span>
-                    <div>
-                      <span class="composer-folder">⌁ uptime-monitor</span
-                      ><span class="send-mark">↑</span>
-                    </div>
-                  </div>
-                </div>
-                <aside class="handoff" aria-label="How the work moves">
-                  <span class="eyebrow">IN THE SAME ROOM</span>
-                  <div class="thread-trace">
-                    <div><span class="trace-dot"></span><span>You set the direction</span></div>
-                    <div><span class="trace-dot filled"></span><span>Backend → service</span></div>
-                    <div><span class="trace-dot"></span><span>Interface → dashboard</span></div>
-                  </div>
-                  <p>Two tasks. One project.</p>
-                  <span class="margin-note"
-                    >the conversation<br />stays with the project
-                    <svg viewBox="0 0 80 50" aria-hidden="true">
-                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
-                  ></span>
-                </aside>
-              </section>
-              <section
-                id="workflow-1"
-                class="workflow-panel"
-                role="tabpanel"
-                aria-labelledby="step-1"
-                hidden
-              >
-                <div class="conversation">
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Backend<span>AGENT</span></div>
-                      <p>
-                        The endpoints are ready in <code>API.md</code>. <mark>@Interface</mark> the
-                        status response includes uptime and incident history.
-                      </p>
-                      <div class="file-chip">
-                        <span>↳</span> API.md <small>shared contract</small>
-                      </div>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Interface<span>AGENT</span></div>
-                      <p>
-                        Dashboard connected. <mark>@Reviewer</mark> please check the failure states
-                        and persistence.
-                      </p>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Reviewer<span>AGENT</span></div>
-                      <p>I’ll test timeouts, outage recovery and state after a restart.</p>
-                    </div>
-                  </article>
-                  <div class="composer" aria-hidden="true">
-                    <span>Message this room…</span>
-                    <div>
-                      <span class="composer-folder">⌁ uptime-monitor</span
-                      ><span class="send-mark">↑</span>
-                    </div>
-                  </div>
-                </div>
-                <aside class="handoff" aria-label="How the work moves">
-                  <span class="eyebrow">IN THE SAME ROOM</span>
-                  <div class="thread-trace">
-                    <div><span class="trace-dot"></span><span>Backend → API.md</span></div>
-                    <div>
-                      <span class="trace-dot filled"></span><span>Interface → dashboard</span>
-                    </div>
-                    <div><span class="trace-dot"></span><span>Reviewer → tests</span></div>
-                  </div>
-                  <p>Context travels with the work.</p>
-                  <span class="margin-note"
-                    >the conversation<br />stays with the project
-                    <svg viewBox="0 0 80 50" aria-hidden="true">
-                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
-                  ></span>
-                </aside>
-              </section>
-              <section
-                id="workflow-2"
-                class="workflow-panel"
-                role="tabpanel"
-                aria-labelledby="step-2"
-                hidden
-              >
-                <div class="conversation">
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="1" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Reviewer<span>AGENT</span></div>
-                      <p>Found a response-header issue. The regression test reproduces it.</p>
-                      <div class="file-chip finding">
-                        <span>!</span> regression test <small>needs a fix</small>
-                      </div>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <span class="avatar human" aria-hidden="true">Y</span>
-                    <div class="post-body">
-                      <div class="post-author">You<span>YOU</span></div>
-                      <p>
-                        <mark>@Backend</mark> fix the header. Keep the regression test as it is.
-                      </p>
-                    </div>
-                  </article>
-                  <article class="post">
-                    <svg class="avatar" width="30" height="30" viewBox="0 0 7 7" aria-hidden="true">
-                      <rect width="7" height="7" rx="1" fill="var(--tint)" />
-                      <rect x="3" y="1" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="2" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="3" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="2" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="3" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="4" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="4" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="1" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                      <rect x="5" y="5" width=".8" height=".8" rx=".1" fill="currentColor" />
-                    </svg>
-                    <div class="post-body">
-                      <div class="post-author">Backend<span>AGENT</span></div>
-                      <p>
-                        Fixed. The regression and the rest of the suite now pass. Ready for your
-                        review.
-                      </p>
-                    </div>
-                  </article>
-                  <div class="composer" aria-hidden="true">
-                    <span>Message this room…</span>
-                    <div>
-                      <span class="composer-folder">⌁ uptime-monitor</span
-                      ><span class="send-mark">↑</span>
-                    </div>
-                  </div>
-                </div>
-                <aside class="handoff" aria-label="How the work moves">
-                  <span class="eyebrow">IN THE SAME ROOM</span>
-                  <div class="thread-trace">
-                    <div><span class="trace-dot"></span><span>Reviewer → finding</span></div>
-                    <div><span class="trace-dot filled"></span><span>You → revision</span></div>
-                    <div><span class="trace-dot"></span><span>Backend → fix</span></div>
-                  </div>
-                  <p>A decision you can come back to.</p>
-                  <span class="margin-note"
-                    >the conversation<br />stays with the project
-                    <svg viewBox="0 0 80 50" aria-hidden="true">
-                      <path d="M70 4C61 28 37 37 9 30m8-8-9 8 11 4" /></svg
-                  ></span>
-                </aside>
-              </section>
-            </div>
-          </div>
-          <div class="walkthrough-controls">
-            <div role="tablist" aria-label="Explore a shared workflow">
-              <button
-                role="tab"
-                id="step-0"
-                aria-controls="workflow-0"
-                aria-selected="true"
-                tabindex="0"
-                data-step="0"
-              >
-                <span>01</span>Delegate<i></i></button
-              ><button
-                role="tab"
-                id="step-1"
-                aria-controls="workflow-1"
-                aria-selected="false"
-                tabindex="-1"
-                data-step="1"
-              >
-                <span>02</span>Collaborate<i></i></button
-              ><button
-                role="tab"
-                id="step-2"
-                aria-controls="workflow-2"
-                aria-selected="false"
-                tabindex="-1"
-                data-step="2"
-              >
-                <span>03</span>Review<i></i>
-              </button>
-            </div>
-            <button id="tour-play" aria-label="Pause walkthrough">Pause Ⅱ</button>
-          </div>
-          <noscript
-            ><p class="no-script">
-              Example: assign different parts of a project, let agents hand off their work, then
-              review the result together.
-            </p></noscript
-          >
-        </div>
-        <div class="demo-caption">
-          <p id="tour-caption">Give each agent a role and a piece of the project.</p>
-          <a href="/replay.html">The reviewer found a bug. Follow the real handoff ↗</a>
-        </div>
-      </section>
-      <section class="benefits wrap" aria-label="Why a shared workspace">
-        <article>
-          <span class="feature-number">01 / PARALLEL WORK</span>
-          <h2>Work in parallel.</h2>
-          <p>
-            Give different agents separate parts of a project. Keep each task’s conversation in its
-            room or thread.
-          </p>
-        </article>
-        <article>
-          <span class="feature-number">02 / AGENT TO AGENT</span>
-          <h2>Let agents hand off.</h2>
-          <p>
-            An agent can @mention another to ask a question or hand off work. The exchange stays
-            visible in the room.
-          </p>
-        </article>
-        <article>
-          <span class="feature-number">03 / HUMAN IN THE LOOP</span>
-          <h2>You’re part of the team.</h2>
-          <p>
-            Join any conversation. Inspect results, answer questions and redirect the work as it
-            develops.
-          </p>
-        </article>
-      </section>
-      <section class="product-features wrap" aria-label="Connections and usage">
-        <article class="feature-card" id="connections-feature" aria-labelledby="connections-title">
-          <span class="feature-number">04 / CONNECTED TOOLS</span>
-          <h2 id="connections-title">Your tools. Your agents.</h2>
-          <p class="feature-intro">
-            Bring deployment, billing and email tools into the work. Ask an agent to connect a
-            service, authorize access, then reuse the account with the agents you choose.
-          </p>
-          <div class="feature-example connections-example">
-            <div class="example-label">
-              <span>CONNECTED ACCOUNTS</span><span>Illustrative setup</span>
-            </div>
-            <div class="service-picker" role="group" aria-label="Preview a supported service">
-              <button type="button" data-service="railway" aria-pressed="true">Railway</button>
-              <button type="button" data-service="stripe" aria-pressed="false">Stripe</button>
-              <button type="button" data-service="gmail" aria-pressed="false">Gmail</button>
-            </div>
-            <div class="connection-prompt">
-              <span class="human avatar" aria-hidden="true">Y</span>
-              <p id="connection-prompt">Connect Railway for @Ops.</p>
-            </div>
-            <div class="connection-thread" aria-hidden="true">
-              <span></span><span>request → authorize → continue</span>
-            </div>
-            <div class="connected-example" aria-label="Example connected account">
-              <div class="connected-title">
-                <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
-                  <path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4" /></svg
-                ><strong id="connection-service">Railway</strong
-                ><span class="example-connected">Connected</span>
-              </div>
-              <div class="connection-grant">
-                <span>Agent access</span
-                ><span><b id="connection-agent">Ops</b><i>Read only</i></span>
-              </div>
-              <p class="reuse-note">
-                <span aria-hidden="true">↳</span> Reuse this account for another agent with your
-                approval.
-              </p>
-            </div>
-            <p class="connection-setup-note" id="connection-setup-note" role="status">
-              Railway setup uses the provider’s sign-in flow. This illustration does not connect an
-              account.
-            </p>
-          </div>
-          <p class="feature-footnote">
-            Conversation-led setup · Per-agent access · Reusable accounts.
-            <a href="#connection-coverage">Preview connection coverage ↗</a>
-          </p>
-        </article>
-        <article class="feature-card" id="usage-feature" aria-labelledby="usage-title">
-          <span class="feature-number">05 / USAGE VISIBILITY</span>
-          <h2 id="usage-title">Know where your allowance goes.</h2>
-          <p class="feature-intro">
-            See reported allowance, reset times and usage trends. Break down token use by agent, and
-            get a forecast when there’s enough recent activity.
-          </p>
-          <div class="feature-example usage-example">
-            <div class="example-label"><span>USAGE</span><span>Illustrative data</span></div>
-            <div class="allowance-heading"><strong>Codex</strong><span>5 hour window</span></div>
-            <div class="allowance-reading">
-              <span>Allowance remaining</span><strong>64<small>%</small></strong>
-            </div>
-            <meter
-              class="allowance-meter"
-              min="0"
-              max="100"
-              value="64"
-              aria-label="Example remaining account allowance: 64 percent"
-            >
-              64%
-            </meter>
-            <div class="allowance-detail">
-              <span>Resets at 17:00</span
-              ><span
-                >Past hour
-                <svg
-                  viewBox="0 0 95 22"
-                  aria-label="Example allowance trending down over the past hour"
-                  role="img"
-                >
-                  <path
-                    d="M1 3 12 3 12 6 24 6 24 8 38 8 38 12 53 12 53 14 67 14 67 17 80 17 80 19 94 19"
-                  /></svg
-              ></span>
-            </div>
-            <div class="employee-share">
-              <svg
-                class="usage-ring"
-                viewBox="0 0 100 100"
-                role="img"
-                aria-label="Example token shares: Backend 58 percent, Interface 31 percent, Reviewer 11 percent. 100,000 tokens total."
-              >
-                <circle class="ring-track" cx="50" cy="50" r="39" />
-                <g transform="rotate(-90 50 50)" fill="none" stroke-width="8">
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="39"
-                    pathLength="100"
-                    stroke="#8c9eff"
-                    stroke-dasharray="57 43"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="39"
-                    pathLength="100"
-                    stroke="#56b6a8"
-                    stroke-dasharray="30 70"
-                    stroke-dashoffset="-58"
-                  />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="39"
-                    pathLength="100"
-                    stroke="#e6a45e"
-                    stroke-dasharray="10 90"
-                    stroke-dashoffset="-89"
-                  />
-                </g>
-                <text x="50" y="49" class="ring-total">100k</text>
-                <text x="50" y="62" class="ring-unit">tokens</text>
-              </svg>
-              <div class="share-legend">
-                <p>Observed by agent</p>
-                <div><i style="--share-color: #8c9eff"></i><span>Backend</span><b>58%</b></div>
-                <div><i style="--share-color: #56b6a8"></i><span>Interface</span><b>31%</b></div>
-                <div><i style="--share-color: #e6a45e"></i><span>Reviewer</span><b>11%</b></div>
-              </div>
-            </div>
-            <div class="forecast-note">
-              <span aria-hidden="true">⌁</span>
-              <p>At this pace, allowance could run out <strong>16:20–16:50</strong>.</p>
-            </div>
-          </div>
-          <p class="feature-footnote">
-            Allowance is provider-reported and shared with other apps. Agent shares cover up to 500
-            recent workspace runs with reported tokens; forecasts are estimates.
-          </p>
-        </article>
-      </section>
-      <section class="technical-features wrap" aria-labelledby="technical-title">
-        <p class="eyebrow">FOR THE WORK BEHIND THE DEMO</p>
-        <h2 id="technical-title">Real files. Real tools. Reviewable work.</h2>
-        <dl class="technical-list">
-          <div>
-            <dt>Git worktrees</dt>
-            <dd>
-              Repository tasks get a working tree and branch from committed HEAD. Inspect the
-              changes and tests before merging. Ordinary folders are edited in place.
-            </dd>
-          </div>
-          <div>
-            <dt>Native agent tools</dt>
-            <dd>
-              Agents use their runtime’s file and command tools. Choose a provider and model for
-              each agent; available tools and account access depend on that runtime.
-            </dd>
-          </div>
-          <div>
-            <dt>Shared project memory</dt>
-            <dd>
-              Save decisions as notes linked to their source messages. Carry useful context into
-              later tasks, while keeping direct conversations separate from shared rooms.
-            </dd>
-          </div>
-          <div>
-            <dt>MCP-backed connections</dt>
-            <dd>
-              Abralo exposes rooms, delegation and memory through MCP, and brokers supported service
-              tools with per-agent access.
-              <a href="#connection-coverage">See the current connection routes.</a>
-            </dd>
-          </div>
-          <div>
-            <dt>Permissions and review</dt>
-            <dd>
-              Choose an agent’s permission mode, answer requests in context and stop work from the
-              conversation. Permission behavior depends on the provider; worktrees are not security
-              sandboxes.
-            </dd>
-          </div>
-          <div id="computer-use-feature">
-            <dt>Computer use <span class="development-status">In development</span></dt>
-            <dd>
-              We’re adding computer use for tasks that need a visual interface. The aim: inspect a
-              running app, exercise its UI and bring findings back to the room. Not included in
-              v0.1.3-preview; release coverage will be documented when it lands.
-            </dd>
-          </div>
-        </dl>
-      </section>
-      <section class="architecture wrap" aria-label="How Abralo runs">
-        <div>
-          <span class="eyebrow">THE ACTUAL STACK</span>
-          <h2>
-            Your machine.<br />
-            Your agents.
-          </h2>
-        </div>
-        <div class="stack-flow">
-          <div><code>Browser UI</code><small>rooms · threads · people</small></div>
-          <span aria-hidden="true">↔</span>
-          <div><code>Local service</code><small>workspace · tasks · tools</small></div>
-          <span aria-hidden="true">↔</span>
-          <div><code>Agent runtimes</code><small>Codex · Claude Agent SDK · OpenCode</small></div>
-        </div>
-        <p>
-          Connect your own provider accounts and choose the folders agents can work in. Workspace
-          conversations are stored locally; model requests go to the provider you connect.
-        </p>
-      </section>
-      <section class="details wrap" id="details" aria-labelledby="details-title">
-        <div class="section-heading"><p class="eyebrow">BEFORE YOU BEGIN</p></div>
-        <div class="details-layout">
-          <h2 id="details-title">Under the hood.</h2>
-          <div class="faq">
-            <details>
-              <summary>What exactly am I installing?</summary>
-              <p>
-                A local workspace that opens in your browser, with a service running on your
-                computer. It gives people and AI agents direct conversations, rooms, and threads.
-                The preview app currently appears as <strong>Agent Workspace</strong> in your
-                application menu.
-              </p>
-            </details>
-            <details id="provider-details">
-              <summary>Which agents can I connect?</summary>
-              <p>
-                The preview includes Codex, Claude Agent SDK, and OpenCode runtimes. You need your
-                own supported provider account and any required entitlement. OpenCode also needs a
-                model selected from its connected provider.
-              </p>
-              <p>
-                Access and billing depend on the provider. Claude’s third-party subscription sign-in
-                route is unresolved; do not choose it for the launch trial. We have not established
-                provider approval for that route. The recorded examples used Codex only.
-              </p>
-              <a
-                href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ONBOARDING-RELIABILITY.md"
-                >Provider and onboarding notes ↗</a
-              >
-            </details>
-            <details id="connection-coverage">
-              <summary>Which external tools can agents use?</summary>
-              <p>
-                The managed setup flows in v0.1.3-preview cover Railway, Stripe and Gmail. Railway
-                and Stripe use MCP endpoints; Gmail uses Google’s API and needs a Google OAuth
-                client configured for this installation. You choose which agents can use an account.
-              </p>
-              <p>
-                The wider MCP ecosystem and native runtime tools are separate from these managed
-                connections. This release does not expose a general MCP-server catalogue. Setup,
-                authentication and available tools depend on the integration and agent runtime.
-              </p>
-            </details>
-            <details>
-              <summary>Where does my work go?</summary>
-              <p>
-                Workspace conversations are stored on your computer. Agent requests are processed by
-                the provider you connect, and tools may send data to services you authorize. Running
-                locally does not mean model requests stay on your device.
-              </p>
-              <a
-                href="https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/ACCESS-AND-PRIVACY.md"
-                >Access and privacy details ↗</a
-              >
-            </details>
-            <details>
-              <summary>Is it free? Is it open source?</summary>
-              <p>
-                The local Abralo preview is free, and its source is available under Apache 2.0.
-                Provider subscriptions or API usage are separate. Bundled third-party components
-                retain their own licenses.
-              </p>
-            </details>
-            <details id="cloud">
-              <summary>Is a hosted version planned?</summary>
-              <p>
-                We’re exploring a paid cloud version for people who need work to continue while
-                their computer is off, or want a shared workspace for their team. Scope, pricing and
-                availability are not set. The local preview is available to try today.
-              </p>
-              <p>
-                Interested in a paid pilot? Tell Chris what you would run regularly, why the local
-                app does not meet that need, and what budget you would have for hosting. Please
-                leave out private project details.
-              </p>
-              <p>
-                <a href="mailto:chris@abralo.com?subject=Abralo%20hosted%20pilot"
-                  >Email chris@abralo.com about hosting ↗</a
-                >. This opens your email app. You choose whether to send; the message is for a
-                conversation about your request, not a newsletter signup or a purchase.
-              </p>
-            </details>
-            <details>
-              <summary>How finished is the preview?</summary>
-              <p>
-                It is an early release. Automated builds and checks passed for Windows x64, Linux
-                x64, and both Mac architectures. That is not a guarantee for every machine or
-                account. Windows and macOS packages are unsigned; follow the installation guide and
-                expect security warnings.
-              </p>
-              <p>
-                The terminal installer step is still part of setup. There is no published npm
-                installer yet.
-              </p>
-            </details>
-          </div>
-        </div>
-      </section>
-      <section class="download wrap" id="download" aria-labelledby="download-title">
-        <div class="download-inner">
-          <div class="download-intro">
-            <p class="eyebrow">THE OPEN-SOURCE PREVIEW / v0.1.3-preview</p>
-            <h2 id="download-title">Start with one agent.<br />Build your team.</h2>
-            <p>
-              Download the local preview. Connect a provider. Give your first agent a real task.
-            </p>
-            <a class="button light" href="/start.html">Start with the setup guide ↗</a>
-            <p class="download-note">Unsigned preview · Your own provider account required</p>
-          </div>
-          <div class="download-options">
-            <h3>Choose your computer</h3>
-            <a
-              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-macos-arm64.tar.gz"
-              ><span>macOS<small>Apple silicon · M-series</small></span
-              ><span aria-hidden="true">↓</span></a
-            ><a
-              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-macos-x64.tar.gz"
-              ><span>macOS<small>Intel</small></span
-              ><span aria-hidden="true">↓</span></a
-            ><a
-              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-windows-x64.tar.gz"
-              ><span>Windows<small>x64</small></span
-              ><span aria-hidden="true">↓</span></a
-            ><a
-              href="https://github.com/cw12574/abralo-workspace/releases/download/v0.1.3-preview/abralo-linux-x64.tar.gz"
-              ><span>Linux<small>x64</small></span
-              ><span aria-hidden="true">↓</span></a
-            ><a
-              class="all-releases"
-              href="https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview"
-              >Release notes &amp; checksums ↗</a
-            >
-          </div>
-        </div>
-      </section>
-    </main>
-    <footer class="site-footer wrap">
-      <a class="brand" href="/"><img src="/mark.svg" width="25" height="25" alt="" />Abralo</a
-      ><span>Open source · Apache 2.0</span>
-      <div>
-        <a href="mailto:chris@abralo.com">Chris · chris@abralo.com</a
-        ><a href="#cloud">Hosted version?</a
-        ><a href="https://github.com/cw12574/abralo-workspace/issues">Report a bug ↗</a
-        ><a href="https://github.com/cw12574/abralo-workspace">GitHub ↗</a>
       </div>
-    </footer>
-  </body>
+
+      <div class="universe" aria-label="How Abralo connects company history to people and AI agents">
+        <div class="graph-stage" id="graph-stage">
+          <div class="graph-backdrop" aria-hidden="true"></div>
+          <svg class="flow-lines" viewBox="0 0 1400 590" preserveAspectRatio="none" aria-hidden="true">
+            <defs><linearGradient id="flow" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#8cebd1" stop-opacity=".12"/><stop offset=".5" stop-color="#8cebd1" stop-opacity=".75"/><stop offset="1" stop-color="#9ab4ff" stop-opacity=".3"/></linearGradient></defs>
+            <path d="M364 294H482M905 294H1025" stroke="url(#flow)" stroke-width="2" stroke-dasharray="5 9" class="flow-dash"/>
+            <path d="M364 294C430 294 420 153 500 153M364 294C430 294 420 435 500 435M905 294C968 294 955 145 1038 145M905 294C968 294 955 442 1038 442" stroke="url(#flow)" stroke-width="1" fill="none" opacity=".5"/>
+            <circle r="4" fill="#a8ffe9" class="flow-packet"><animateMotion dur="4s" repeatCount="indefinite" path="M364 294H1025"/></circle>
+            <circle r="3" fill="#9ab4ff" class="flow-packet packet-late"><animateMotion dur="5s" begin="1s" repeatCount="indefinite" path="M364 294H1025"/></circle>
+          </svg>
+
+          <section class="history-column" aria-label="Examples of company information Abralo can make searchable">
+            <p class="diagram-label">THE HISTORY OF YOUR ORGANISATION</p>
+            <article class="history-card"><span class="history-icon icon-talk" aria-hidden="true">“</span><div><h3>Conversations</h3></div><span class="card-signal" aria-hidden="true"></span></article>
+            <article class="history-card"><span class="history-icon icon-decisions" aria-hidden="true">⌁</span><div><h3>Decisions</h3></div><span class="card-signal" aria-hidden="true"></span></article>
+            <article class="history-card"><span class="history-icon icon-work" aria-hidden="true">◫</span><div><h3>Work &amp; tools</h3></div><span class="card-signal" aria-hidden="true"></span></article>
+            <article class="history-card"><span class="history-icon icon-ai" aria-hidden="true">✳</span><div><h3>AI conversations</h3></div><span class="card-signal" aria-hidden="true"></span></article>
+          </section>
+
+          <section class="memory-column" aria-label="Abralo indexes organisational history so it can be searched">
+            <div class="memory-web" aria-hidden="true"><svg viewBox="0 0 300 270"><path d="M43 54 112 33 213 58 251 126 218 218 132 243 54 187 43 54ZM43 54l89 189M112 33l106 185M213 58 54 187M251 126 43 54M54 187l159-129M132 243l-20-210"/><circle cx="43" cy="54" r="4"/><circle cx="112" cy="33" r="4"/><circle cx="213" cy="58" r="4"/><circle cx="251" cy="126" r="4"/><circle cx="218" cy="218" r="4"/><circle cx="132" cy="243" r="4"/><circle cx="54" cy="187" r="4"/></svg></div>
+            <div class="memory-core"><div class="memory-logo"><img src="/mark.svg" alt="" width="42" height="42"></div><p class="memory-title">Abralo</p><p class="memory-subtitle">Searchable organisational memory</p><div class="search-example"><span class="search-symbol" aria-hidden="true">⌕</span><span>Search the whole history</span></div></div>
+          </section>
+
+          <section class="access-column" aria-label="People and agents use the same company memory">
+            <p class="diagram-label">AVAILABLE TO YOUR TEAM</p>
+            <div class="access-card people-card"><div class="access-heading"><span class="access-glyph" aria-hidden="true">◎</span><div><h3>People</h3></div></div><div class="people-stack" aria-label="People across the team"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i></div></div>
+            <div class="access-card agents-card"><div class="access-heading"><span class="access-glyph agent-glyph" aria-hidden="true">✳</span><div><h3>Agents</h3></div></div><div class="agent-stack" aria-label="Research, engineering and other agents"><span>Research</span><span>Engineering</span><span>Other agents</span></div></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="recognition prose-section" id="how">
+      <div class="prose-grid">
+        <h2>What does Abralo actually do?</h2>
+        <div class="prose-copy">
+          <p>Your company's history is spread across conversations, documents, projects, tools and the AI chats your team has already had. Important context gets hard to find, so people repeat the same research and agents start with only the information someone remembered to paste in.</p>
+          <p>Abralo indexes that shared history and makes it searchable. When a person or agent needs context, they can look across the organisation's accumulated work instead of starting from a blank page. Private direct chats stay private.</p>
+        </div>
+      </div>
+      <figure class="prose-diagram history-flow" aria-label="Company conversations, documents, work and AI chats flow into shared memory, where people and agents can search them">
+        <div class="diagram-source-group">
+          <p class="diagram-heading">WHAT YOUR COMPANY HAS LEARNED</p>
+          <div class="record-grid">
+            <div class="record-card"><span aria-hidden="true">↗</span><b>Conversations</b></div>
+            <div class="record-card"><span aria-hidden="true">▤</span><b>Documents</b></div>
+            <div class="record-card"><span aria-hidden="true">⌘</span><b>Projects &amp; tools</b></div>
+            <div class="record-card"><span aria-hidden="true">✳</span><b>AI sessions</b></div>
+          </div>
+        </div>
+        <div class="diagram-connector" aria-hidden="true"><span></span><i>›</i></div>
+        <div class="diagram-memory">
+          <div class="diagram-network" aria-hidden="true"><svg viewBox="0 0 180 150"><path d="M22 35 67 18 122 29 157 70 133 121 76 136 29 103 22 35ZM22 35l54 101M67 18l66 103M122 29 29 103M157 70 22 35M29 103l93-74M76 136 67 18"/><circle cx="22" cy="35" r="3"/><circle cx="67" cy="18" r="3"/><circle cx="122" cy="29" r="3"/><circle cx="157" cy="70" r="3"/><circle cx="133" cy="121" r="3"/><circle cx="76" cy="136" r="3"/><circle cx="29" cy="103" r="3"/></svg></div>
+          <img src="/mark.svg" alt="" width="35" height="35">
+          <b>Shared memory</b>
+        </div>
+        <div class="diagram-connector" aria-hidden="true"><span></span><i>›</i></div>
+        <div class="history-access">
+          <article class="history-access-card">
+            <h3>WHEN SOMEONE NEEDS CONTEXT</h3>
+            <div class="history-access-action"><span aria-hidden="true">⌕</span><b>Search the history</b></div>
+          </article>
+          <article class="history-access-card agent-access-card">
+            <h3>WHEN AN AGENT NEEDS CONTEXT</h3>
+            <div class="history-access-action"><span aria-hidden="true">⌘</span><b>Tool call to search the history</b></div>
+          </article>
+        </div>
+      </figure>
+    </section>
+
+    <section class="memory-growth prose-section">
+      <div class="prose-grid">
+        <h2>A company’s memory grows with the work.</h2>
+        <div class="prose-copy">
+          <p>Every conversation, decision and project adds to the record people and agents can search. A new piece of work can connect to what the company already learned.</p>
+          <p>That means the next question can start with more of the story already in reach.</p>
+        </div>
+      </div>
+      <figure class="context-growth" aria-label="Illustrative curve showing searchable company history increasing as more work is connected over time.">
+        <div class="growth-heading"><span>MORE HISTORY CONNECTED</span><span>MORE TO DRAW ON</span></div>
+        <svg class="growth-chart" viewBox="0 0 1000 350" role="img" aria-hidden="true">
+          <defs>
+            <linearGradient id="growth-area" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#89f3d6" stop-opacity=".23"/><stop offset="1" stop-color="#89f3d6" stop-opacity="0"/></linearGradient>
+            <linearGradient id="growth-line" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#89f3d6"/><stop offset="1" stop-color="#a9bcff"/></linearGradient>
+          </defs>
+          <path class="growth-gridline" d="M72 275H950M72 205H950M72 135H950M72 65H950"/>
+          <path class="growth-area" d="M72 275C218 270 312 258 403 238S561 195 650 152 810 82 950 36V275H72Z"/>
+          <path class="growth-curve" d="M72 275C218 270 312 258 403 238S561 195 650 152 810 82 950 36"/>
+          <g class="growth-points"><circle cx="72" cy="275" r="5"/><circle cx="225" cy="268" r="5"/><circle cx="403" cy="238" r="5"/><circle cx="560" cy="194" r="5"/><circle cx="720" cy="119" r="5"/><circle cx="860" cy="66" r="5"/><circle cx="950" cy="36" r="6"/></g>
+          <text class="growth-axis-label" x="72" y="320">AS THE COMPANY WORKS</text>
+          <text class="growth-curve-label" x="705" y="95">MORE CONTEXT TO SEARCH</text>
+        </svg>
+        <figcaption>More conversations, decisions and projects become part of the searchable record.</figcaption>
+      </figure>
+    </section>
+
+    <section class="possibilities prose-section">
+      <div class="prose-grid">
+        <h2>Beyond search.</h2>
+        <div class="prose-copy">
+          <p>Search is the beginning. We’re building toward a company memory that carries decisions forward, helps people and agents pick up work, and brings more of what happens in meetings into the record.</p>
+        </div>
+      </div>
+      <div class="future-grid" aria-label="What Abralo is building toward">
+        <article class="future-card"><span>01</span><h3>Remember why decisions were made</h3><p>Keep the original discussion, the decision and what followed connected.</p></article>
+        <article class="future-card"><span>02</span><h3>Hand work over with its context</h3><p>Give the next person or agent the goal, current state and open questions.</p></article>
+        <article class="future-card"><span>03</span><h3>Catch the moment things change</h3><p>Bring new information forward when it changes an earlier decision.</p></article>
+        <article class="future-card"><span>04</span><h3>Bring context to every agent</h3><p>Make connected, source-linked company history available across the tools teams choose.</p></article>
+        <article class="future-card"><span>05</span><h3>Let the memory learn from feedback</h3><p>Use corrections to make company context easier to find and more useful.</p></article>
+        <article class="future-card"><span>06</span><h3>Keep meetings in the company story</h3><p>Bring notes and useful artifacts from in-person and virtual meetings into the shared record.</p></article>
+      </div>
+      <p class="future-note">Today, Abralo makes shared company history searchable. Training models on company data is a separate possibility we’re exploring for the future.</p>
+    </section>
+
+    <section class="closing" id="waitlist">
+      <div class="closing-star" aria-hidden="true">✳</div>
+      <h2>Want to see where this goes?</h2>
+      <p class="closing-copy">We're building Abralo for teams that want their people and AI to work with the shared context of the organisation. Leave your email and we'll send you a note when there's something real to try.</p>
+      <a class="closing-cta" href="#email">Get early access <span aria-hidden="true">↗</span></a>
+    </section>
+  </main>
+
+  <footer class="footer"><a class="brand footer-brand" href="#top"><img src="/mark.svg" alt="" width="22" height="22"><span>abralo</span></a><span>A shared, searchable memory for your organisation.</span><a href="#top">Back to the beginning ↑</a></footer>
+</body>
 </html>
