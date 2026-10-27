@@ -1,0 +1,46 @@
+name: Assemble verified preview draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful four-platform build run ID
+        required: true
+      source_sha:
+        description: Exact source commit checked by that run
+        required: true
+      release_tag:
+        description: Existing unpublished release tag
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: assemble-preview-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN: ${{ inputs.build_run }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.16.0
+      - name: Verify provenance and unpublished destination
+        run: node scripts/assemble-preview.mjs validate
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.build_run }}
+          pattern: abralo-*
+          path: verified-packages
+      - name: Verify archives, upload missing assets, and check remote digests
+        run: node scripts/assemble-preview.mjs upload
