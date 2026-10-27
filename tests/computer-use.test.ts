@@ -53,7 +53,7 @@ describe('computer use', () => {
     }
   }, 30000);
 
-  it('requires explicit consent and supports immediate revocation', async () => {
+  it.runIf(process.platform === 'win32')('requires explicit consent and supports immediate revocation', async () => {
     const { computer, tools, active, events } = fixture(async () => ({ allow: true }));
     const desktop = tools('run-one').workspace_desktop;
     await expect(desktop({ action: 'screenshot' })).rejects.toThrow('Request desktop control');
@@ -70,11 +70,22 @@ describe('computer use', () => {
     } else expect(JSON.stringify(response)).toContain('requires Windows');
   });
 
-  it('keeps the desktop unavailable after a declined request', async () => {
+  it.runIf(process.platform === 'win32')('keeps the desktop unavailable after a declined request', async () => {
     const { tools } = fixture();
     const desktop = tools('run-one').workspace_desktop;
     const response = await desktop({ action: 'request', reason: 'Open a desktop app' });
     expect(JSON.parse(response.content[0].text).active).toBe(false);
     await expect(desktop({ action: 'click', x: 10, y: 10 })).rejects.toThrow('Request desktop control');
+  });
+
+  it.runIf(process.platform !== 'win32')('reports desktop control as unsupported without requesting access', async () => {
+    let prompted = false;
+    const { tools, computer } = fixture(async () => { prompted = true; return { allow: true }; });
+    const desktop = tools('run-one').workspace_desktop;
+    for (const action of ['request', 'screenshot', 'click']) {
+      expect(JSON.stringify(await desktop({ action }))).toContain('requires Windows');
+    }
+    expect(prompted).toBe(false);
+    expect(computer.status().active).toBe(false);
   });
 });
