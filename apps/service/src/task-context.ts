@@ -54,13 +54,13 @@ async function taskFolderOnce(store: Store, employee: any, contextKey: string) {
     return root;
   }
   const saved = store.setting('worktree.' + contextKey);
-  if (saved && existsSync(saved.path)) return realpathSync(saved.path);
+  if (saved && existsSync(saved.path)) return realpathSync.native(saved.path);
   const path = join(ensureDirectory(join(store.dir, 'worktrees')), contextKey.slice(0, 24));
   const branch = 'codex/workspace-' + contextKey.slice(0, 16);
   const remember = (worktreePath: string) => {
     // Git reports canonical paths, which can differ from the requested path
     // through macOS /var symlinks or Windows short profile names.
-    const absolutePath = realpathSync(resolve(worktreePath));
+    const absolutePath = realpathSync.native(resolve(worktreePath));
     store.set('worktree.' + contextKey, { path: absolutePath, branch, source: root });
     return absolutePath;
   };
