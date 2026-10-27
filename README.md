@@ -1,4 +1,4 @@
-# Abralo â€” lasting goals for your AI team
+# Abralo — lasting goals for your AI team
 
 **Give your AI team a goal you can pick up tomorrow.**
 
@@ -10,7 +10,7 @@ Abralo is an open-source, local workspace for people and coding agents. Keep an 
 
 Work starts from your requests or an explicit schedule. Lasting goals do not promise continuous background execution or guaranteed outcomes. Ordinary conversation remains available while work runs.
 
-**[Website and assisted trial](https://abralo.com/#try)** Â· **[Release status and older previews](https://github.com/cw12574/abralo-workspace/releases)** Â· **[Goals walkthrough](docs/preview/GOALS-TRIAL.md)** Â· **[Setup guide](docs/preview/START-HERE.md)**
+**[Website and assisted trial](https://abralo.com/#try)** · **[Release status and older previews](https://github.com/cw12574/abralo-workspace/releases)** · **[Goals walkthrough](docs/preview/GOALS-TRIAL.md)** · **[Setup guide](docs/preview/START-HERE.md)**
 
 ## Durable-goals release candidate
 
@@ -32,7 +32,7 @@ Native harnesses use the owner's supported login. Invitations do not grant other
 
 This is a working preview, not a signed public release. No sample conversations or simulated agent activity are installed in the user's workspace.
 
-On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings â†’ General lets you turn automatic startup off or on.
+On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings → General lets you turn automatic startup off or on.
 
 The default data directory is `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS and `$XDG_DATA_HOME/AgentWorkspace` (or `~/.local/share/AgentWorkspace`) on Linux. Installation code and user data are separate. Backups omit provider tokens; `scripts/restore.mjs` restores into a new directory and leaves schedules disabled until explicitly re-enabled.
 
