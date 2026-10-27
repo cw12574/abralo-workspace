@@ -1,6 +1,8 @@
 import webpush from 'web-push';
 import { z } from 'zod';
-import { Store, uid } from './store.js';
+import { ApiError, Store, uid } from './store.js';
+import { nativeNotificationsAvailable, prepareNativeNotifications, sendNativeNotification } from './native-notifications.js';
+const defaultPreferences = { enabled: true, sound: true, privatePreview: false };
 export async function registerNotifications(app: any, s: Store) {
   if (!s.setting('inbox.backfilled')) {
     for (const row of s.all(
@@ -17,11 +19,10 @@ export async function registerNotifications(app: any, s: Store) {
   webpush.setVapidDetails('mailto:workspace@localhost.invalid', keys.publicKey, keys.privateKey);
   app.get('/api/notifications', async (req: any) => ({
     publicKey: keys.publicKey,
-    preferences: s.setting('notifications.' + req.user.id, {
-      enabled: false,
-      sound: true,
-      privatePreview: false,
-    }),
+    nativeAvailable: nativeNotificationsAvailable(s, req.user.id),
+    browserSubscriptions: s.one('SELECT COUNT(*) n FROM subscriptions WHERE user_id=?', req.user.id).n,
+    lastDelivery: s.setting('notifications.delivery.' + req.user.id, null),
+    preferences: s.setting('notifications.' + req.user.id, defaultPreferences),
   }));
   app.get('/api/notifications/inbox', async (req: any) => {
     const rows = s.all(
@@ -89,18 +90,23 @@ export async function registerNotifications(app: any, s: Store) {
         s.run('DELETE FROM subscriptions WHERE id=?', row.id);
     return { ok: true };
   });
-  // Native/browser routing is coordinated by the page while connected. Push is
-  // sent only for an opted-in recipient without a recently visible page lease.
-  app.post('/api/notifications/presence', async (req: any) => {
-    s.set('presence.' + req.user.id, { at: Date.now(), visible: !!req.body?.visible });
+  // A focused page acknowledges each event it actually receives. If it closes
+  // or loses its stream, the deadline still sends a desktop alert.
+  const pending = new Map<string, NodeJS.Timeout>();
+  app.post('/api/notifications/ack', async (req: any) => {
+    const { messageId } = z.object({ messageId: z.string() }).parse(req.body);
+    if (!s.one('SELECT 1 FROM inbox WHERE user_id=? AND message_id=?', req.user.id, messageId))
+      throw new ApiError(404, 'Notification not found.');
+    const key = req.user.id + ':' + messageId;
+    const timer = pending.get(key);
+    if (timer) clearTimeout(timer);
+    pending.delete(key);
     return { ok: true };
   });
-  const onEvent = (event: any) => {
-    if (event.type !== 'notification.message' || !event.userId) return;
-    const prefs = s.setting('notifications.' + event.userId, {}),
-      presence = s.setting('presence.' + event.userId, {});
-    if (!prefs.enabled || (presence.visible && Date.now() - presence.at < 45000)) return;
+  const sendBrowserPush = (event: any, prefs: any) => {
+    let attempted = false;
     for (const row of s.all('SELECT * FROM subscriptions WHERE user_id=?', event.userId)) {
+      attempted = true;
       const payload = {
         id: event.payload.id,
         title: event.payload.authorName,
@@ -117,11 +123,55 @@ export async function registerNotifications(app: any, s: Store) {
         .catch((e: any) => {
           if (e.statusCode === 404 || e.statusCode === 410)
             s.run('DELETE FROM subscriptions WHERE id=?', row.id);
+          s.set('notifications.delivery.' + event.userId,
+            { channel: 'browser', at: Date.now(), error: String(e.message || e) });
+          console.error('Browser notification failed:', e);
         });
     }
+    s.set('notifications.delivery.' + event.userId,
+      { channel: attempted ? 'browser' : 'none', at: Date.now(),
+        ...(attempted ? {} : { error: 'No browser subscription or native desktop channel.' }) });
+  };
+  app.post('/api/notifications/test', async (req: any) => {
+    if (!nativeNotificationsAvailable(s, req.user.id))
+      return { channel: 'browser', message: 'Use the browser notification test.' };
+    await sendNativeNotification(s, {
+      title: 'Abralo', body: 'A test notification from Abralo.',
+      sound: !!s.setting('notifications.' + req.user.id, defaultPreferences).sound,
+    });
+    return { channel: 'windows', message: 'Sent to Windows. Check the notification center if no banner appears.' };
+  });
+  const onEvent = (event: any) => {
+    if (event.type !== 'notification.message' || !event.userId) return;
+    const prefs = s.setting('notifications.' + event.userId, defaultPreferences);
+    if (!prefs.enabled) return;
+    const key = event.userId + ':' + event.payload.id;
+    const previous = pending.get(key);
+    if (previous) clearTimeout(previous);
+    pending.set(key, setTimeout(() => {
+      pending.delete(key);
+      if (!s.setting('notifications.' + event.userId, defaultPreferences).enabled) return;
+      if (nativeNotificationsAvailable(s, event.userId)) {
+        void sendNativeNotification(s, {
+          title: event.payload.authorName,
+          body: prefs.privatePreview ? 'You have a new message.' : event.payload.text.slice(0, 160),
+          sound: !!prefs.sound,
+        }, () => sendBrowserPush(event, prefs))
+          .then(() => s.set('notifications.delivery.' + event.userId,
+            { channel: 'windows', at: Date.now() }))
+          .catch((error) => {
+            console.error('Windows notification failed:', error);
+            sendBrowserPush(event, prefs);
+          });
+      } else sendBrowserPush(event, prefs);
+    }, 1500));
   };
   s.bus.on('event', onEvent);
+  void prepareNativeNotifications(s).catch((error) =>
+    console.error('Could not prepare Windows notifications:', error));
   app.addHook('onClose', async () => {
     s.bus.off('event', onEvent);
+    for (const timer of pending.values()) clearTimeout(timer);
+    pending.clear();
   });
 }

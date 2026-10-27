@@ -17,7 +17,7 @@ const target = join(base, 'versions', String(Date.now()));
 if (existsSync(target)) throw new Error('Installation already exists.');
 mkdirSync(target, { recursive: true });
 for (const name of ['dist', 'node_modules', 'scripts', 'runtime', 'package.json', 'release.json', 'README.md', 'docs'])
-  cpSync(join(source, name), join(target, name), { recursive: true });
+  cpSync(join(source, name), join(target, name), { recursive: true, verbatimSymlinks: true });
 const node = join(target, 'runtime', 'node'),
   launcher = join(base, 'launcher.mjs');
 cpSync(join(target, 'scripts', 'installed-launcher.mjs'), launcher);

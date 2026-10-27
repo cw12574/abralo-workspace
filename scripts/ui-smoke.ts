@@ -17,6 +17,7 @@ const chief = store.createEmployee(owner.id, {
   cwd: '',
   instructions: '',
 });
+store.set('workspace.chiefOfStaff.' + owner.id, chief.id);
 const ada = store.createEmployee(owner.id, {
   name: 'Ada',
   role: 'Engineering',
@@ -392,8 +393,9 @@ if (
   throw new Error('Activity trail should follow the message when its latest update is more recent');
 if (await toolMessage.locator('.run-status').count())
   throw new Error('An active toolchain should replace the duplicate Working status');
-await activityTrail.getByRole('button', { name: /Show 2 activity steps/ }).click();
+await activityTrail.getByRole('button', { name: /Show activity timeline/ }).click();
 const timelineSteps = activityTrail.locator('.toolchain-step');
+await expect(timelineSteps).toHaveCount(2);
 const timelineText = (await timelineSteps.allTextContents()).join('|');
 if (timelineText.indexOf('Read project files') > timelineText.indexOf('Run focused checks'))
   throw new Error('Toolchain steps are not shown in chronological order');

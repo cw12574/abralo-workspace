@@ -75,6 +75,9 @@ function verifyInstalledPayload(root) {
     if (!existsSync(join(root, required))) throw new Error(`Installed payload is missing ${required}.`);
   }
   if (!existsSync(node)) throw new Error('Installed bundled Node runtime is missing.');
+  // Verify the installed copy too: framework links must stay inside it, and
+  // its browser must launch without relying on the extracted download.
+  run(node, [resolve('scripts/verify-package.mjs'), root], { cwd: root });
   return node;
 }
 

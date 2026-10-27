@@ -3,35 +3,90 @@ const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: queryMock }));
 vi.mock('../packages/host/src/index.js', () => ({
   executable: () => ({ command: 'fixture-claude', args: [] }),
-  execFileAsync: async () => ({ stdout: JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' }) }),
+  execFileAsync: async () => ({
+    stdout: JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' }),
+  }),
 }));
 import { ClaudeAdapter } from '../apps/service/src/adapters/claude.js';
 
 function input() {
   const controller = new AbortController();
   const emit = vi.fn();
-  return { controller, emit, value: {
-    id: 'fixture', prompt: 'Test', attachments: [], signal: controller.signal, emit,
-    employee: { permissionMode: 'ask', instructions: '', cwd: '' },
-    decide: async () => ({ allow: true }),
-  } as any };
+  return {
+    controller,
+    emit,
+    value: {
+      id: 'fixture',
+      prompt: 'Test',
+      attachments: [],
+      signal: controller.signal,
+      emit,
+      employee: { permissionMode: 'ask', instructions: '', cwd: '' },
+      decide: async () => ({ allow: true }),
+    } as any,
+  };
 }
-beforeEach(() => { queryMock.mockReset(); });
+beforeEach(() => {
+  queryMock.mockReset();
+});
 
 describe('Claude cancellation lifecycle', () => {
+  it('lets Abralo own connection approvals even when native tools require asking', async () => {
+    const a = input();
+    a.value.tools = {
+      workspace: { url: 'http://localhost/mcp', headers: { Authorization: 'test' } },
+    };
+    a.value.decide = vi.fn(async () => ({ allow: false }));
+    queryMock.mockImplementation(({ options }) => ({
+      close() {},
+      async setMcpServers() {},
+      async *[Symbol.asyncIterator]() {
+        expect(options.settingSources).toEqual(['project']);
+        expect(options.strictMcpConfig).toBe(true);
+        expect(
+          await options.canUseTool('mcp__workspace__workspace_connection_call', { tool: 'write' }),
+        ).toMatchObject({ behavior: 'allow' });
+        expect(a.value.decide).not.toHaveBeenCalled();
+        expect(await options.canUseTool('mcp__other__workspace_connection_call', {})).toMatchObject(
+          { behavior: 'deny' },
+        );
+      },
+    }));
+    await new ClaudeAdapter().run(a.value);
+  });
+  it('loads configured MCP servers only after Abralo opt-in', async () => {
+    const a = input();
+    a.value.nativeMcp = true;
+    queryMock.mockImplementation(({ options }) => ({
+      close() {},
+      async *[Symbol.asyncIterator]() {
+        expect(options.settingSources).toEqual(['user', 'project']);
+        expect(options.strictMcpConfig).toBe(false);
+      },
+    }));
+    await new ClaudeAdapter().run(a.value);
+  });
   it('keeps the transport open until native interrupt acknowledges, then closes it', async () => {
     const a = input();
     let release!: () => void;
     let sdkSignal!: AbortSignal;
     const close = vi.fn();
-    const interrupt = vi.fn(() => new Promise<void>(resolve => { release = resolve; }));
+    const interrupt = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
     queryMock.mockImplementation(({ options }) => {
       sdkSignal = options.abortController.signal;
       expect(options.perTaskStopAffordance).toBe(false);
       return {
-        interrupt, close,
+        interrupt,
+        close,
         async *[Symbol.asyncIterator]() {
-          await new Promise(resolve => sdkSignal.addEventListener('abort', resolve, { once: true }));
+          await new Promise((resolve) =>
+            sdkSignal.addEventListener('abort', resolve, { once: true }),
+          );
         },
       };
     });
@@ -51,12 +106,20 @@ describe('Claude cancellation lifecycle', () => {
   it('reports unconfirmed termination if native interrupt fails', async () => {
     const a = input();
     queryMock.mockImplementation(({ options }) => ({
-      interrupt: async () => { throw new Error('Native cleanup failed'); }, close: () => {},
+      interrupt: async () => {
+        throw new Error('Native cleanup failed');
+      },
+      close: () => {},
       async *[Symbol.asyncIterator]() {
-        await new Promise(resolve => options.abortController.signal.addEventListener('abort', resolve, { once: true }));
+        await new Promise((resolve) =>
+          options.abortController.signal.addEventListener('abort', resolve, { once: true }),
+        );
       },
     }));
-    const result = new ClaudeAdapter().run(a.value).then(() => undefined, error => error);
+    const result = new ClaudeAdapter().run(a.value).then(
+      () => undefined,
+      (error) => error,
+    );
     await vi.waitFor(() => expect(queryMock).toHaveBeenCalledOnce());
     a.controller.abort();
     expect(String(await result)).toContain('tool termination is unconfirmed');

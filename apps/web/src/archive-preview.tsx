@@ -92,9 +92,9 @@ async function readEntry(archive: Archive, entry: Entry): Promise<string> {
   if (entry.method === 0) return decoder.decode(compressed);
   if (entry.method !== 8 || typeof DecompressionStream === 'undefined')
     throw new Error('This file uses compression that this browser cannot preview.');
-  const compressedBuffer = new ArrayBuffer(compressed.byteLength);
-  new Uint8Array(compressedBuffer).set(compressed);
-  const stream = new Blob([compressedBuffer])
+  const blobBytes = new ArrayBuffer(compressed.byteLength);
+  new Uint8Array(blobBytes).set(compressed);
+  const stream = new Blob([blobBytes])
     .stream()
     .pipeThrough(new DecompressionStream('deflate-raw'));
   const reader = stream.getReader();

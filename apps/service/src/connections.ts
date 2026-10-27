@@ -2,7 +2,8 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import { randomBytes } from 'node:crypto';
-import { Store, ApiError, hash } from './store.js';
+import { Store, ApiError, hash, uid } from './store.js';
+import { ConnectionActions } from './connection-actions.js';
 import { Vault } from './vault.js';
 import type { Supervisor } from './supervisor.js';
 import { GmailConnection, gmailTools } from './gmail.js';
@@ -12,6 +13,123 @@ const recipes: Record<string, { url: string; label: string; probe?: string }> = 
   railway: { url: 'https://mcp.railway.com', label: 'Railway' },
 };
 export class ConnectionBroker {
+  actions: ConnectionActions;
+  resolve(id: string, ownerId: string) {
+    const c = this.store.one('SELECT * FROM connections WHERE id=? AND owner_id=?', id, ownerId);
+    if (!c) throw new ApiError(404, 'Connection unavailable');
+    const data = JSON.parse(c.data);
+    if (data.reuseId) {
+      const account = this.store.one(
+        'SELECT * FROM connections WHERE id=? AND owner_id=?',
+        data.reuseId,
+        ownerId,
+      );
+      if (!account || account.service !== c.service)
+        throw new ApiError(404, 'Connected account unavailable');
+      return account;
+    }
+    return c;
+  }
+  status(id: string, employeeId: string, ownerId: string) {
+    const c = this.resolve(id, ownerId),
+      data = JSON.parse(c.data);
+    const grant = this.store.one(
+      'SELECT capabilities FROM grants WHERE connection_id=? AND employee_id=?',
+      c.id,
+      employeeId,
+    );
+    const capabilities: string[] = grant ? JSON.parse(grant.capabilities) : [];
+    return {
+      id: c.id,
+      connectionId: c.id,
+      requestId: id !== c.id ? id : undefined,
+      service: c.service,
+      label: c.label,
+      state: c.state,
+      capabilities,
+      status: c.state === 'ready' ? (grant ? 'ready' : 'grant_required') : c.state,
+      toolCount: grant ? data.tools?.length || 0 : 0,
+      nextStep:
+        c.state === 'ready'
+          ? grant
+            ? 'Use this connectionId. Writes return a durable Abralo action approval; do not reconnect.'
+            : 'Share the existing account using the setup card.'
+          : 'Complete the existing setup card. Do not create another connection.',
+    };
+  }
+  request(run: any, service: string, access: string) {
+    const s = this.store;
+    const accounts = s.all(
+      "SELECT * FROM connections WHERE owner_id=? AND service=? AND state='ready'",
+      run.user_id,
+      service,
+    );
+    const granted = accounts.find((c) => {
+      const status = this.status(c.id, run.employee_id, run.user_id);
+      return status.capabilities.includes(access);
+    });
+    if (granted) return this.status(granted.id, run.employee_id, run.user_id);
+    const pending = s
+      .all(
+        "SELECT * FROM connections WHERE owner_id=? AND service=? AND state IN ('awaiting_authorization','failed','disconnected')",
+        run.user_id,
+        service,
+      )
+      .find((c) => {
+        const d = JSON.parse(c.data);
+        return d.employeeId === run.employee_id && d.conversationId === run.conversation_id;
+      });
+    const id = pending?.id || uid();
+    const data = {
+      ...(pending ? JSON.parse(pending.data) : {}),
+      employeeId: run.employee_id,
+      conversationId: run.conversation_id,
+      requestMessageId: run.message_id,
+      runId: run.id,
+      service,
+      requestedWrite: access === 'write' || !!(pending && JSON.parse(pending.data).requestedWrite),
+      ...(accounts[0] ? { reuseId: accounts[0].id, accountLabel: accounts[0].label } : {}),
+    };
+    if (pending) s.run('UPDATE connections SET data=? WHERE id=?', JSON.stringify(data), id);
+    else
+      s.run(
+        'INSERT INTO connections VALUES(?,?,?,?,?,?)',
+        id,
+        run.user_id,
+        service,
+        service,
+        'awaiting_authorization',
+        JSON.stringify(data),
+      );
+    s.emit('connection.requested', run.conversation_id, { id, service }, run.user_id);
+    return {
+      ...this.status(id, run.employee_id, run.user_id),
+      requestId: id,
+      status: data.reuseId ? 'grant_required' : 'setup_required',
+      requestedAccess: data.requestedWrite ? 'write' : 'read',
+      nextStep:
+        'Use the existing inline setup card. Do not create another request or ask for secrets in chat.',
+    };
+  }
+  access(id: string, employeeId: string, ownerId: string, name: string) {
+    const c = this.resolve(id, ownerId);
+    const status = this.status(c.id, employeeId, ownerId);
+    if (status.status !== 'ready')
+      throw new ApiError(403, 'Connection access is not ready. Check workspace_connection_status.');
+    const tool = JSON.parse(c.data).tools?.find((t: any) => t.name === name);
+    if (!tool)
+      throw new ApiError(
+        400,
+        'Tool unavailable. Refresh workspace_connection_tools before choosing a tool.',
+      );
+    const read = tool.annotations?.readOnlyHint === true;
+    if (!status.capabilities.includes(read ? 'read' : 'write'))
+      throw new ApiError(
+        403,
+        'This account grant is read-only. Request write access on the existing connection.',
+      );
+    return { connection: c, tool, read };
+  }
   announceReady(c: any) {
     const data = JSON.parse(c.data);
     if (!data.conversationId || this.store.setting('connection.announced.' + c.id)) return;
@@ -19,13 +137,21 @@ export class ConnectionBroker {
       ({ stripe: 'Stripe', railway: 'Railway', gmail: 'Gmail' } as Record<string, string>)[
         c.service
       ] || c.service;
+    const grant = data.employeeId
+      ? this.store.one(
+          'SELECT capabilities FROM grants WHERE connection_id=? AND employee_id=?',
+          c.id,
+          data.employeeId,
+        )
+      : null;
+    const write = grant && JSON.parse(grant.capabilities).includes('write');
     this.store.db.transaction(() => {
       this.store.addMessage(
         data.conversationId,
         'workspace',
         'Workspace',
         'system',
-        `${service} connected. Read-only access is ready${data.employeeId ? ' for ' + (this.store.employee(data.employeeId)?.name || 'your employee') : ''}.`,
+        `${service} connected. ${write ? 'Read and write' : 'Read-only'} access is ready${data.employeeId ? ' for ' + (this.store.employee(data.employeeId)?.name || 'your employee') : ''}.`,
       );
       this.store.set('connection.announced.' + c.id, true);
     })();
@@ -38,7 +164,9 @@ export class ConnectionBroker {
     public store: Store,
     public origin: () => string,
     public supervisor?: Supervisor,
-  ) {}
+  ) {
+    this.actions = new ConnectionActions(store, this);
+  }
   async resumeWaitingTask(
     connection: any,
     setupData = JSON.parse(connection.data),
@@ -50,6 +178,8 @@ export class ConnectionBroker {
       requestId = setupData.requestMessageId,
       runId = setupData.runId;
     if (!employeeId || !conversationId || !requestId || !runId || !this.supervisor) return;
+    // Reconnection can unblock a later task on the same account. Dedupe per originating run.
+    key += '.' + runId;
     const request = s.one(
         'SELECT * FROM messages WHERE id=? AND conversation_id=? AND deleted_at IS NULL',
         requestId,
@@ -71,7 +201,9 @@ export class ConnectionBroker {
       return;
     }
     if (s.setting('connection.continuation.' + key)) return;
-    const continuation = `Connection setup is complete for ${setupData.service || connection.service}. Continue the existing request from its current state. Use the connection only within the access the human granted. Do not repeat completed work. Keep any unresolved release choice unresolved, and do not publish or deploy without the required explicit instruction.`;
+    const continuation =
+      setupData.continuation ||
+      `Connection setup is complete for ${setupData.service || connection.service}. Use workspace_connection_status with connectionId ${connection.id} to check the exact access granted. Continue the existing request from its current state. Do not repeat completed work or publish or deploy without the human's instruction.`;
     const active = [
       'accepted',
       'dispatching',
@@ -83,12 +215,12 @@ export class ConnectionBroker {
     if (active && this.supervisor.active.has(runId)) {
       const config = s.setting('run.config.' + runId, {});
       const adapter = this.supervisor.adapters[config.harness || employee.harness];
-      if (adapter?.steer && (await adapter.steer(runId, continuation))) {
+      if (adapter?.steer && (await adapter.steer(runId, continuation).catch(() => false))) {
         s.set('connection.continuation.' + key, 'steered');
         return;
       }
     }
-    if (!active && originRun.state !== 'completed') return;
+    if (!active && !['completed', 'interrupted'].includes(originRun.state)) return;
     const queued = s.db.transaction(() => {
       if (s.setting('connection.continuation.' + key)) return false;
       const followup = s.addMessage(
@@ -171,6 +303,11 @@ export class ConnectionBroker {
   async connect(id: string, ownerId: string, code?: string) {
     const c = this.store.one('SELECT * FROM connections WHERE id=? AND owner_id=?', id, ownerId);
     if (!c) throw new ApiError(404, 'Connection unavailable');
+    if (JSON.parse(c.data).reuseId)
+      throw new ApiError(
+        409,
+        'This is an access request. Use the existing account button; sign-in is already complete.',
+      );
     if (c.service === 'gmail') {
       const vault = await this.storage(),
         saved = vault.get(id),
@@ -205,7 +342,7 @@ export class ConnectionBroker {
           'INSERT OR IGNORE INTO grants VALUES(?,?,?)',
           id,
           data.employeeId,
-          JSON.stringify(['read']),
+          JSON.stringify(data.approvedAccess || ['read']),
         );
       this.store.emit('connection.ready', data.conversationId, { id }, ownerId);
       this.announceReady(c);
@@ -222,7 +359,17 @@ export class ConnectionBroker {
     try {
       if (code) await transport.finishAuth(code);
       await client.connect(transport);
-      const tools = await client.listTools();
+      const tools: { tools: any[] } = { tools: [] };
+      const cursors = new Set<string>();
+      let cursor: string | undefined;
+      do {
+        const page = await client.listTools(cursor ? { cursor } : undefined);
+        tools.tools.push(...page.tools);
+        cursor = page.nextCursor;
+        if (cursor && (cursors.has(cursor) || cursors.size >= 100))
+          throw new Error('Provider tool pagination did not finish.');
+        if (cursor) cursors.add(cursor);
+      } while (cursor);
       let account: any = null;
       if (recipe.probe && tools.tools.some((t) => t.name === recipe.probe))
         account = await client.callTool({ name: recipe.probe, arguments: {} });
@@ -247,10 +394,13 @@ export class ConnectionBroker {
           'INSERT OR IGNORE INTO grants VALUES(?,?,?)',
           id,
           data.employeeId,
-          JSON.stringify(['read']),
+          JSON.stringify(data.approvedAccess || ['read']),
         );
       await this.clients.get(id)?.close();
       this.clients.set(id, client);
+      client.onclose = () => {
+        if (this.clients.get(id) === client) this.clients.delete(id);
+      };
       this.store.emit(
         'connection.ready',
         data.conversationId || null,
@@ -272,7 +422,16 @@ export class ConnectionBroker {
         };
       }
       this.store.run("UPDATE connections SET state='failed' WHERE id=?", id);
-      throw new ApiError(502, 'Provider connection failed: ' + e.message);
+      this.store.emit(
+        'connection.ready',
+        JSON.parse(c.data).conversationId || null,
+        { id, state: 'failed' },
+        ownerId,
+      );
+      throw new ApiError(
+        502,
+        'The provider could not verify this connection. Retry this connection card; you do not need a new account setup.',
+      );
     }
   }
   async ensure(id: string, ownerId: string) {
@@ -284,38 +443,74 @@ export class ConnectionBroker {
     return pending;
   }
   async call(id: string, employeeId: string, ownerId: string, name: string, args: any) {
-    const c = this.store.one(
-      "SELECT c.*,g.capabilities FROM connections c JOIN grants g ON g.connection_id=c.id WHERE c.id=? AND c.owner_id=? AND g.employee_id=? AND c.state='ready'",
-      id,
-      ownerId,
-      employeeId,
-    );
-    if (!c) throw new ApiError(403, 'Connection access is not granted.');
-    const tool = JSON.parse(c.data).tools?.find((t: any) => t.name === name);
-    if (!tool) throw new ApiError(400, 'Tool unavailable');
-    const read = tool.annotations?.readOnlyHint === true;
-    if (!read && !JSON.parse(c.capabilities).includes('write'))
-      throw new ApiError(
-        403,
-        'This grant is read-only. Request write access explicitly for this task.',
+    const { connection: c, read } = this.access(id, employeeId, ownerId, name);
+    id = c.id;
+    if (c.service === 'gmail') {
+      const vault = await this.storage();
+      this.access(id, employeeId, ownerId, name);
+      return new GmailConnection(vault, id, `${this.origin()}/oauth/callback/${id}`).call(
+        name,
+        args,
       );
-    if (c.service === 'gmail')
-      return new GmailConnection(
-        await this.storage(),
-        id,
-        `${this.origin()}/oauth/callback/${id}`,
-      ).call(name, args);
+    }
     if (!this.clients.has(id)) await this.ensure(id, ownerId);
+    this.access(id, employeeId, ownerId, name);
     const client = this.clients.get(id);
     if (!client) throw new ApiError(409, 'Sign-in needs to be completed.');
-    return client.callTool({ name, arguments: args });
+    try {
+      return await client.callTool({ name, arguments: args });
+    } catch (error: any) {
+      // Only reads are eligible for one transport recovery. Never retry a dispatched write.
+      if (!read || !/closed|session|fetch failed|ECONNRESET/i.test(String(error?.message)))
+        throw error;
+      this.clients.delete(id);
+      await client.close().catch(() => {});
+      await this.ensure(id, ownerId);
+      this.access(id, employeeId, ownerId, name);
+      const recovered = this.clients.get(id);
+      if (!recovered)
+        throw new ApiError(409, 'Sign-in needs to be completed on the existing connection card.');
+      return recovered.callTool({ name, arguments: args });
+    }
   }
   async close() {
+    await Promise.allSettled([...this.actions.inflight]);
     await Promise.all([...this.clients.values()].map((c) => c.close()));
   }
 }
 export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
   const s = broker.store;
+  app.get('/api/connections/native-mcp', async (req: any) => ({
+    enabled: s.setting('connections.nativeMcp.' + req.user.id, false),
+  }));
+  app.put('/api/connections/native-mcp', async (req: any) => {
+    const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+    s.set('connections.nativeMcp.' + req.user.id, enabled);
+    s.emit('workspace.changed', null, { nativeMcp: enabled }, req.user.id);
+    return { enabled };
+  });
+  app.get('/api/connection-actions', async (req: any) => {
+    const conversationId = z.string().parse(req.query.conversationId);
+    s.authorize(req.user.id, conversationId);
+    return s
+      .all(
+        "SELECT a.*,c.service,c.label FROM connection_actions a JOIN connections c ON c.id=a.connection_id WHERE a.owner_id=? AND a.conversation_id=? AND (a.state IN ('awaiting_approval','running','unknown') OR a.id IN (SELECT id FROM connection_actions WHERE owner_id=? AND conversation_id=? ORDER BY created_at DESC LIMIT 5)) ORDER BY a.created_at ASC",
+        req.user.id,
+        conversationId,
+        req.user.id,
+        conversationId,
+      )
+      .map((a) => ({
+        ...broker.actions.receipt(a),
+        service: a.service,
+        label: a.label,
+        arguments: JSON.parse(a.arguments),
+      }));
+  });
+  app.post('/api/connection-actions/:id/decision', async (req: any) => {
+    const { allow } = z.object({ allow: z.boolean() }).parse(req.body);
+    return broker.actions.decide(req.params.id, req.user.id, allow);
+  });
   app.post('/api/connections/:id/google-client', async (req: any) => {
     const c = s.one(
       "SELECT * FROM connections WHERE id=? AND owner_id=? AND service='gmail'",
@@ -334,10 +529,20 @@ export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
     vault.set(c.id, { ...vault.get(c.id), googleClient: data });
     return broker.connect(c.id, req.user.id);
   });
-  app.post('/api/connections/:id/connect', async (req: any) =>
-    broker.ensure(req.params.id, req.user.id),
-  );
+  app.post('/api/connections/:id/connect', async (req: any) => {
+    const c = broker.resolve(req.params.id, req.user.id);
+    if (c.id !== req.params.id)
+      throw new ApiError(409, 'Use the existing account button to share this connection.');
+    const body = z.object({ grantWrite: z.boolean().optional() }).parse(req.body || {});
+    const data = JSON.parse(c.data);
+    if (body.grantWrite !== undefined && c.state !== 'ready') {
+      data.approvedAccess = body.grantWrite ? ['read', 'write'] : ['read'];
+      s.run('UPDATE connections SET data=? WHERE id=?', JSON.stringify(data), c.id);
+    }
+    return broker.ensure(c.id, req.user.id);
+  });
   app.post('/api/connections/:id/reuse', async (req: any) => {
+    const { write } = z.object({ write: z.boolean() }).parse(req.body);
     const request = s.one(
       'SELECT * FROM connections WHERE id=? AND owner_id=?',
       req.params.id,
@@ -350,20 +555,41 @@ export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
         data.reuseId,
         req.user.id,
       );
+    if (write !== !!data.requestedWrite)
+      throw new ApiError(409, 'The requested access changed. Review the updated connection card.');
     const employee = s.employee(data.employeeId);
-    if (!existing || !employee || employee.ownerId !== req.user.id)
+    if (!existing || !employee || !s.canUseEmployee(req.user.id, employee.id))
       throw new ApiError(409, 'Existing connection is no longer available');
     s.run(
       'INSERT INTO grants VALUES(?,?,?) ON CONFLICT(connection_id,employee_id) DO UPDATE SET capabilities=excluded.capabilities',
       existing.id,
       employee.id,
-      JSON.stringify(data.requestedWrite ? ['read', 'write'] : ['read']),
+      JSON.stringify(
+        data.requestedWrite ||
+          broker.status(existing.id, employee.id, req.user.id).capabilities.includes('write')
+          ? ['read', 'write']
+          : ['read'],
+      ),
     );
-    s.run("UPDATE connections SET state='granted' WHERE id=?", request.id);
+    // Settle all older duplicate cards for this employee and account without changing their scopes.
+    for (const duplicate of s.all(
+      "SELECT * FROM connections WHERE owner_id=? AND service=? AND state='awaiting_authorization'",
+      req.user.id,
+      request.service,
+    )) {
+      const d = JSON.parse(duplicate.data);
+      if (
+        d.reuseId === existing.id &&
+        d.employeeId === employee.id &&
+        (!d.requestedWrite || data.requestedWrite)
+      )
+        s.run("UPDATE connections SET state='granted' WHERE id=?", duplicate.id);
+    }
     s.emit('connection.ready', data.conversationId, { id: existing.id }, req.user.id);
     await broker.resumeWaitingTask(existing, data, request.id);
     return {
       state: 'granted',
+      connectionId: existing.id,
       message:
         'Existing account shared with ' +
         employee.name +
@@ -377,7 +603,7 @@ export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
       req.user.id,
     );
     const employee = s.employee(req.body?.employeeId);
-    if (!c || !employee || employee.ownerId !== req.user.id)
+    if (!c || !employee || !s.canUseEmployee(req.user.id, employee.id))
       throw new ApiError(403, 'Account or employee unavailable');
     const capabilities = req.body.write ? ['read', 'write'] : ['read'];
     s.run(
@@ -400,6 +626,12 @@ export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
     broker.clients.delete(c.id);
     s.run('DELETE FROM grants WHERE connection_id=?', c.id);
     s.run("UPDATE connections SET state='disconnected' WHERE id=?", c.id);
+    s.emit(
+      'connection.ready',
+      JSON.parse(c.data).conversationId || null,
+      { id: c.id },
+      req.user.id,
+    );
     return { ok: true };
   });
   app.get('/oauth/callback/:id', async (req: any, reply: any) => {
@@ -414,10 +646,18 @@ export function registerConnectionRoutes(app: any, broker: ConnectionBroker) {
     )
       throw new ApiError(403, 'This sign-in request expired.');
     vault.set(c.id, { ...data, attempt: undefined, authorizationUrl: undefined });
-    if (req.query.error)
+    if (req.query.error) {
+      s.run("UPDATE connections SET state='failed' WHERE id=?", c.id);
+      s.emit(
+        'connection.ready',
+        JSON.parse(c.data).conversationId || null,
+        { id: c.id, state: 'failed' },
+        c.owner_id,
+      );
       return reply
         .type('text/plain')
         .send('Sign-in cancelled. Return to your conversation to retry.');
+    }
     if (typeof req.query.code !== 'string') throw new ApiError(400, 'Missing authorization code');
     await broker.connect(c.id, c.owner_id, req.query.code);
     return reply

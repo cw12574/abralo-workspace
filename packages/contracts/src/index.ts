@@ -156,6 +156,8 @@ export interface AdapterEvent {
 export interface RunInput {
   /** Explicitly delegated review/research tasks only; never inferred from conversation text. */
   readOnly?: boolean;
+  /** Human opt-in to Claude Code's user and project MCP configurations. */
+  nativeMcp?: boolean;
   id: string;
   employee: Employee;
   prompt: string;

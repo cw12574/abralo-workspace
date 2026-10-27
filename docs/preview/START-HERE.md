@@ -1,127 +1,66 @@
-# Abralo preview setup
+# Abralo private preview
 
-This is an early developer preview. The application and shortcuts currently say **Agent Workspace**. The Windows and macOS packages are unsigned; the Linux package has no publisher signature. Automated build and install checks have passed, but native desktop acceptance, signing/trust checks and some live agent-permission checks are still open. This is not a finished or independently security-audited release.
-
-Only use a package from the official Abralo release for your operating system and CPU. A CI build or checksum alone does not establish that a package is safe or signed by a publisher. The current downloadable preview is [v0.1.3-preview](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview).
-
-## Download and unpack the app
-
-1. Open the [v0.1.3-preview release](https://github.com/cw12574/abralo-workspace/releases/tag/v0.1.3-preview). Its four platform jobs passed in [this build](https://github.com/cw12574/abralo-workspace/actions/runs/37115385405).
-2. Download the matching `.tar.gz` package: `abralo-windows-x64`, `abralo-linux-x64`, `abralo-macos-x64` for an Intel Mac, or `abralo-macos-arm64` for Apple silicon.
-3. Download `SHA256SUMS` from that same release and compare the archive's SHA-256 with its matching line, using the commands below.
-4. Extract the archive. On Windows, PowerShell's `tar -xzf .\abralo-windows-x64.tar.gz` can extract it. Open the resulting package directory that contains `release.json`, `runtime/`, and `scripts/`.
-
-Do not use GitHub's **Code → Download ZIP** source archive or run `pnpm build` to install the app. Those are for developers; `pnpm build` does not create a distributable package or the `runtime/` directory. If `runtime/` is missing, you have the source tree rather than the packaged app. Download the matching release package instead. Spaces in the package's parent directory name are okay; do not rename files inside the package.
+This is an early local workspace for humans and AI agents. The application and shortcuts currently say **Agent Workspace**. Chris will supply a package for your computer after its release checks pass. A build existing does not mean it has passed those checks.
 
 ## Before installing
 
+- Tell Chris your Windows version/CPU, Mac chip (Apple silicon or Intel), or Linux distribution/version/CPU, and which provider you can sign into.
 - Use your own provider account. Model requests use its allowance or the billing option you explicitly select. The application is local; model processing is performed by the selected provider.
-- The official packaged app includes the agent runtimes; you do not need to install them separately. You will need your own supported provider account. Read the [provider support table](../../README.md#providers-and-preview-limits) before choosing one: the Claude subscription authentication route remains unresolved; OpenCode also needs a model selection. The recorded build used Codex.
 - Begin with disposable files containing no personal, customer or employer information. The preview has not had an independent security audit.
-- Start with one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
+- Use one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
 - Leave external connections, remote access and schedules unused for this first trial. Do not run as administrator or use Bypass/Full access.
-- On Windows, run `Get-FileHash .\PACKAGE.tar.gz -Algorithm SHA256` in PowerShell; on macOS, run `shasum -a 256 PACKAGE.tar.gz`; on Linux, run `sha256sum PACKAGE.tar.gz`. Replace `PACKAGE.tar.gz` with the archive's actual name. A checksum checks file integrity; it is not a publisher signature. If the values differ or no checksum was supplied, stop and ask Chris.
-- Do not disable antivirus, Gatekeeper or other system protection, and do not change a machine-wide execution policy. If your system blocks a package or script, stop, record the exact message and ask Chris. Do not use instructions from an unsolicited message or download a replacement package from another source.
 
-## Install
+## Install the package supplied for your computer
+
+Extract the archive into a local folder. If Chris supplies a SHA-256 checksum, compare it before installation. A checksum checks file integrity; it is not a publisher signature. Do not disable antivirus, Gatekeeper or other system protection. If the downloaded preview is blocked, record the exact message and contact Chris.
 
 ### Windows
 
-The package supports Windows x64. In File Explorer, extract the downloaded artifact. Open the extracted package folder (the one containing `release.json` and `runtime/`), then choose **Open in Terminal**. Make sure the shell is PowerShell, then run:
+Open PowerShell in the extracted package folder and run:
 
 ```powershell
 .\scripts\install-windows.ps1 -ReleaseDirectory .
 ```
 
-Open **Agent Workspace** from the Start menu. The installer needs no administrator rights. Startup on login remains off for a new install. If PowerShell reports that the downloaded installer script is blocked by `RemoteSigned`, and you have decided to proceed with the exact package Chris sent and verified its checksum, you may remove the internet mark from just that installer script and run it again:
+Open **Agent Workspace** from the Start menu. New installations leave startup on login off. Existing startup preferences are preserved; Settings → General controls it. The installer needs no administrator rights. If PowerShell blocks the unsigned script, stop and ask Chris to help verify the package rather than changing machine-wide policy.
 
-```powershell
-Unblock-File .\scripts\install-windows.ps1
-.\scripts\install-windows.ps1 -ReleaseDirectory .
-```
+### macOS — only once Chris confirms your build has passed
 
-This is a one-file exception that lets that script run; it does not verify the publisher or the script's safety. Do not change machine-wide execution policy. If Windows Security/SmartScreen blocks the app, or the warning differs from the expected PowerShell policy message, stop and send Chris the exact warning. Do not select a security override.
-
-### macOS
-
-The package must match your Mac's CPU (Apple silicon or Intel). To install it:
-
-1. In Finder, double-click the downloaded artifact archive to extract it.
-2. Find the extracted package directory that contains `release.json`, `runtime/`, and `scripts/`.
-3. Open Terminal. Type `cd ` (include the space), drag that package directory from Finder into the Terminal window, and press Return. This handles spaces in the folder path.
-4. Run the installer command below.
+Open Terminal in the extracted package folder and run:
 
 ```sh
 ./runtime/node scripts/install-posix.mjs
 ```
 
-Open **Agent Workspace.app** from your home folder's Applications directory. macOS may report that the developer cannot be verified because this preview is unsigned, and cannot confirm the app is free of malware. Do not turn off Gatekeeper or remove quarantine attributes. If you have decided to proceed with the exact artifact from the official workflow and verified its checksum, try opening it once, then go to **System Settings → Privacy & Security**, scroll to **Security**, and choose **Open Anyway** for this app. Read and accept the system warning only if you still choose to continue. This stores a manual exception for the app; it does not verify the publisher or prove the app is safe. If the option is absent or the app still will not open, stop and send Chris the exact message. See [Apple's safety guidance](https://support.apple.com/en-ie/102445).
+Open **Agent Workspace.app** from your home folder's Applications directory. The package must match your Mac's chip. macOS signing, downloaded-package trust behavior and native testing remain release gates until Chris confirms otherwise.
 
-### Linux
+### Linux — only once Chris confirms your build has passed
 
-The package supports Linux x64, but desktop acceptance has not been verified on a specific distribution. Do not use WSL as evidence that the native desktop works. Open a terminal in the extracted package folder and run:
+Open a terminal in the extracted package folder and run:
 
 ```sh
 ./runtime/node scripts/install-posix.mjs
 ```
 
-Open **Agent Workspace** in your desktop application menu. Do not use `sudo`. If it does not appear or fails to launch, send Chris your distribution/version and the exact error.
+Open **Agent Workspace** in your desktop application menu. The package must match your CPU and a verified distribution; a WSL test does not establish support for your desktop. Do not use sudo.
 
 ## First useful result
 
-### Make one file you can check
+1. Open the app and complete onboarding using your own provider sign-in. Never paste passwords or API keys into ordinary chat.
+2. Check the selected agent's settings and choose **Ask**. Give it access only to your disposable test folder when prompted.
+3. Try your own small task, or use this example with a short fictional notes file:
 
-1. Open the app, enter your name and connect a provider for **Chief of Staff**. Use the provider's sign-in screen; never paste credentials into ordinary chat. A connected account is the starting point; the task below checks whether it can actually run.
-2. Create an ordinary folder named `abralo-first-task`. Keep it outside an existing Git repository. Save the following fictional notes as `notes.txt` inside it:
+   > Read notes.txt and draft a short README in this folder. Use only those notes, do not browse or install anything, and show me what you changed.
 
-   ```text
-   Project: Lantern reading club
-   Meets on the first Tuesday of each month at 18:30.
-   Location: the community library.
-   Bring one book recommendation.
-   Attendance is free; registration is not required.
-   ```
-
-3. Open the Chief of Staff conversation, choose **Ask** using the permission control, and choose this working folder in the composer. Grant the requested folder access when prompted.
-4. Send this task:
-
-   > Read notes.txt and create README.md in this folder with a title, a one-sentence introduction and a "How to join" section. Include every fact in the notes and do not invent any others. Do not browse or install anything. Show me the file you changed.
-
-5. Open `README.md` in the selected folder. Check the name, meeting day and time, location, what to bring, and the free/no-registration rule against the five lines above. Ask: **Keep all the facts, but make "How to join" a bullet list.** Inspect the revision.
-6. Wait for the task to finish. Close and reopen the app, find the same conversation, and reopen the file.
-
-**Success:** the file contains the supplied facts, the revision preserves them, and both the conversation and file remain available after reopening. Wording may vary. If a step fails, report that step; a sign-in check alone is not a successful first task.
+4. Review the permission request and actual result. Ask for one small revision.
+5. Close the tab, reopen the application, and check that you can find the conversation and result.
 
 Git projects start from committed HEAD in a separate worktree. Uncommitted changes are not copied. Ordinary folders are edited directly. Inspect the work location and changes before using any output.
 
 Closing the tab does not stop agents. Use **Stop** in the conversation and wait for completion; see [recovery](RECOVERY.md) if it remains on “Stopping.”
 
-### Try one handoff
-
-Once the first task works:
-
-1. Use **Add employee → Agent** to create an agent named **Reviewer**, using the same connected provider. Set its instructions to: **Compare documents with their source notes. Report omissions and unsupported claims. Do not change files.** Choose **Ask** for this agent too.
-2. Create a room named **first-review**, selecting Chief of Staff and Reviewer as members. Choose the same `abralo-first-task` folder in the room's composer. An ordinary folder lets both agents inspect the same files.
-3. Send the following in the room, selecting Chief of Staff from the mention picker. If you renamed either agent, use its actual name. Mention only the first agent so it can initiate the handoff:
-
-   > @Chief of Staff read notes.txt and README.md in this folder, then ask Reviewer in this room to check that the README matches every note and makes no unsupported promises. Do not change files, browse or install anything. Bring the review back here for my decision.
-
-4. Look for the handoff and the review in the shared room. Read the files yourself and decide whether to accept the README or ask Chief of Staff for a correction. A review can find no defects; do not create one just to complete the exercise.
-
-**Success:** a named agent hands work to another, the reviewer reports its findings in the room, and you make the final decision. This uses additional provider allowance. If a handoff stalls, ask for the blocker before submitting another task.
-
-For a larger coding exercise, [build Beacon with three agents](../../examples/beacon/TRY-IT.md). The guide includes the original brief, role boundaries and checks for the finished monitor. You can [inspect the recorded handoff](https://abralo.com/replay.html) before running it yourself.
-
 ## Feedback
 
-For setup help or personal feedback, email Chris at [chris@abralo.com](mailto:chris@abralo.com?subject=Abralo%20setup%20help) and name the step where you got stuck. There is no guaranteed support response time during preview.
-
-For a reproducible problem, [open a bug report](https://github.com/cw12574/abralo-workspace/issues/new/choose) with the version, OS/CPU/browser, provider, last successful step and exact error. Include only reviewed, redacted evidence. For a suspected vulnerability, follow [the security policy](../../SECURITY.md).
-
-For a guided trial with Chris, use [the feedback sheet](FEEDBACK.md). You do not need to try every feature. The useful questions are: could you get started, did you get something useful, and would you choose to return?
+Use [the feedback sheet](FEEDBACK.md), then explore independently if you wish. You do not need to try every feature. The useful questions are: could you get started, did you get something useful, and would you choose to return?
 
 Read [access and privacy](ACCESS-AND-PRIVACY.md) and [recovery](RECOVERY.md) before adding anything you care about.
-
-## Remove
-
-Stop any active agent and close the app first. Follow [the removal steps](RECOVERY.md#remove-the-application-while-keeping-data) to remove program files and shortcuts. Those steps keep your local conversations and settings. Do not delete the data directory unless you deliberately want to erase that data.

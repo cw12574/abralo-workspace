@@ -1,3 +1,4 @@
+import { connectionTools } from '../connection-tools.js';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { launch, executable, killTree } from '../../../../packages/host/src/index.js';
@@ -151,6 +152,13 @@ export class OpenCodeAdapter implements Adapter {
         pattern: '*',
         action: !input.readOnly && input.employee.permissionMode === 'ask' ? 'ask' : 'allow',
       },
+      ...(input.tools?.workspace
+        ? ['workspace_browser', 'workspace_desktop', ...connectionTools].map((name) => ({
+            permission: toolName + '_' + name,
+            pattern: '*',
+            action: 'allow',
+          }))
+        : []),
     ];
     const session = input.sessionId
       ? { id: input.sessionId }

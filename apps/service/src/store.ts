@@ -129,11 +129,22 @@ export class Store {
  CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL,author_id TEXT NOT NULL,content TEXT NOT NULL,source_id TEXT NOT NULL,version INTEGER NOT NULL DEFAULT 1,deleted INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,scope TEXT NOT NULL DEFAULT 'conversation',owner_id TEXT);
  CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(id UNINDEXED,content);
  CREATE TABLE IF NOT EXISTS connections(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,service TEXT NOT NULL,label TEXT NOT NULL,state TEXT NOT NULL,data TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS connection_actions(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,employee_id TEXT NOT NULL,conversation_id TEXT NOT NULL,request_id TEXT NOT NULL,run_id TEXT NOT NULL,connection_id TEXT NOT NULL,fingerprint TEXT NOT NULL,tool TEXT NOT NULL,arguments TEXT NOT NULL,state TEXT NOT NULL,result TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+ CREATE UNIQUE INDEX IF NOT EXISTS connection_action_request ON connection_actions(owner_id,employee_id,request_id,fingerprint);
  CREATE TABLE IF NOT EXISTS grants(connection_id TEXT NOT NULL,employee_id TEXT NOT NULL,capabilities TEXT NOT NULL,PRIMARY KEY(connection_id,employee_id));
  CREATE TABLE IF NOT EXISTS schedules(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,conversation_id TEXT NOT NULL,employee_id TEXT NOT NULL,prompt TEXT NOT NULL,next_at TEXT NOT NULL,interval_minutes INTEGER,enabled INTEGER NOT NULL DEFAULT 1);
  CREATE TABLE IF NOT EXISTS subscriptions(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,data TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS inbox(user_id TEXT NOT NULL,message_id TEXT NOT NULL,seen INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,PRIMARY KEY(user_id,message_id));
  CREATE INDEX IF NOT EXISTS inbox_user ON inbox(user_id,seen,created_at);
+ CREATE TABLE IF NOT EXISTS goals(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,conversation_id TEXT NOT NULL,title TEXT NOT NULL,success TEXT NOT NULL,current TEXT NOT NULL DEFAULT '',next_step TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'active',source_message_id TEXT,version INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,lead_agent_id TEXT);
+ CREATE INDEX IF NOT EXISTS goals_owner ON goals(owner_id,status,updated_at);
+ CREATE INDEX IF NOT EXISTS goals_conversation ON goals(conversation_id,updated_at);
+ CREATE TABLE IF NOT EXISTS goal_steps(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,title TEXT NOT NULL,done_when TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'todo',evidence TEXT NOT NULL DEFAULT '',position INTEGER NOT NULL,updated_at TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS goal_steps_goal ON goal_steps(goal_id,position);
+ CREATE TABLE IF NOT EXISTS goal_updates(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,author_id TEXT NOT NULL,summary TEXT NOT NULL,evidence TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS goal_updates_goal ON goal_updates(goal_id,created_at);
+ CREATE TABLE IF NOT EXISTS work_items(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,conversation_id TEXT NOT NULL,request_message_id TEXT NOT NULL,run_id TEXT NOT NULL,goal_id TEXT,title TEXT NOT NULL,done_when TEXT NOT NULL,proof_plan TEXT NOT NULL,checks TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'working',summary TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(owner_id,request_message_id));
+ CREATE INDEX IF NOT EXISTS work_items_conversation ON work_items(owner_id,conversation_id,updated_at);
  INSERT OR IGNORE INTO migrations VALUES(1,datetime('now'));
  `);
     const messageColumns = new Set(this.all('PRAGMA table_info(messages)').map((row) => row.name));
@@ -148,6 +159,11 @@ export class Store {
       this.db.exec("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'conversation'");
     if (!memoryColumns.has('owner_id'))
       this.db.exec('ALTER TABLE memories ADD COLUMN owner_id TEXT');
+    const goalColumns = new Set(this.all('PRAGMA table_info(goals)').map((row) => row.name));
+    if (!goalColumns.has('lead_agent_id')) {
+      this.db.exec('ALTER TABLE goals ADD COLUMN lead_agent_id TEXT');
+      this.db.exec("UPDATE goals SET lead_agent_id=(SELECT employee_id FROM conversations WHERE id=goals.conversation_id AND kind='dm')");
+    }
     this.db.exec(
       'CREATE INDEX IF NOT EXISTS memories_owner_scope ON memories(owner_id,scope,deleted,created_at)',
     );

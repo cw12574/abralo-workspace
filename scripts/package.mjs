@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, copyFileSync, writeFileSync, existsSync,readdirSync,realpathSync,unlinkSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync, existsSync,readdirSync,realpathSync,unlinkSync,cpSync } from 'node:fs';
 import { join, resolve, dirname,relative,isAbsolute } from 'node:path';
+import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const target = resolve(
@@ -33,6 +34,18 @@ for(const name of readdirSync(join(target,'node_modules')).filter(n=>/^opencode-
   if(existsSync(binary)){const within=relative(realpathSync(target),realpathSync(binary));if(within.startsWith('..')||isAbsolute(within))throw new Error('Native binary escaped package directory');unlinkSync(binary);}
 }
 mkdirSync(join(target, 'runtime'), { recursive: true });
+const browserExecutable = chromium.executablePath();
+if (!existsSync(browserExecutable))
+  throw new Error('Install the pinned Chromium with pnpm exec playwright install chromium before packaging.');
+let browserRoot = dirname(browserExecutable);
+while (!/^chromium-\d+$/.test(browserRoot.split(/[\\/]/).pop())) {
+  const parent = dirname(browserRoot);
+  if (parent === browserRoot) throw new Error('Cannot locate the pinned Chromium package root.');
+  browserRoot = parent;
+}
+// macOS frameworks use relative links within the app bundle. Preserve those
+// links so the archive does not point back to the build runner's browser cache.
+cpSync(browserRoot, join(target, 'runtime', 'chromium'), { recursive: true, verbatimSymlinks: true });
 copyFileSync(
   process.execPath,
   join(target, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'),
@@ -41,11 +54,12 @@ writeFileSync(
   join(target, 'release.json'),
   JSON.stringify(
     {
-      version: (process.env.ABRALO_VERSION || '0.1.0-preview').replace(/^v/, ''),
+      version: (process.env.ABRALO_VERSION || '0.2.0-preview').replace(/^v/, ''),
       platform: process.platform,
       arch: process.arch,
       node: process.version,
       builtAt: new Date().toISOString(),
+      chromiumExecutable: ['runtime', 'chromium', relative(browserRoot, browserExecutable)].join('/').replaceAll('\\', '/'),
       maintenanceProtocol: 1,
       dataCompatibility: 'workspace-v1',
     },

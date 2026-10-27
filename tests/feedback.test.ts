@@ -105,7 +105,17 @@ it('approves a team once, includes employees in a channel, and actually queues t
     const second = await approve();
     expect(second.json().channelId).toBe(first.json().channelId);
     expect(s.all('SELECT * FROM employees')).toHaveLength(2);
-    expect(s.all('SELECT * FROM outbox')).toHaveLength(2);
+    const scoutId = s.one(
+      'SELECT employee_id FROM employee_conversations WHERE conversation_id=? AND employee_id<>?',
+      first.json().channelId,
+      chief.id,
+    ).employee_id;
+    expect(
+      s
+        .all('SELECT employee_id FROM outbox')
+        .map((row) => row.employee_id)
+        .sort(),
+    ).toEqual([chief.id, scoutId].sort());
     expect(
       s.all('SELECT * FROM employee_conversations WHERE conversation_id=?', first.json().channelId),
     ).toHaveLength(2);
@@ -162,6 +172,8 @@ it('announces an agent leaving each room when deleted and removes its room membe
       role: '',
       instructions: '',
     });
+  // The workspace now protects its last active agent; exercise removal with a successor.
+  s.createEmployee(u.id, { name: 'Successor', harness: 'codex', model: '', cwd: '', role: '', instructions: '' });
   const room = uid();
   s.run(
     'INSERT INTO conversations VALUES(?,?,?,?,?)',
@@ -208,6 +220,7 @@ it('recreates a deleted Chief of Staff and preserves saved workspace objectives'
       role: '',
       instructions: '',
     });
+  s.createEmployee(u.id, { name: 'Successor', harness: 'codex', model: '', cwd: '', role: '', instructions: '' });
   s.set('workspace.chiefOfStaff.' + u.id, e.id);
   s.set('workspace.objectives.' + u.id, ['Ship the preview']);
   const { app } = await createApp(s);

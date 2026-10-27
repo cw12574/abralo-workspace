@@ -5,113 +5,6 @@ import { Store, ApiError, uid, now } from './store.js';
 import type { Supervisor } from './supervisor.js';
 import Database from 'better-sqlite3';
 import { startupInfo, setStartup } from './startup.js';
-const proactiveInterval = 24 * 60 * 60 * 1000;
-const proactiveIdleGrace = 2 * 60 * 1000;
-const proactiveMaxFollowups = 2;
-
-function tickProactiveReviews(s: Store, sup: Supervisor) {
-  if (sup.maintenance) return;
-  const clock = Date.now();
-  for (const { id: userId } of s.all("SELECT id FROM humans WHERE role='owner'")) {
-    if (!s.setting('workspace.onboarded', false)) continue;
-    const purpose = s.setting('workspace.purpose', '');
-    const objectives = s.setting('workspace.objectives.' + userId, purpose ? [purpose] : []);
-    const employeeId =
-      s.setting('workspace.chiefOfStaff.' + userId) ||
-      s
-        .all('SELECT id,data FROM employees WHERE owner_id=?', userId)
-        .map((row) => ({ id: row.id, ...JSON.parse(row.data) }))
-        .find((employee) => employee.name === 'Chief of Staff')?.id;
-    const employee = employeeId && s.employee(employeeId);
-    if (!Array.isArray(objectives) || !objectives.length || !employee || employee.deactivatedAt)
-      continue;
-    const conversation = s.one(
-      "SELECT id FROM conversations WHERE employee_id=? AND kind='dm'",
-      employeeId,
-    );
-    if (!conversation) continue;
-
-    const stateKey = 'proactive.state.' + userId;
-    const state = s.setting(stateKey, {
-      nextAt: s.setting('proactive.nextAt.' + userId),
-      idleSince: null,
-      lastReviewAt: null,
-      lastHumanAt: null,
-      followup: false,
-      chainDepth: 0,
-    });
-    const busy =
-      s.one(
-        "SELECT 1 FROM runs WHERE user_id=? AND state IN ('accepted','dispatching','running','waiting_input','waiting_permission','cancelling') LIMIT 1",
-        userId,
-      ) ||
-      s.one(
-        "SELECT 1 FROM outbox WHERE user_id=? AND status IN ('pending','new','claimed','steered') LIMIT 1",
-        userId,
-      );
-    if (busy) {
-      if (state.idleSince) s.set(stateKey, { ...state, idleSince: null });
-      continue;
-    }
-
-    const idleSince = state.idleSince || now();
-    if (!state.idleSince) {
-      s.set(stateKey, { ...state, idleSince });
-      continue;
-    }
-    if (clock - Date.parse(idleSince) < proactiveIdleGrace) continue;
-
-    const latestHuman = s.one(
-      "SELECT created_at,text FROM messages WHERE author_id=? AND kind='human' ORDER BY created_at DESC LIMIT 1",
-      userId,
-    );
-    const acknowledgement =
-      /^(?:thanks?(?:\s+(?:a lot|very much))?|thank you(?: so much)?|ok(?:ay)?|great|sounds good|got it|perfect|nice)[.!? ]*$/i;
-    const newHumanActivity =
-      !!latestHuman &&
-      latestHuman.created_at > (state.lastReviewAt || '') &&
-      !acknowledgement.test(latestHuman.text.trim());
-    const due =
-      state.followup || newHumanActivity || (state.nextAt && Date.parse(state.nextAt) <= clock);
-    if (!due) continue;
-
-    const chainDepth = state.followup
-      ? Math.min(proactiveMaxFollowups, (state.chainDepth || 0) + 1)
-      : newHumanActivity
-        ? 0
-        : state.chainDepth || 0;
-    const reviewedAt = now();
-    s.db.transaction(() => {
-      const message = s.addMessage(
-        conversation.id,
-        'system',
-        'Workspace',
-        'system',
-        'The workspace is idle. The Chief of Staff is checking for a useful next step toward your objectives.',
-      );
-      s.run(
-        'INSERT INTO outbox VALUES(?,?,?,?,?,?)',
-        uid(),
-        message.id,
-        employeeId,
-        userId,
-        'new',
-        reviewedAt,
-      );
-      s.set('proactive.review.' + message.id, true);
-      s.set(stateKey, {
-        lastReviewAt: reviewedAt,
-        lastHumanAt: latestHuman?.created_at || state.lastHumanAt,
-        nextAt: new Date(clock + proactiveInterval).toISOString(),
-        idleSince,
-        followup: false,
-        chainDepth,
-      });
-      return message;
-    })();
-    s.emit('workspace.changed', null, {}, userId);
-  }
-}
 
 export function tickSchedules(s: Store, sup: Supervisor) {
   if (sup.maintenance) return;
@@ -155,7 +48,6 @@ export function tickSchedules(s: Store, sup: Supervisor) {
       s.emit('workspace.changed', null, {}, u.id);
     })();
   }
-  tickProactiveReviews(s, sup);
   void sup.dispatch();
 }
 export function registerOperations(app: any, s: Store, sup: Supervisor) {

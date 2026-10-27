@@ -1,18 +1,31 @@
-Abralo is an early preview for opt-in testers. The application and shortcuts currently say **Agent Workspace**. The Windows and macOS packages are unsigned, and the Linux package has no publisher signature. Automated checks do not replace testing on your own machine. This preview has not had an independent security audit.
+﻿# Abralo 0.2.0-preview — durable goals
 
-## Onboarding and connection recovery
+Release candidate. Download availability depends on the checks for each asset.
 
-- Provider startup and broken-pipe failures are contained so they cannot take down the workspace service through the repaired error paths. Failed startup can be retried.
-- Connection checks have deadlines and avoid duplicate requests. Checking one provider does not wait for an unrelated provider.
-- Codex uses browser sign-in by default, with device-code fallback, cancellation and automatic status refresh.
-- Claude connection checks distinguish a signed-out account from a runtime failure. The bundled runtime is found reliably in both source and packaged installations.
-- Setup details survive a page reload in the same tab. OpenCode setup explicitly selects a model from its connected providers.
-- Service connection errors provide recovery instructions instead of only showing “Failed to fetch”.
+## What changes
 
-All four packages must pass automated tests, clean-profile native provider probes, browser onboarding recovery checks, and installer/lifecycle checks before this release publishes. Provider probes make no model calls; they do not establish live-account entitlement or guarantee that every previously reported incident has the same cause.
+- Lasting goals keep a success measure, current position, named lead and next step.
+- Progress updates and evidence for completed steps survive across sessions.
+- Substantial tasks have a definition of done and visible checks; ordinary chat remains available.
+- Shared browser tools use isolated sessions. Chromium is bundled for all four build targets.
+- Supported connections and durable action approvals are reused across agent harnesses.
+- Published provider onboarding/recovery fixes are retained alongside the new goals workflow.
+- The last active agent is protected from deletion; Windows notification support is included.
 
-For a retest, quit the old Abralo instance, install this version using the guide, and reopen it. Keep your existing workspace data. If connection still fails, record the OS/browser, the exact step, and the corresponding redacted `service.log` lines; do not share credentials or sign-in codes.
+Work starts from a human request or explicit schedule. This version does not promise continuous autonomous goal pursuit or guaranteed outcomes.
 
-Download the archive matching your operating system and CPU. Compare its SHA-256 with `SHA256SUMS` before extracting it. A matching checksum detects a damaged download; it does not verify the publisher or prove the application is safe.
+## Platforms and verification
 
-See the [friends preview guide](https://github.com/cw12574/abralo-workspace/blob/main/docs/preview/START-HERE.md) for installation, safety notes, first-task guidance, feedback, and removal instructions. Use disposable files and your own provider account. Do not redistribute the preview package.
+Targets: Windows x64, Linux x64, macOS Intel and macOS Apple silicon. Native CI runs the dependency audit, build, unit tests, packaged runtime/browser checks, clean-profile provider probes without model calls, onboarding recovery, installer/removal and lifecycle checks. Archives are created on each native runner to preserve executable permissions.
+
+The lifecycle check seeds a goal and completed step, backs up the populated workspace, restores it into a separate directory, and verifies the goal and evidence after service restart. Maintenance tests cover upgrade handoff, verified backup and failure recovery in disposable fixtures.
+
+Passing CI does not establish live-account entitlement, native notification delivery, signing/notarization or interactive installation on every desktop distribution. Packages are unsigned. macOS downloaded-package trust and Linux desktop acceptance remain release checks. See [data durability requirements](DATA-DURABILITY.md) for broader public-release gates, including off-device backups.
+
+## Trying the candidate
+
+Use your own supported provider account, one agent in Ask mode and disposable non-sensitive files. Read [START-HERE](START-HERE.md), [access and privacy](ACCESS-AND-PRIVACY.md) and [the goals walkthrough](GOALS-TRIAL.md). Model requests use your provider's allowance or explicitly chosen billing option.
+
+Choose the archive for your OS/CPU and compare its SHA-256 with the release checksum. Checksums verify download integrity, not publisher identity. Do not bypass operating-system security warnings. Back up existing workspaces before upgrades.
+
+Older 0.1.3-preview downloads do not contain durable goals. An unpublished candidate or CI artifact is not a stable release.

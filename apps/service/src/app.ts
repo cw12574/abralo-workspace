@@ -41,10 +41,9 @@ import { registerOperations } from './operations.js';
 import { quotaForecasts } from './usage.js';
 import { handoffTeam } from './team-handoff.js';
 import { createMaintenance, type MaintenanceConfig } from './maintenance.js';
-
-const chiefOfStaffInstructions =
-  'You are the Chief of Staff, the first employee and owner of forward motion. The workspace has user-stated objectives available in your context. When you receive a proactive idle review, inspect relevant recent workspace activity and identify one high-value next action toward those objectives. Do useful, bounded work yourself or delegate to existing employees; do not merely suggest work that you could safely start. Ask the human a specific question only when a material decision or missing fact blocks progress. If no worthwhile action is justified, say so briefly and wait. Use a new employee or team proposal only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Limit autonomous follow-up chains, avoid parallel work without a concrete reason, and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.';
-
+import { Goals, registerGoalRoutes } from './goals.js';
+import { Work, registerWorkRoutes } from './work.js';
+import { ComputerUse } from './computer-use.js';
 export async function createApp(
   store: Store,
   options: { supervisor?: Supervisor; staticRoot?: string; maintenance?: MaintenanceConfig } = {},
@@ -141,6 +140,18 @@ export async function createApp(
     const paths = store
       .all('SELECT path FROM attachments WHERE conversation_id=?', id)
       .map((attachment: any) => attachment.path as string);
+    // A long-lived goal outlives the conversation that first named it. Move it
+    // to another active assistant conversation owned by the same person.
+    for (const goal of store.all('SELECT id,owner_id FROM goals WHERE conversation_id=?', id)) {
+      const replacement = store.all('SELECT data FROM employees WHERE owner_id=?', goal.owner_id)
+        .map((row: any) => JSON.parse(row.data))
+        .find((agent: any) => !agent.deactivatedAt && agent.dmId !== id);
+      if (!replacement)
+        throw new ApiError(409, 'This conversation has a lasting goal. Keep another active agent before deleting it.');
+      store.run('UPDATE goals SET conversation_id=?,lead_agent_id=CASE WHEN lead_agent_id=(SELECT employee_id FROM conversations WHERE id=?) THEN ? ELSE lead_agent_id END,source_message_id=NULL,updated_at=? WHERE id=?', replacement.dmId, id, replacement.id, now(), goal.id);
+      store.emit('goal.changed', replacement.dmId, { id: goal.id }, goal.owner_id);
+    }
+    store.run('DELETE FROM work_items WHERE conversation_id=?', id);
     store.run(
       "DELETE FROM settings WHERE key IN (SELECT 'delegation.lineage.' || id FROM messages WHERE conversation_id=?) OR key IN (SELECT 'run.lineage.' || id FROM runs WHERE conversation_id=?)",
       id,
@@ -171,6 +182,7 @@ export async function createApp(
       id,
     );
     store.run('DELETE FROM runs WHERE conversation_id=?', id);
+    store.run('DELETE FROM connection_actions WHERE conversation_id=?', id);
     store.run('DELETE FROM schedules WHERE conversation_id=?', id);
     store.run('DELETE FROM drafts WHERE conversation_id=?', id);
     store.run(
@@ -549,15 +561,6 @@ if ($selected) { [Console]::WriteLine($selected) }
       if (k === 'objectives') {
         const ownerId = user(req).id;
         store.set('workspace.objectives.' + ownerId, v);
-        const stateKey = 'proactive.state.' + ownerId;
-        const state = store.setting(stateKey, {});
-        store.set(stateKey, {
-          ...state,
-          nextAt: now(),
-          idleSince: null,
-          followup: false,
-          chainDepth: 0,
-        });
       } else store.set('workspace.' + k, v);
     return { ok: true };
   });
@@ -714,12 +717,19 @@ if ($selected) { [Console]::WriteLine($selected) }
     const b = EmployeeInput.parse(req.body);
     return store.createEmployee(user(req).id, b);
   });
+  const protectLastAgent = (ownerId: string, removingId: string) => {
+    const alternative = store.all('SELECT id,data FROM employees WHERE owner_id=?', ownerId)
+      .some((row: any) => row.id !== removingId && !JSON.parse(row.data).deactivatedAt);
+    if (!alternative)
+      throw new ApiError(409, 'Keep one active agent so you can continue the conversation. Add or reactivate another agent first.');
+  };
   app.post('/api/employees/:id/deactivate', async (req) => {
     const actor = owner(req);
     const id = (req.params as any).id;
     const employee = store.employee(id);
     if (!employee || employee.ownerId !== actor.id) throw new ApiError(404, 'Agent not found.');
     if (employee.deactivatedAt) return { ok: true };
+    protectLastAgent(actor.id, id);
     for (const run of store.all(
       "SELECT id,user_id FROM runs WHERE employee_id=? AND state NOT IN ('completed','cancelled','failed','interrupted')",
       id,
@@ -729,6 +739,7 @@ if ($selected) { [Console]::WriteLine($selected) }
       .all('SELECT id FROM schedules WHERE employee_id=? AND enabled=1', id)
       .map((row: any) => row.id as string);
     store.db.transaction(() => {
+      protectLastAgent(actor.id, id);
       store.run('UPDATE schedules SET enabled=0 WHERE employee_id=?', id);
       store.run(
         "UPDATE outbox SET status='cancelled' WHERE employee_id=? AND status IN ('pending','new')",
@@ -781,6 +792,7 @@ if ($selected) { [Console]::WriteLine($selected) }
     const id = (req.params as any).id;
     const employee = store.employee(id);
     if (!employee || employee.ownerId !== actor.id) throw new ApiError(404, 'Agent not found.');
+    if (!employee.deactivatedAt) protectLastAgent(actor.id, id);
     const activeRuns = store
       .all(
         "SELECT id,user_id FROM runs WHERE employee_id=? AND state NOT IN ('completed','cancelled','failed','interrupted')",
@@ -843,6 +855,7 @@ if ($selected) { [Console]::WriteLine($selected) }
         .map((row: any) => row.user_id),
     ]);
     const { paths } = store.db.transaction(() => {
+      if (!employee.deactivatedAt) protectLastAgent(actor.id, id);
       for (const room of rooms)
         store.addMessage(
           room.id,
@@ -852,6 +865,7 @@ if ($selected) { [Console]::WriteLine($selected) }
           `${employee.name} left #${room.name}.`,
         );
       const purged = purgeConversation(employee.dmId);
+      store.run('UPDATE goals SET lead_agent_id=NULL,updated_at=? WHERE lead_agent_id=?', now(), id);
       store.run('DELETE FROM employee_grants WHERE employee_id=?', id);
       store.run('DELETE FROM grants WHERE employee_id=?', id);
       store.run('DELETE FROM schedules WHERE employee_id=?', id);
@@ -893,21 +907,14 @@ if ($selected) { [Console]::WriteLine($selected) }
         ...body.employee,
         name: 'Chief of Staff',
         role: 'Organizes the team and keeps work moving',
-        instructions: chiefOfStaffInstructions,
+        instructions:
+          'You are the Chief of Staff, the first employee and owner of continuity. Help the human turn substantial requests into lasting goals, agree on a useful next step, and report checked results. Keep ordinary conversation available while work continues. Do useful, bounded work yourself or delegate to existing employees when the human asks for it. Ask the human a specific question only when a material decision or missing fact blocks progress. Use a new employee or team proposal only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Avoid parallel work without a concrete reason and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.',
       });
       const objectives = body.objectives?.length ? body.objectives : [body.purpose!.trim()];
       const objectiveText = objectives.map((objective, i) => `${i + 1}. ${objective}`).join('\n');
       store.set('workspace.purpose', (body.purpose || objectiveText).slice(0, 10000));
       store.set('workspace.objectives.' + u.id, objectives);
       store.set('workspace.chiefOfStaff.' + u.id, employee.id);
-      store.set('proactive.state.' + u.id, {
-        nextAt: new Date(Date.now() + 2 * 60_000).toISOString(),
-        idleSince: null,
-        lastReviewAt: null,
-        lastHumanAt: null,
-        followup: false,
-        chainDepth: 0,
-      });
       store.set('workspace.onboarded', true);
       const opening = store.accept({ ...u, name: body.userName }, employee.dmId, {
         text: `Here are the outcomes I’d like the workspace to move towards:\n\n${objectiveText}`,
@@ -963,7 +970,7 @@ if ($selected) { [Console]::WriteLine($selected) }
       harness,
       model: '',
       cwd: '',
-      instructions: chiefOfStaffInstructions,
+      instructions: 'You are the Chief of Staff. Help the human maintain lasting goals, agree on the next step, and report checked results. Work starts from requests or explicit schedules.',
     });
     store.set('workspace.chiefOfStaff.' + actor.id, employee.id);
     store.addMessage(
@@ -1842,7 +1849,14 @@ if ($selected) { [Console]::WriteLine($selected) }
     supervisor,
   );
   registerConnectionRoutes(app, broker);
-  await registerWorkspaceTools(app, store, supervisor, broker, maintenance);
+  const goals = new Goals(store);
+  registerGoalRoutes(app, goals);
+  const work = new Work(store);
+  registerWorkRoutes(app, work);
+  const computer = new ComputerUse(store, supervisor);
+  app.get('/api/desktop-control', async (req) => { owner(req); return computer.status(user(req).id); });
+  app.post('/api/desktop-control/revoke', async (req) => { owner(req); return computer.revoke(user(req).id); });
+  await registerWorkspaceTools(app, store, supervisor, broker, maintenance, goals, work, computer);
   app.get('/api/maintenance', async (req) => {
     owner(req);
     return maintenance.status();
@@ -1870,9 +1884,11 @@ if ($selected) { [Console]::WriteLine($selected) }
   }
   app.addHook('onClose', async () => {
     maintenance.close();
+    await computer.close();
     await stopClaudeLogin();
     await supervisor.dispose();
+    await broker.close();
     store.close();
   });
-  return { app, supervisor, maintenance };
+  return { app, supervisor, maintenance, broker };
 }
