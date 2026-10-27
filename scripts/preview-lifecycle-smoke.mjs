@@ -5,6 +5,7 @@ import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { pathToFileURL } from 'node:url';
 
 if (!process.argv[2]) throw new Error('Pass a package directory');
 let root = resolve(process.argv[2]);
@@ -56,6 +57,16 @@ async function stop() {
 }
 const report = { platform: process.platform, arch: process.arch, checks, providerCalls: false, liveWorkspaceTouched: false };
 try {
+  const { Store } = await import(pathToFileURL(join(root, 'dist/service/apps/service/src/store.js')).href);
+  const { Goals } = await import(pathToFileURL(join(root, 'dist/service/apps/service/src/goals.js')).href);
+  const seed = new Store(data);
+  const owner = seed.createOwner('Release tester');
+  const employee = seed.createEmployee(owner.id, { name: 'Test lead', harness: 'codex', model: '', cwd: '', role: '', instructions: '' });
+  const goalService = new Goals(seed);
+  const goal = goalService.create(owner.id, { conversationId: employee.dmId, title: 'Verify release continuity', success: 'Goal and evidence survive restart and restore', nextStep: 'Inspect the restored workspace' });
+  const step = goalService.addStep(goal.id, owner.id, { title: 'Record a checked result', doneWhen: 'Evidence exists' }).steps[0];
+  goalService.changeStep(goal.id, step.id, owner.id, { status: 'done', evidence: 'Fixture result inspected' });
+  seed.close();
   await start();
   checks.push('isolated bundled launcher and loopback service');
   const bundledNode = join(root, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
@@ -74,11 +85,22 @@ try {
   if (!(await fetch(url + '/api/workspace', { headers })).ok) throw new Error('Authorized workspace failed');
   const backup = await fetch(url + '/api/backups', { method: 'POST', headers });
   if (!backup.ok) throw new Error('Backup failed');
-  checks.push('authentication boundary and fresh workspace backup');
+  const backupInfo = await backup.json();
+  const restoredPath = join(fixture, 'restored-data');
+  execFileSync(bundledNode, [join(root, 'scripts/restore.mjs'), backupInfo.path, restoredPath], { cwd: root, env, stdio: 'pipe' });
+  const restored = new Store(restoredPath);
+  try {
+    const saved = new Goals(restored).get(goal.id, owner.id);
+    if (saved.nextStep !== goal.nextStep || saved.steps[0]?.evidence !== 'Fixture result inspected') throw new Error('Goal or check evidence missing from restored backup');
+  } finally { restored.close(); }
+  checks.push('authentication boundary; populated goal backup restored separately with step evidence intact');
   await stop();
   await start();
   if (!(await fetch(url + '/api/workspace', { headers })).ok) throw new Error('Session did not survive restart');
+  const savedGoal = await (await fetch(url + '/api/goals/' + goal.id, { headers })).json();
+  if (savedGoal.nextStep !== goal.nextStep || savedGoal.steps[0]?.evidence !== 'Fixture result inspected') throw new Error('Goal or evidence did not survive service restart');
   checks.push('service stop/restart preserves authorized session');
+  checks.push('goal, next step and checked result survive packaged service restart');
   report.status = 'passed';
 } catch (e) { report.status = 'failed'; report.error = String(e); process.exitCode = 1; }
 finally {

@@ -1,3 +1,4 @@
+import { connectionTools } from '../connection-tools.js';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync } from 'node:fs';
 import { executable, execFileAsync } from '../../../../packages/host/src/index.js';
@@ -150,16 +151,26 @@ export class ClaudeAdapter implements Adapter {
                 : 'auto',
           allowDangerouslySkipPermissions:
             !input.readOnly && input.employee.permissionMode === 'bypass',
-          settingSources: ['project'],
+          settingSources: input.nativeMcp ? ['user', 'project'] : ['project'],
           systemPrompt: {
             type: 'preset',
             preset: 'claude_code',
             append: input.employee.instructions,
           },
           mcpServers: input.tools,
-          strictMcpConfig: true,
+          strictMcpConfig: !input.nativeMcp,
           canUseTool: async (toolName, args) => {
             if (input.signal.aborted) return { behavior: 'deny', message: 'The run was cancelled' };
+            if (
+              input.tools?.workspace &&
+              ['workspace_browser', 'workspace_desktop'].some((name) => toolName === 'mcp__workspace__' + name)
+            )
+              return { behavior: 'allow', updatedInput: args };
+            if (
+              input.tools?.workspace &&
+              connectionTools.some((name) => toolName === 'mcp__workspace__' + name)
+            )
+              return { behavior: 'allow', updatedInput: args };
             if (
               toolName.startsWith('mcp__workspace__') &&
               (input.readOnly || input.employee.permissionMode !== 'ask')

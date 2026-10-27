@@ -1,0 +1,79 @@
+.work-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--raised);
+  padding: 16px;
+  margin: 12px 0;
+  text-align: left;
+}
+.work-card-head {
+  display: flex;
+  align-items: start;
+  gap: 11px;
+}
+.work-card-head > svg {
+  flex: none;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.work-card-head strong,
+.work-card-head small {
+  display: block;
+}
+.work-card-head small {
+  color: var(--muted);
+  margin-top: 3px;
+}
+.work-card p {
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+.work-card details {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.work-card summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.work-card summary::-webkit-details-marker {
+  display: none;
+}
+.work-card details[open] summary svg {
+  transform: rotate(180deg);
+}
+.work-card-detail {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.work-card-detail strong {
+  display: block;
+  margin-top: 8px;
+}
+.work-card-detail ul {
+  margin: 5px 0 10px;
+  padding-left: 20px;
+}
+.work-card-detail li {
+  margin: 4px 0;
+}
+.work-spin {
+  animation: work-spin 2s linear infinite;
+}
+@keyframes work-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .work-spin {
+    animation: none;
+  }
+}

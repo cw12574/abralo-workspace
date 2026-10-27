@@ -8,6 +8,30 @@ import { forecast } from '../apps/service/src/usage.js';
 import { createApp } from '../apps/service/src/app.js';
 import { Supervisor } from '../apps/service/src/supervisor.js';
 describe('recovery and boundaries', () => {
+  it('does not start work merely because onboarding objectives are due for review', () => {
+    const s = new Store(mkdtempSync(join(tmpdir(), 'workspace-no-idle-work-')));
+    const owner = s.createOwner('Owner');
+    const lead = s.createEmployee(owner.id, {
+      name: 'Chief of Staff',
+      harness: 'codex',
+      model: '',
+      role: '',
+      instructions: '',
+      cwd: '',
+    });
+    s.set('workspace.onboarded', true);
+    s.set('workspace.objectives.' + owner.id, ['Grow the business']);
+    s.set('workspace.chiefOfStaff.' + owner.id, lead.id);
+    s.set('proactive.state.' + owner.id, {
+      nextAt: '2020-01-01T00:00:00.000Z',
+      idleSince: '2020-01-01T00:00:00.000Z',
+    });
+    const messagesBefore = s.all('SELECT * FROM messages').length;
+    tickSchedules(s, { dispatch: async () => {} } as any);
+    expect(s.all('SELECT * FROM outbox')).toHaveLength(0);
+    expect(s.all('SELECT * FROM messages')).toHaveLength(messagesBefore);
+    s.close();
+  });
   it('closes oversized event replay instead of looping on the same page', async () => {
     const s = new Store(mkdtempSync(join(tmpdir(), 'workspace-event-replay-')));
     const owner = s.createOwner('Owner');

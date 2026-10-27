@@ -10,7 +10,8 @@ const release = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
 if (release.platform !== process.platform || release.arch !== process.arch)
   throw new Error('Run verification on the package target OS and CPU.');
 for (const name of ['dist/web/index.html', 'dist/service/apps/service/src/main.js', 'README.md',
-  'docs/preview/START-HERE.md', 'docs/preview/ACCESS-AND-PRIVACY.md', 'docs/preview/RECOVERY.md', 'docs/preview/FEEDBACK.md'])
+  'docs/preview/START-HERE.md', 'docs/preview/ACCESS-AND-PRIVACY.md', 'docs/preview/RECOVERY.md', 'docs/preview/FEEDBACK.md',
+  'docs/preview/GOALS-TRIAL.md', 'dist/service/apps/service/src/goals.js', 'dist/service/apps/service/src/work.js'])
   if (!existsSync(join(root, name))) throw new Error('Missing package file: ' + name);
 const forbidden = /^(?:\.env(?:\..*)?|workspace\.db(?:-.*)?|bootstrap\.key|vault-key(?:\.dpapi)?|secret-.*|service(?:\.previous)?\.log|auth\.json|credentials\.json)$/i;
 const suspicious = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}\b|\bgh[pousr]_[A-Za-z0-9]{30,}\b/;
@@ -47,6 +48,13 @@ if (probe.status !== 0) throw new Error('Bundled runtime/SQLite probe failed: ' 
 const runtime = JSON.parse(probe.stdout);
 if (runtime.platform !== release.platform || runtime.arch !== release.arch || runtime.sqlite !== 1)
   throw new Error('Runtime does not match manifest.');
+if (release.chromiumExecutable || process.platform === 'win32') {
+  const browser = release.chromiumExecutable ? join(root, release.chromiumExecutable) : join(root, 'runtime', 'chromium', 'chrome-win64', 'chrome.exe');
+  if (!existsSync(browser)) throw new Error('Bundled Chromium is missing.');
+  const browserProbe = spawnSync(binary, ['-e', `const {chromium}=require('playwright');chromium.launch({headless:true,executablePath:${JSON.stringify(browser)}}).then(async b=>{await b.close();console.log('browser ok')}).catch(e=>{console.error(e);process.exitCode=1})`], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 20000 });
+  if (browserProbe.status !== 0 || !browserProbe.stdout.includes('browser ok'))
+    throw new Error('Bundled Chromium did not launch: ' + browserProbe.stderr);
+}
 console.log(JSON.stringify({ status: 'passed', platform: release.platform, arch: release.arch,
   runtime, files: count, firstPartyTextFiles, releaseManifestSha256: createHash('sha256').update(readFileSync(join(root, 'release.json'))).digest('hex'),
   limitations: ['Pattern scan is not exhaustive secret detection', 'No native provider/account cancellation test, package signing/trust check, or graphical desktop acceptance test'] }, null, 2));

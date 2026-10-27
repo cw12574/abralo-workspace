@@ -46,6 +46,16 @@
 body {
   margin: 0;
 }
+.desktop-control-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--red);
+  background: var(--raised);
+  flex-shrink: 0;
+}
 button,
 input,
 textarea,

@@ -10,12 +10,18 @@ import { execFileAsync, ensureDirectory } from '../../../packages/host/src/index
 import { collaborationRoom, mentionedEmployees } from './room-routing.js';
 import { postKickoff } from './team-handoff.js';
 import type { createMaintenance } from './maintenance.js';
+import { Goals } from './goals.js';
+import { Work } from './work.js';
+import { ComputerUse } from './computer-use.js';
 export async function registerWorkspaceTools(
   app: any,
   s: Store,
   sup: Supervisor,
   broker: ConnectionBroker,
   maintenance?: ReturnType<typeof createMaintenance>,
+  goals?: Goals,
+  work?: Work,
+  computer?: ComputerUse,
 ) {
   app.post('/mcp', async (req: any, reply: any) => {
     const bearer = req.headers.authorization?.replace(/^Bearer /, '');
@@ -26,6 +32,7 @@ export async function registerWorkspaceTools(
     s.authorizeEmployee(employee.id, run.conversation_id);
     const server = new McpServer({ name: 'workspace', version: '0.1.0' });
     const result = (v: any) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
+    computer?.register(server, run, employee);
     server.registerTool(
       'workspace_maintenance',
       {
@@ -281,7 +288,7 @@ export async function registerWorkspaceTools(
       'workspace_activity',
       {
         description:
-          'Scan recent messages in shared channels you are authorized to read. Use during a proactive idle review to find open work, blockers, and follow-ups. This returns a compact recent snapshot; use workspace_read for a relevant thread or room before acting. Private direct messages are never included.',
+          'Scan recent messages in shared channels you are authorized to read. Use when a human asks about open work, blockers, or follow-ups. This returns a compact recent snapshot; use workspace_read for a relevant thread or room before acting. Private direct messages are never included.',
         inputSchema: { maxRooms: z.number().int().min(1).max(20).default(6) },
       },
       async ({ maxRooms }) => {
@@ -501,12 +508,6 @@ export async function registerWorkspaceTools(
           }
           return message;
         })();
-        if (mentionTargets.length && s.setting('proactive.review.' + run.message_id, false)) {
-          const proactiveKey = 'proactive.state.' + run.user_id;
-          const proactive = s.setting(proactiveKey, {});
-          if ((proactive.chainDepth || 0) < 2)
-            s.set(proactiveKey, { ...proactive, followup: true });
-        }
         postingActivity(m, 'Posted');
         s.set('run.posted.' + run.id, true);
         queueMicrotask(() => void sup.dispatch());
@@ -594,7 +595,7 @@ export async function registerWorkspaceTools(
       'workspace_propose_team',
       {
         description:
-          'Propose a small workforce for the human to review when requested or when a proactive objective review identifies a specific, recurring skill or capacity gap. This does not hire anyone; approval is still required. For distinct projects, include one room per project in rooms and assign proposed employees by zero-based employeeIndexes. Keep the Chief of Staff in every room. Avoid duplicating employees across rooms unless their role truly serves both. The approval card shows the team and project room membership together.',
+          'Propose a small workforce for the human to review when requested or when current work reveals a specific, recurring skill or capacity gap. This does not hire anyone; approval is still required. For distinct projects, include one room per project in rooms and assign proposed employees by zero-based employeeIndexes. Keep the Chief of Staff in every room. Avoid duplicating employees across rooms unless their role truly serves both. The approval card shows the team and project room membership together.',
         inputSchema: {
           purpose: z.string(),
           channelName: z.string().min(1).max(80).optional(),
@@ -741,12 +742,6 @@ export async function registerWorkspaceTools(
           s.set('delegation.lineage.' + message.id, [...lineage, employeeId]);
           s.set('delegation.parent.' + message.id, { runId: run.id, employeeId: employee.id });
           s.set('delegation.purpose.' + message.id, purpose);
-          if (s.setting('proactive.review.' + run.message_id, false)) {
-            const proactiveKey = 'proactive.state.' + run.user_id;
-            const proactive = s.setting(proactiveKey, {});
-            if ((proactive.chainDepth || 0) < 2)
-              s.set(proactiveKey, { ...proactive, followup: true });
-          }
           return message;
         })();
         postingActivity(m, purpose === 'execute' ? 'Delegated' : 'Invited review');
@@ -835,6 +830,72 @@ export async function registerWorkspaceTools(
         );
       },
     );
+    if (goals) {
+      const goalForRun = (id: string) => {
+        const goal = goals.get(id, run.user_id);
+        if (s.one('SELECT kind FROM conversations WHERE id=?', run.conversation_id)?.kind === 'channel' &&
+            goal.conversationId !== run.conversation_id)
+          throw new Error('A private goal cannot be used in a shared room.');
+        if (goal.leadAgentId !== employee.id &&
+            !(goal.leadAgentId === null && goal.conversationId === run.conversation_id))
+          throw new Error('This goal is led by another agent. Ask the human to change its lead if needed.');
+        return goal;
+      };
+      const canChangeGoal = () => {
+        if (s.setting('run.readOnly.' + run.id, false))
+          throw new Error('Goals cannot be changed during a review or research task.');
+      };
+      server.registerTool('workspace_goals', {
+        description: 'Read durable goals you lead, including progress, next steps and checks. The human controls which agent leads each goal.',
+        inputSchema: {},
+      }, async () => result(goals.listForAgent(run.user_id, employee.id, run.conversation_id)));
+      server.registerTool('workspace_goal_create', {
+        description: 'Create a durable goal when the human asks for an ongoing outcome across multiple work sessions. For a small one-off request, just do the work. State what success looks like and the next concrete step in plain language.',
+        inputSchema: { title: z.string().min(1).max(240), success: z.string().min(1).max(240), current: z.string().max(2000).optional(), nextStep: z.string().max(2000).optional() },
+      }, async (input) => {
+        canChangeGoal();
+        return result(goals.create(run.user_id, { ...input, conversationId: run.conversation_id, sourceMessageId: run.message_id, leadAgentId: employee.id }));
+      });
+      server.registerTool('workspace_goal_change', {
+        description: 'Update a durable goal after reading its current version. Keep its current position and next step accurate; pause or complete only when justified by evidence or the human request. Change the named lead only when the human asks; use workspace_team to find the agent ID.',
+        inputSchema: { goalId: z.string().uuid(), version: z.number().int().positive(), title: z.string().min(1).max(240).optional(), success: z.string().min(1).max(240).optional(), current: z.string().max(2000).optional(), nextStep: z.string().max(2000).optional(), status: z.enum(['active', 'paused', 'complete']).optional(), leadAgentId: z.string().uuid().optional() },
+      }, async ({ goalId, ...change }) => {
+        canChangeGoal(); goalForRun(goalId);
+        return result(goals.change(goalId, run.user_id, change));
+      });
+      server.registerTool('workspace_goal_step', {
+        description: 'Add or update one clear step toward a goal. Describe how it will be checked. A done step requires a result or evidence.',
+        inputSchema: { goalId: z.string().uuid(), stepId: z.string().uuid().optional(), title: z.string().min(1).max(240).optional(), doneWhen: z.string().max(2000).optional(), status: z.enum(['todo', 'doing', 'blocked', 'done']).optional(), evidence: z.string().max(2000).optional() },
+      }, async ({ goalId, stepId, ...change }) => {
+        canChangeGoal(); goalForRun(goalId);
+        return result(stepId
+          ? goals.changeStep(goalId, stepId, run.user_id, change)
+          : goals.addStep(goalId, run.user_id, { title: change.title, doneWhen: change.doneWhen }));
+      });
+      server.registerTool('workspace_goal_update', {
+        description: 'Record a dated, factual progress update with a result or evidence. Use this after material work, learning or a changed measurement.',
+        inputSchema: { goalId: z.string().uuid(), summary: z.string().min(1).max(2000), evidence: z.string().max(2000).optional() },
+      }, async ({ goalId, ...update }) => {
+        canChangeGoal(); goalForRun(goalId);
+        return result(goals.addUpdate(goalId, run.user_id, employee.id, update));
+      });
+    }
+    if (work) {
+      server.registerTool('workspace_work_start', {
+        description: 'Create one compact work card for a substantial execution request. State what will count as done and how you will check it before implementing. Do not create one for a simple answer or tiny task.',
+        inputSchema: { title: z.string().min(1).max(240), doneWhen: z.array(z.string().min(1).max(240)).min(1).max(6), proofPlan: z.array(z.string().min(1).max(240)).min(1).max(6), goalId: z.string().uuid().optional() },
+      }, async (input) => {
+        if (s.setting('run.readOnly.' + run.id, false)) throw new Error('A review or research task cannot start implementation work.');
+        return result(work.start(run, input));
+      });
+      server.registerTool('workspace_work_update', {
+        description: 'Keep an existing work card accurate. Record real check results and a concise summary. Mark complete only after at least one passing check; leave it waiting when a decision or another work session is needed.',
+        inputSchema: { workId: z.string().uuid(), status: z.enum(['working', 'waiting', 'checking', 'complete']).optional(), summary: z.string().max(2000).optional(), checks: z.array(z.object({ label: z.string().min(1).max(240), result: z.enum(['passed', 'failed', 'pending']), detail: z.string().max(1000).optional() })).max(12).optional() },
+      }, async ({ workId, ...change }) => {
+        if (s.setting('run.readOnly.' + run.id, false)) throw new Error('A review or research task cannot change implementation work.');
+        return result(work.change(workId, run.user_id, run.conversation_id, change));
+      });
+    }
     server.registerTool(
       'workspace_connection',
       {
@@ -845,88 +906,74 @@ export async function registerWorkspaceTools(
           access: z.enum(['read', 'write']).default('read'),
         },
       },
-      async ({ service, access }) => {
-        const existing = s.one(
-          "SELECT c.*,g.capabilities FROM connections c JOIN grants g ON g.connection_id=c.id WHERE c.owner_id=? AND c.service=? AND c.state='ready' AND g.employee_id=?",
-          run.user_id,
-          service,
-          employee.id,
-        );
-        if (existing && (access === 'read' || JSON.parse(existing.capabilities).includes('write')))
-          return result({ id: existing.id, status: 'ready', label: existing.label });
-        const reusable = s.one(
-          "SELECT * FROM connections WHERE owner_id=? AND service=? AND state='ready'",
-          run.user_id,
-          service,
-        );
-        const pending = s
-          .all(
-            "SELECT * FROM connections WHERE owner_id=? AND service=? AND state='awaiting_authorization'",
-            run.user_id,
-            service,
-          )
-          .find(
-            (c) =>
-              JSON.parse(c.data).employeeId === employee.id &&
-              JSON.parse(c.data).conversationId === run.conversation_id,
-          );
-        if (pending)
-          return result({
-            id: pending.id,
-            status: 'Setup is already available in the conversation.',
-          });
-        const id = uid();
-        s.run(
-          'INSERT INTO connections VALUES(?,?,?,?,?,?)',
-          id,
-          run.user_id,
-          service,
-          service,
-          'awaiting_authorization',
-          JSON.stringify({
-            employeeId: employee.id,
-            conversationId: run.conversation_id,
-            requestMessageId: run.message_id,
-            runId: run.id,
-            service,
-            requestedWrite: access === 'write',
-            ...(reusable ? { reuseId: reusable.id, accountLabel: reusable.label } : {}),
-          }),
-        );
-        s.emit(
-          'connection.requested',
-          run.conversation_id,
-          { id, service, employeeId: employee.id },
-          run.user_id,
-        );
-        return result({
-          id,
-          status: 'Awaiting setup in conversation. Do not ask for secrets in ordinary chat.',
-        });
+      async ({ service, access }) => result(broker.request(run, service, access)),
+    );
+    server.registerTool(
+      'workspace_connection_status',
+      {
+        description:
+          'Read Abralo connection and grant status before asking for setup. Accepts account or setup-request IDs. Never creates a request.',
+        inputSchema: {
+          connectionId: z.string().optional(),
+          service: z.enum(['railway', 'stripe', 'gmail']).optional(),
+        },
       },
+      async ({ connectionId, service }) =>
+        result(
+          connectionId
+            ? broker.status(connectionId, employee.id, run.user_id)
+            : s
+                .all(
+                  'SELECT id FROM connections WHERE owner_id=?' + (service ? ' AND service=?' : ''),
+                  run.user_id,
+                  ...(service ? [service] : []),
+                )
+                .map((c) => broker.status(c.id, employee.id, run.user_id)),
+        ),
     );
     server.registerTool(
       'workspace_connection_tools',
       {
         description:
-          'List tools for a connection granted to this employee. Discover tools only as needed.',
-        inputSchema: { connectionId: z.string() },
+          'Find tools on a granted account by name or task. Use query for large catalogs so only relevant definitions enter context. Refresh repairs stale discovery; it never changes grants.',
+        inputSchema: { connectionId: z.string(), query: z.string().max(120).optional(), refresh: z.boolean().default(false) },
       },
-      async ({ connectionId }) => {
-        const c = s.one(
-          "SELECT c.data FROM connections c JOIN grants g ON c.id=g.connection_id WHERE c.id=? AND c.owner_id=? AND g.employee_id=? AND c.state='ready'",
-          connectionId,
-          run.user_id,
-          employee.id,
-        );
-        return result(c ? JSON.parse(c.data).tools : []);
+      async ({ connectionId, query, refresh }) => {
+        let status = broker.status(connectionId, employee.id, run.user_id);
+        if (refresh && status.capabilities.length) {
+          await broker.ensure(status.connectionId, run.user_id);
+          status = broker.status(connectionId, employee.id, run.user_id);
+        }
+        const c = broker.resolve(connectionId, run.user_id);
+        const available = status.status === 'ready' ? JSON.parse(c.data).tools || [] : [];
+        const words = (query || '').toLocaleLowerCase().split(/\s+/).filter(Boolean);
+        const matches = words.length
+          ? available.filter((tool: any) => words.every((word: string) => `${tool.name} ${tool.description || ''}`.toLocaleLowerCase().includes(word)))
+          : available;
+        return result({
+          ...status,
+          tools: matches.slice(0, 25),
+          totalTools: available.length,
+          matchedTools: matches.length,
+          truncated: matches.length > 25,
+        });
       },
+    );
+    server.registerTool(
+      'workspace_connection_action',
+      {
+        description:
+          'Read the durable status/result of a connected action. Pending means an Abralo approval, not a provider login. Never resubmit an unknown or pending action.',
+        inputSchema: { actionId: z.string() },
+      },
+      async ({ actionId }) =>
+        result(broker.actions.receipt(broker.actions.get(actionId, run.user_id, employee.id))),
     );
     server.registerTool(
       'workspace_connection_call',
       {
         description:
-          'Call an available tool through a granted connection. Writes require a write grant and an explicit inline execution decision.',
+          'Read through a granted account or prepare a durable write approval in Abralo. Writes return an actionId immediately; approval executes exactly the saved arguments. Use workspace_connection_action for its result, never reconnect or resubmit.',
         inputSchema: {
           connectionId: z.string(),
           tool: z.string(),
@@ -934,25 +981,8 @@ export async function registerWorkspaceTools(
         },
       },
       async ({ connectionId, tool, arguments: args }) => {
-        const c = s.one(
-          'SELECT data FROM connections WHERE id=? AND owner_id=?',
-          connectionId,
-          run.user_id,
-        );
-        const info = c ? JSON.parse(c.data).tools?.find((t: any) => t.name === tool) : null;
-        const read = info?.annotations?.readOnlyHint === true;
-        if (!read) {
-          const decision = await sup.decision(run.id, {
-            kind: 'permission',
-            title: `${tool} through a connected account`,
-            detail: args,
-          });
-          if (!decision.allow) return result({ error: 'Declined' });
-        }
-        if (s.setting('run.readOnly.' + run.id, false))
-          return result({
-            error: 'Connected actions are unavailable during a review or research task.',
-          });
+        const access = broker.access(connectionId, employee.id, run.user_id, tool);
+        if (!access.read) return result(broker.actions.request(run, connectionId, tool, args));
         return result(await broker.call(connectionId, employee.id, run.user_id, tool, args));
       },
     );

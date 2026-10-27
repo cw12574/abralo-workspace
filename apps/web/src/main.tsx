@@ -40,6 +40,7 @@ import {
   Trash2,
   Pencil,
   FolderOpen,
+  Target,
 } from 'lucide-react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -67,9 +68,39 @@ import {
   type ConversationView,
 } from './conversation-cache';
 import { useConversationViewport } from './conversation-viewport';
+import { GoalsView, ConversationGoals } from './goals-view';
+import { WorkCards } from './work-cards';
 import type { Employee, Message, ProviderInfo } from '../../../packages/contracts/src/index';
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_ITEMS: any[] = [];
+async function ensureBrowserNotificationSubscription(publicKey: string) {
+  const registration = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
+  const expectedKey = Uint8Array.from(
+    atob((publicKey + padding).replace(/-/g, '+').replace(/_/g, '/')),
+    (character) => character.charCodeAt(0),
+  );
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    const currentKey = subscription.options.applicationServerKey;
+    const bytes = currentKey ? new Uint8Array(currentKey as ArrayBuffer) : null;
+    const sameKey = bytes?.length === expectedKey.length &&
+      bytes.every((byte, index) => byte === expectedKey[index]);
+    if (!sameKey) {
+      await api('/notifications/subscribe', { endpoint: subscription.endpoint }, 'DELETE');
+      if (!(await subscription.unsubscribe()))
+        throw new Error('Could not replace the browser notification subscription.');
+      subscription = null;
+    }
+  }
+  subscription ??= await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: expectedKey,
+  });
+  await api('/notifications/subscribe', subscription.toJSON());
+  window.dispatchEvent(new Event('workspace-notification-channel'));
+}
 const names: Record<string, string> = {
   codex: 'Codex',
   claude: 'Claude Code',
@@ -375,6 +406,7 @@ function ConfirmMessageDelete({ message, onClose, onConfirm }: any) {
   );
 }
 function App() {
+  const [desktopControl, setDesktopControl] = useState<any>({ active: false });
   const [threadWidth, setThreadWidth] = useState(() =>
     Math.max(300, Math.min(760, Number(localStorage.getItem('thread-width')) || 390)),
   );
@@ -409,7 +441,7 @@ function App() {
   useEffect(() => {
     localStorage.setItem('sidebar-width', String(sidebarWidth));
   }, [sidebarWidth]);
-  const notificationPrefs = useRef<any>({ enabled: false, sound: false });
+  const notificationPrefs = useRef<any>({ enabled: true, sound: true });
   useEffect(() => {
     window.addEventListener('pointerdown', unlockSound, { once: true });
     return () => window.removeEventListener('pointerdown', unlockSound);
@@ -423,7 +455,9 @@ function App() {
         '',
     ),
     [view, setView] = useState(
-      localStorage.getItem('active-view') === 'connections' ? 'connections' : 'chat',
+      ['connections', 'goals'].includes(localStorage.getItem('active-view') || '')
+        ? localStorage.getItem('active-view')!
+        : 'chat',
     ),
     [thread, setThread] = useState<Message | null>(null),
     [modal, setModal] = useState(''),
@@ -567,6 +601,8 @@ function App() {
     const location =
       view === 'connections'
         ? 'Connections'
+        : view === 'goals'
+          ? 'Goals'
         : conversation?.kind === 'channel'
           ? `#${conversation.name}`
           : employee?.name || conversation?.name || 'Workspace';
@@ -586,8 +622,22 @@ function App() {
   }, []);
   useEffect(() => {
     if (!workspace) return;
+    if (workspace.user?.role === 'owner') {
+      void api('/desktop-control').then(setDesktopControl).catch(() => {});
+      const timer = window.setInterval(() => void api('/desktop-control').then(setDesktopControl).catch(() => {}), 5000);
+      return () => window.clearInterval(timer);
+    }
+  }, [workspace?.user?.id]);
+  useEffect(() => {
+    if (!workspace) return;
     void api('/notifications')
-      .then((v) => (notificationPrefs.current = v.preferences))
+      .then((v) => {
+        notificationPrefs.current = v.preferences;
+        if (v.preferences.enabled && 'Notification' in window &&
+            Notification.permission === 'granted' && 'serviceWorker' in navigator)
+          void ensureBrowserNotificationSubscription(v.publicKey).catch((error) =>
+            console.warn('Could not repair browser notifications:', error));
+      })
       .catch(() => {});
     const es = new EventSource('/api/events?activity=summary&after=' + workspace.cursor);
     es.onopen = () => {
@@ -595,6 +645,7 @@ function App() {
     };
     es.onmessage = (e) => {
       const event = JSON.parse(e.data);
+      if (event.type === 'desktop.control') setDesktopControl(event.payload);
       const { selected, thread } = notificationView.current;
       if (['notification.message', 'inbox.changed'].includes(event.type))
         void loadInbox().catch(() => {});
@@ -603,6 +654,9 @@ function App() {
         if (thread?.id === event.payload.id) setThread(event.payload);
       }
       if (event.type === 'notifications.preferences') notificationPrefs.current = event.payload;
+      if (event.type === 'notification.message' && notificationPrefs.current.enabled &&
+          !document.hidden && document.hasFocus())
+        void api('/notifications/ack', { messageId: event.payload.id }).catch(() => {});
       window.dispatchEvent(new CustomEvent('workspace-event', { detail: event }));
       if (
         ['workspace.changed', 'message.created', 'message.finished', 'run.changed'].includes(
@@ -612,6 +666,7 @@ function App() {
         void refresh().catch(() => {});
       if (
         event.type === 'notification.message' &&
+        notificationPrefs.current.enabled &&
         (event.conversationId !== selected ||
           (event.payload.threadId || null) !== (thread?.id || null) ||
           document.hidden ||
@@ -629,13 +684,16 @@ function App() {
           toastTimer.current = null;
           setToast(null);
         }, 7000);
-        // OS delivery is owned by server push, so a hidden tab cannot duplicate it.
+        // A hidden or unfocused tab never acknowledges delivery to the service.
       }
       if (
         [
           'proposal.created',
           'connection.requested',
           'connection.ready',
+          'connection.action',
+          'goal.changed',
+          'work.changed',
           'decision.created',
           'decision.resolved',
         ].includes(event.type)
@@ -643,24 +701,6 @@ function App() {
         setRevision((v) => v + 1);
     };
     return () => es.close();
-  }, [workspace?.user?.id]);
-  useEffect(() => {
-    if (!workspace) return;
-    const send = () =>
-      void api('/notifications/presence', {
-        visible: !document.hidden && document.hasFocus(),
-      }).catch(() => {});
-    send();
-    const timer = setInterval(send, 30000);
-    document.addEventListener('visibilitychange', send);
-    window.addEventListener('focus', send);
-    window.addEventListener('blur', send);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', send);
-      window.removeEventListener('focus', send);
-      window.removeEventListener('blur', send);
-    };
   }, [workspace?.user?.id]);
   useEffect(() => {
     if (workspace?.user.role === 'owner')
@@ -919,6 +959,9 @@ function App() {
           <ChevronDown size={15} />
         </button>
         <nav>
+          <button className={`nav-row goals-nav${view === 'goals' ? ' selected' : ''}`} onClick={() => { setView('goals'); setMobile(false); }}>
+            <Target size={18} aria-hidden="true" /><span>Goals</span>
+          </button>
           <div className="nav-title">
             <span>Rooms</span>
             <button className="icon" aria-label="Add room" onClick={() => setModal('channel')}>
@@ -1140,6 +1183,12 @@ function App() {
         <button className="scrim" aria-label="Close navigation" onClick={() => setMobile(false)} />
       )}
       <main className="main">
+        {desktopControl.active && (
+          <div className="desktop-control-banner" role="status">
+            <span><strong>Desktop control active</strong> · {desktopControl.employeeName} · until {new Date(desktopControl.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <button className="secondary" onClick={() => void api('/desktop-control/revoke', {}, 'POST').then(setDesktopControl).catch((e) => setError(e.message))}>Stop control</button>
+          </div>
+        )}
         <header className="conversation-header">
           <button
             className="icon mobile-menu"
@@ -1156,6 +1205,8 @@ function App() {
                 <p>Accounts your team can use.</p>
               </div>
             </>
+          ) : view === 'goals' ? (
+            <><Target size={20} /><div><h1>Goals</h1><p>What you want to achieve.</p></div></>
           ) : conversation ? (
             employee || conversation.kind === 'channel' ? (
               <button
@@ -1350,6 +1401,8 @@ function App() {
         )}
         {view === 'connections' ? (
           <Connections revision={revision} fail={setError} />
+        ) : view === 'goals' ? (
+          <GoalsView conversationId={selected} conversations={workspace.conversations} employees={workspace.employees} revision={revision} onOpenConversation={choose} fail={setError} />
         ) : conversation ? (
           <PreviewContext.Provider value={openPreview}>
             <div className="conversation-columns">
@@ -1371,6 +1424,7 @@ function App() {
                 onMessageChange={updateMessage}
                 fail={setError}
                 onRead={refresh}
+                onOpenGoals={() => setView('goals')}
                 revision={revision}
                 readOnly={!!conversation.archivedAt || !!conversation.agentDeactivated}
               />
@@ -2050,6 +2104,7 @@ function Chat({
   onThread,
   fail,
   onRead,
+  onOpenGoals,
   revision,
   focusMessage,
   restoreViewport = false,
@@ -2118,6 +2173,7 @@ function Chat({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [proposals, setProposals] = useState<any[]>([]);
   const [connections, setConnections] = useState<any[]>([]);
+  const [connectionActions, setConnectionActions] = useState<any[]>([]);
   const [workingFolder, setWorkingFolder] = useState<{ path: string; name: string } | null>(null);
   const [choosingFolder, setChoosingFolder] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -2249,6 +2305,9 @@ function Chat({
           ),
         ),
       )
+      .catch(() => {});
+    api('/connection-actions?conversationId=' + encodeURIComponent(id))
+      .then(setConnectionActions)
       .catch(() => {});
   }, [id, revision]);
   const confirmedKeys = new Set(messages.map((m) => m.clientKey));
@@ -2491,6 +2550,7 @@ function Chat({
   }
   return (
     <section className="chat">
+      {!threadId && <ConversationGoals conversationId={id} revision={revision} onOpen={onOpenGoals} fail={fail} />}
       <div className="message-scroll" ref={scroll} onScroll={handleConversationScroll}>
         {readOnly && (
           <div className="conversation-archived-notice">
@@ -2702,6 +2762,10 @@ function Chat({
           ))}
           {decisions.map((d) => (
             <Decision key={d.id} decision={d} fail={fail} />
+          ))}
+          {!threadId && <WorkCards conversationId={id} revision={revision} fail={fail} />}
+          {connectionActions.map((action) => (
+            <ConnectionAction key={action.actionId} action={action} fail={fail} />
           ))}
           {connections.map((c) => (
             <ConnectionRow key={c.id} connection={c} fail={fail} />
@@ -3731,6 +3795,11 @@ function Decision({ decision: d, fail }: any) {
       ))}
       {d.kind === 'question' ? (
         <textarea aria-label="Answer" value={answer} onChange={(e) => setAnswer(e.target.value)} />
+      ) : d.kind === 'desktop_control' ? (
+        <div className="ui-stack">
+          <p>{d.detail?.reason}</p>
+          <p className="caption">The agent can see the Windows desktop and use the mouse and keyboard for five minutes. Stop control at any time from the visible banner.</p>
+        </div>
       ) : d.kind === 'workspace_access' ? (
         <div className="workspace-access-fields">
           <p>{d.detail.reason}</p>
@@ -3789,6 +3858,8 @@ function Decision({ decision: d, fail }: any) {
               ? d.detail.type === 'directory'
                 ? 'Grant folder access'
                 : 'Clone and grant access'
+              : d.kind === 'desktop_control'
+                ? 'Allow for 5 minutes'
               : 'Allow this action'}
         </button>
       </div>
@@ -4941,6 +5012,77 @@ function ProviderLogin({
     </div>
   );
 }
+function ConnectionAction({ action, fail }: any) {
+  const [receipt, setReceipt] = useState(action);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => setReceipt(action), [action]);
+  const labels: Record<string, string> = {
+    awaiting_approval: 'Ready for your approval',
+    running: 'Working on it',
+    succeeded: 'Completed',
+    declined: 'Declined',
+    failed: 'Could not complete',
+    unknown: 'Needs a check',
+  };
+  async function decide(allow: boolean) {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      setReceipt(await api(`/connection-actions/${action.actionId}/decision`, { allow }));
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="inline-card connection-action ui-stack" aria-busy={busy}>
+      <div className="connection-heading">
+        <Plug size={18} />
+        <strong>{serviceNames[action.service] || action.service}</strong>
+        <span className="quiet" role="status">
+          {labels[receipt.status] || receipt.status}
+        </span>
+      </div>
+      <p>
+        <strong>{action.tool.replaceAll('_', ' ')}</strong>
+      </p>
+      {receipt.status === 'awaiting_approval' && (
+        <p className="quiet">
+          Your account is connected. Approve this action once and Abralo will continue
+          automatically.
+        </p>
+      )}
+      {receipt.status === 'unknown' && (
+        <p role="status">
+          The connection stopped before the result was confirmed. Your agent needs to check what
+          happened before trying again.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+      <details>
+        <summary>Action details · {action.label}</summary>
+        <pre>{JSON.stringify(action.arguments, null, 2)}</pre>
+      </details>
+      {receipt.status === 'awaiting_approval' && (
+        <div className="form-actions">
+          <button className="secondary" disabled={busy} onClick={() => void decide(false)}>
+            Decline
+          </button>
+          <button className="primary" disabled={busy} onClick={() => void decide(true)}>
+            {busy ? 'Saving…' : 'Approve action'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 function ConnectionRow({ connection: c, fail }: any) {
   const [detail, setDetail] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -4965,15 +5107,21 @@ function ConnectionRow({ connection: c, fail }: any) {
             : c.state.replaceAll('_', ' ').replace(/^./, (v: string) => v.toUpperCase())}
         </span>
       </div>
-      {detail && <p>{detail.message || detail.error}</p>}
-      {c.data?.reuseId && (
+      {detail && <p role="status">{detail.message || detail.error}</p>}
+      {c.data?.reuseId && c.state !== 'granted' && detail?.state !== 'granted' && (
         <button
           className="primary"
+          disabled={busy}
           onClick={async () => {
+            setBusy(true);
             try {
-              setDetail(await api(`/connections/${c.id}/reuse`, {}));
+              setDetail(
+                await api(`/connections/${c.id}/reuse`, { write: !!c.data.requestedWrite }),
+              );
             } catch (e: any) {
-              fail(e.message);
+              setDetail({ error: e.message });
+            } finally {
+              setBusy(false);
             }
           }}
         >
@@ -5026,28 +5174,37 @@ function ConnectionRow({ connection: c, fail }: any) {
           Continue sign-in <ExternalLink size={14} />
         </a>
       )}
-      <button
-        className="secondary"
-        disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          try {
-            setDetail(await api(`/connections/${c.id}/connect`, {}));
-          } catch (e: any) {
-            fail(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {busy
-          ? 'Connecting…'
-          : c.state === 'ready'
-            ? 'Check connection'
-            : detail?.url
-              ? 'Check sign-in'
-              : 'Connect'}
-      </button>
+      {!c.data?.reuseId && (
+        <button
+          className="secondary"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              setDetail(
+                await api(
+                  `/connections/${c.id}/connect`,
+                  c.state === 'ready' ? {} : { grantWrite: !!c.data?.requestedWrite },
+                ),
+              );
+            } catch (e: any) {
+              setDetail({ error: e.message });
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy
+            ? 'Connecting…'
+            : c.state === 'ready'
+              ? 'Check connection'
+              : detail?.url
+                ? 'Check sign-in'
+                : c.data?.requestedWrite
+                  ? 'Connect · allow reads and writes'
+                  : 'Connect · read only'}
+        </button>
+      )}
       {c.state === 'ready' && (
         <button
           className="quiet-button"
@@ -5068,18 +5225,23 @@ function ConnectionRow({ connection: c, fail }: any) {
 }
 function Connections({ revision, fail }: any) {
   const [items, setItems] = useState<any[]>([]);
+  const [nativeMcp, setNativeMcp] = useState<boolean | null>(null);
+  const [savingMcp, setSavingMcp] = useState(false);
   useEffect(() => {
     api('/connections')
       .then(setItems)
+      .catch((e: any) => fail(e.message));
+    api('/connections/native-mcp')
+      .then((value) => setNativeMcp(value.enabled))
       .catch((e: any) => fail(e.message));
   }, [revision]);
   return (
     <section className="settings-content">
       <h2>Connected accounts</h2>
       <p className="quiet">
-        Ask any employee to connect a service. Existing accounts can be shared with another employee
-        when you choose.
+        Ask an agent to connect an account. You choose which agent can use it, and Abralo keeps a record of actions that need your decision.
       </p>
+      <p className="quiet">Agents can also use command line tools and provider APIs in their working folder, subject to their permissions.</p>
       {items.length ? (
         items.map((c) => <ConnectionRow key={c.id} connection={c} fail={fail} />)
       ) : (
@@ -5089,6 +5251,17 @@ function Connections({ revision, fail }: any) {
           <span className="quiet">Start with a message. Setup stays in the conversation.</span>
         </div>
       )}
+      <div className="inline-card ui-stack">
+        <div><h3>Tools configured in Claude Code</h3><p className="quiet">Claude Code can use MCP servers from your user and project settings. A project server may start when an agent opens that project, so enable this for projects you trust.</p></div>
+        <label className="check-label"><input type="checkbox" checked={!!nativeMcp} disabled={nativeMcp === null || savingMcp} onChange={async (event) => {
+          const enabled = event.target.checked;
+          setSavingMcp(true);
+          try { const saved = await api('/connections/native-mcp', { enabled }, 'PUT'); setNativeMcp(saved.enabled); }
+          catch (error: any) { fail(error.message); }
+          finally { setSavingMcp(false); }
+        }} /> Allow configured Claude Code MCP servers</label>
+        <p className="quiet">Codex and OpenCode continue to use their own configured tools. Abralo account connections above have separate access and action checks.</p>
+      </div>
     </section>
   );
 }
@@ -5490,9 +5663,10 @@ function PermissionMenu({ employee, fail }: any) {
 }
 function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, initialTab }: any) {
   const [notificationStatus, setNotificationStatus] = useState('');
+  const [notificationInfo, setNotificationInfo] = useState<any>(null);
   const [startup, setStartup] = useState<any>(null);
   const [tab, setTab] = useState(initialTab || 'general'),
-    [prefs, setPrefs] = useState<any>({ enabled: false, sound: true, privatePreview: false }),
+    [prefs, setPrefs] = useState<any>({ enabled: true, sound: true, privatePreview: false }),
     [memories, setMemories] = useState<any[]>([]),
     [accountProviders, setAccountProviders] = useState<any[]>([]),
     [checkingAccounts, setCheckingAccounts] = useState(false);
@@ -5507,15 +5681,18 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
     }
   }
   useEffect(() => {
-    api('/notifications')
-      .then((r) => setPrefs(r.preferences))
+    const loadNotifications = () => void api('/notifications')
+      .then((r) => { setPrefs(r.preferences); setNotificationInfo(r); })
       .catch((e) => setSettingsError(e.message));
+    loadNotifications();
+    window.addEventListener('workspace-notification-channel', loadNotifications);
     api('/memories')
       .then(setMemories)
       .catch((e) => setSettingsError(e.message));
     api('/startup')
       .then(setStartup)
       .catch(() => {});
+    return () => window.removeEventListener('workspace-notification-channel', loadNotifications);
   }, []);
   useEffect(() => {
     if (tab === 'accounts' && accountProviders.length === 0) {
@@ -5736,57 +5913,56 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
           ) : tab === 'notifications' ? (
             <div className="ui-stack notification-settings">
               <p>Get an alert when someone replies or mentions you.</p>
+              {notificationInfo && (
+                <p className="quiet">
+                  {notificationInfo.nativeAvailable
+                    ? prefs.enabled
+                      ? 'Delivery: Windows desktop, independent of your browser.'
+                      : 'Windows desktop delivery is available.'
+                    : notificationInfo.browserSubscriptions
+                      ? `${prefs.enabled ? 'Delivery' : 'Available'}: ${notificationInfo.browserSubscriptions} browser subscription${notificationInfo.browserSubscriptions === 1 ? '' : 's'}.`
+                      : prefs.enabled
+                        ? 'In-app alerts are on. Desktop alerts need browser permission on this device.'
+                        : 'Alerts are off.'}
+                  {notificationInfo.lastDelivery?.error &&
+                    !(notificationInfo.nativeAvailable && notificationInfo.lastDelivery.channel === 'none') &&
+                    ` Last attempt failed: ${notificationInfo.lastDelivery.error}`}
+                </p>
+              )}
               <button
-                className="primary"
+                className={prefs.enabled ? 'secondary' : 'primary'}
                 onClick={async () => {
                   try {
-                    const permission = await Notification.requestPermission();
-                    if (permission !== 'granted')
-                      throw new Error(
-                        'Notifications are blocked. Enable them in browser settings.',
-                      );
-                    const registration = await navigator.serviceWorker.register('/sw.js');
-                    await navigator.serviceWorker.ready;
-                    const { publicKey } = await api('/notifications');
-                    const padding = '='.repeat((4 - (publicKey.length % 4)) % 4);
-                    const expectedKey = Uint8Array.from(
-                      atob((publicKey + padding).replace(/-/g, '+').replace(/_/g, '/')),
-                      (character) => character.charCodeAt(0),
-                    );
-                    let sub = await registration.pushManager.getSubscription();
-                    if (sub) {
-                      const existingKey = sub.options.applicationServerKey;
-                      const existingBytes = existingKey
-                        ? new Uint8Array(existingKey as ArrayBuffer)
-                        : null;
-                      const sameKey =
-                        existingBytes?.length === expectedKey.length &&
-                        existingBytes.every((byte, index) => byte === expectedKey[index]);
-                      if (!sameKey) {
-                        await api('/notifications/subscribe', { endpoint: sub.endpoint }, 'DELETE');
-                        if (!(await sub.unsubscribe()))
-                          throw new Error(
-                            'Could not replace the browser notification subscription.',
-                          );
-                        sub = null;
-                      }
-                    }
-                    sub ??= await registration.pushManager.subscribe({
-                      userVisibleOnly: true,
-                      applicationServerKey: expectedKey,
-                    });
-                    await api('/notifications/subscribe', sub.toJSON());
-                    const next = { ...prefs, enabled: true };
+                    const next = { ...prefs, enabled: !prefs.enabled };
                     await api('/notifications', next, 'PUT');
                     setPrefs(next);
+                    setNotificationStatus('');
                   } catch (e: any) {
                     setSettingsError(e.message);
                   }
                 }}
               >
                 <Bell size={15} />
-                {prefs.enabled ? 'Notifications enabled' : 'Enable notifications'}
+                {prefs.enabled ? 'Turn off notifications' : 'Turn on notifications'}
               </button>
+              {prefs.enabled && notificationInfo && !notificationInfo.nativeAvailable &&
+                !notificationInfo.browserSubscriptions && (
+                <button className="secondary" onClick={async () => {
+                  try {
+                    if (!('Notification' in window) || !('serviceWorker' in navigator))
+                      throw new Error('This browser does not support desktop alerts.');
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted')
+                      throw new Error('Desktop alerts are blocked in this browser.');
+                    await ensureBrowserNotificationSubscription(notificationInfo.publicKey);
+                    setNotificationStatus('Browser desktop alerts connected.');
+                  } catch (e: any) {
+                    setNotificationStatus(e.message);
+                  }
+                }}>
+                  Allow browser desktop alerts
+                </button>
+              )}
               {['sound', 'privatePreview'].map((key) => (
                 <label className="check-label" key={key}>
                   <input
@@ -5805,12 +5981,17 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                   {key === 'sound' ? 'Play sounds where supported' : 'Hide message previews'}
                 </label>
               ))}
-              {prefs.enabled && (
+              {prefs.enabled && !!(notificationInfo?.nativeAvailable || notificationInfo?.browserSubscriptions) && (
                 <button
                   className="secondary"
                   onClick={async () => {
                     setNotificationStatus('Sending…');
                     try {
+                      if (notificationInfo?.nativeAvailable) {
+                        const result = await api('/notifications/test', {}, 'POST');
+                        setNotificationStatus(result.message);
+                        return;
+                      }
                       if (!('Notification' in window) || Notification.permission !== 'granted')
                         throw new Error(
                           'Notifications are blocked for this browser. Enable them in site settings.',
