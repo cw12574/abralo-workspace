@@ -40,6 +40,24 @@ for (const target of Object.keys(targets)) {
   if (!jobs.some((job) => job.name === target && job.conclusion === 'success'))
     throw new Error(`Missing successful native job: ${target}`);
 }
+// PR builds check out a synthetic merge commit. Its tree must match the source
+// named by this preview, rather than merely sharing the PR's head commit.
+const artifacts = api(`actions/runs/${runId}/artifacts?per_page=100`).artifacts;
+if (artifacts.length !== 4 || artifacts.some((artifact) => artifact.expired))
+  throw new Error('Expected four unexpired native build artifacts.');
+const builtCommits = new Set();
+for (const target of Object.keys(targets)) {
+  const matching = artifacts.filter((artifact) =>
+    new RegExp(`^abralo-${target}-[a-f0-9]{40}$`).test(artifact.name),
+  );
+  if (matching.length !== 1) throw new Error('Missing or duplicate artifact: ' + target);
+  builtCommits.add(matching[0].name.slice(-40));
+}
+const sourceTree = api(`git/commits/${source}`).tree.sha;
+for (const commit of builtCommits) {
+  if (api(`git/commits/${commit}`).tree.sha !== sourceTree)
+    throw new Error('The built artifact tree differs from the named release source.');
+}
 const releases = api('releases?per_page=100');
 const release = releases.find((item) => item.tag_name === tag);
 if (!release) throw new Error('Create the reviewable draft release first.');
