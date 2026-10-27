@@ -43,7 +43,9 @@ while (!/^chromium-\d+$/.test(browserRoot.split(/[\\/]/).pop())) {
   if (parent === browserRoot) throw new Error('Cannot locate the pinned Chromium package root.');
   browserRoot = parent;
 }
-cpSync(browserRoot, join(target, 'runtime', 'chromium'), { recursive: true });
+// macOS frameworks use relative links within the app bundle. Preserve those
+// links so the archive does not point back to the build runner's browser cache.
+cpSync(browserRoot, join(target, 'runtime', 'chromium'), { recursive: true, verbatimSymlinks: true });
 copyFileSync(
   process.execPath,
   join(target, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'),
