@@ -39,7 +39,7 @@ These are engineering conclusions drawn from the sources and Abralo's code, not 
 
 **Actions:** a write request persists the account, employee, request, exact arguments and fingerprint. It immediately returns an action ID. Approval atomically claims the saved action; repeated clicks and repeated pending submissions share the same receipt. Results survive browser reloads and service restarts. A crash during execution becomes `unknown`, requiring inspection of provider state. Abralo offers no automatic replay of that action. This is at-most-once dispatch per saved action, not provider-level exactly-once delivery.
 
-**Permissions:** grants and room access are checked before an approval is shown and before execution. Read-only research can use connected reads, but cannot prepare writes. Native Claude and OpenCode connection-tool permissions defer to Abralo's checks instead of adding a second approval. Codex already configures the first-party workspace gateway for tool approval in its adapter.
+**Permissions:** grants and conversation access are checked before an approval is shown and before execution. Read-only research can use connected reads, but cannot prepare writes. Native Claude and OpenCode connection-tool permissions defer to Abralo's checks instead of adding a second approval. Codex already configures the first-party workspace gateway for tool approval in its adapter.
 
 **Conversation:** the action card distinguishes approval, execution, completion, rejection and uncertain outcomes. It shows the account and exact action details. The saved action result drives a continuation of the original task, using the existing supervisor/outbox path.
 

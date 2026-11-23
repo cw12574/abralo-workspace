@@ -1,9 +1,18 @@
+.message-work-cards {
+  max-width: 1000px;
+  margin-inline: auto;
+  padding: 0 var(--space-8) var(--space-3);
+}
+@media (max-width: 720px) {
+  .message-work-cards {
+    padding-inline: var(--space-4);
+  }
+}
 .work-card {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--raised);
   padding: 16px;
-  margin: 12px 0;
   text-align: left;
 }
 .work-card-head {

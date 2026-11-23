@@ -132,7 +132,7 @@ describe('recent conversation cache', () => {
     cache.event(delta(5, ' world'));
     expect(cache.read(view).data?.messages[0].text).toBe('Hello world');
   });
-  it('does not mix conversations, threads, agent views or history pages', async () => {
+  it('isolates conversations, threads and history pages without a separate agent view', async () => {
     const fetcher = vi.fn(async (path: string) => data(path));
     const cache = new ConversationCache(fetcher);
     const variants = [
@@ -143,7 +143,22 @@ describe('recent conversation cache', () => {
       { ...view, before: 3 },
     ];
     await Promise.all(variants.map((item) => cache.load(item)));
-    expect(new Set(variants.map((item) => cache.read(item).data?.messages[0].text)).size).toBe(5);
+    expect(new Set(variants.map((item) => cache.read(item).data?.messages[0].text)).size).toBe(4);
+    expect(cache.stats().views).toBe(4);
+  });
+  it('ignores another conversation by the same employee and keeps thread runs separate', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn().mockResolvedValue(data());
+    const cache = new ConversationCache(fetcher);
+    await cache.load(view);
+    const before = cache.read(view).data;
+    cache.event({ type: 'message.created', conversationId: 'b', payload: { ...message(), id: 'other', conversationId: 'b' } });
+    cache.event({ type: 'run.changed', conversationId: 'b', payload: { id: 'other', employee_id: 'agent-a', state: 'running' } });
+    cache.event({ type: 'run.changed', conversationId: 'a', payload: { id: 'thread-run', employee_id: 'agent-a', thread_id: 'thread', state: 'running' } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(cache.read(view).data).toBe(before);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    cache.clear();
   });
   it('keeps content, including a cached empty view, on background failure', async () => {
     const fetcher = vi
@@ -168,16 +183,16 @@ describe('recent conversation cache', () => {
     expect(cache.read(view).data).toBeNull();
     expect(cache.composer(view).draft).toBe('');
   });
-  it('purges revoked conversations and aggregated agent history', async () => {
+  it('purges only the revoked conversation', async () => {
     const cache = new ConversationCache(vi.fn().mockResolvedValue(data()));
     cache.setScope('user', ['a', 'b']);
     await cache.load(view);
     await cache.load({ id: 'b' });
     cache.setScope('user', ['a']);
     expect(cache.read({ id: 'b' }).data).toBeNull();
-    expect(cache.read(view).data).toBeNull();
+    expect(cache.read(view).data).not.toBeNull();
   });
-  it('purges aggregated history when agent access is removed even if DM membership remains', async () => {
+  it('purges conversation history when agent access is removed even if DM membership remains', async () => {
     const cache = new ConversationCache(vi.fn().mockResolvedValue(data()));
     cache.setScope('user', ['a'], ['agent-a']);
     await cache.load(view);
@@ -248,15 +263,6 @@ describe('recent conversation cache', () => {
     expect(cache.composer(view).outgoing).toHaveLength(1);
     await cache.load(view);
     expect(cache.composer(view).outgoing).toHaveLength(0);
-  });
-  it('does not reveal quiet agent events in a shared room', async () => {
-    vi.useFakeTimers();
-    const cache = new ConversationCache(vi.fn().mockResolvedValue(data()));
-    const room = { id: 'a', room: true };
-    await cache.load(room);
-    cache.event(delta(5, ' private tool detail'));
-    expect(cache.read(room).data?.messages[0].text).toBe('Hello');
-    cache.clear();
   });
   it('retains a failed draft save and retries it on reconnect', async () => {
     vi.useFakeTimers();

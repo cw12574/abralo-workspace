@@ -5,6 +5,7 @@ import './work-cards.css';
 
 type WorkItem = {
   id: string;
+  requestMessageId: string;
   title: string;
   effectiveStatus: string;
   summary: string;
@@ -12,21 +13,21 @@ type WorkItem = {
   proofPlan: string[];
   checks: { label: string; result: string; detail?: string }[];
 };
-export function WorkCards({
-  conversationId,
-  revision,
-  fail,
-}: {
-  conversationId: string;
-  revision: number;
-  fail: (message: string) => void;
-}) {
-  const [items, setItems] = useState<WorkItem[]>([]);
+export function useConversationWork(
+  conversationId: string,
+  messageIds: string[],
+  revision: number,
+  fail: (message: string) => void,
+) {
+  const [result, setResult] = useState<{ conversationId: string; items: WorkItem[] }>();
+  const messageKey = messageIds.join(',');
   useEffect(() => {
+    if (!messageKey) return;
     let active = true;
-    api('/work?conversationId=' + encodeURIComponent(conversationId))
-      .then((result) => {
-        if (active) setItems(result);
+    const query = new URLSearchParams({ conversationId, messageIds: messageKey });
+    api('/work?' + query)
+      .then((items) => {
+        if (active) setResult({ conversationId, items });
       })
       .catch((error) => {
         if (active) fail(error.message);
@@ -34,13 +35,15 @@ export function WorkCards({
     return () => {
       active = false;
     };
-  }, [conversationId, revision]);
-  const visible = items
-    .filter((item, index) => item.effectiveStatus !== 'complete' || index < 2)
-    .slice(0, 4);
+  }, [conversationId, messageKey, revision]);
+  return result?.conversationId === conversationId ? result.items : [];
+}
+
+export function WorkCards({ items }: { items: WorkItem[] }) {
+  if (!items.length) return null;
   return (
-    <>
-      {visible.map((item) => (
+    <div className="message-work-cards ui-stack">
+      {items.map((item) => (
         <article className="work-card" key={item.id}>
           <div className="work-card-head">
             {item.effectiveStatus === 'complete' ? (
@@ -104,6 +107,6 @@ export function WorkCards({
           </details>
         </article>
       ))}
-    </>
+    </div>
   );
 }

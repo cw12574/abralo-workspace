@@ -25,18 +25,23 @@ $nodePath=Join-Path $target 'runtime\node.exe'
 $launcher=Join-Path $installRoot 'launcher.mjs'
 Copy-Item -LiteralPath (Join-Path $target 'scripts\installed-launcher.mjs') -Destination $launcher
 $launchScript=Join-Path $installRoot 'Open Workspace.ps1'
-$escapedNode=$nodePath.Replace("'","''")
-$escapedLauncher=$launcher.Replace("'","''")
-Set-Content -LiteralPath $launchScript -Encoding UTF8 -Value "Start-Process -FilePath '$escapedNode' -ArgumentList @('`"$escapedLauncher`"') -WindowStyle Hidden"
+$launchBody=@'
+$ErrorActionPreference='Stop'
+$selected=(Get-Content -LiteralPath (Join-Path $PSScriptRoot 'current.txt') -Raw).Trim()
+$runtime=Join-Path $selected 'runtime\node.exe'
+$launcher=Join-Path $PSScriptRoot 'launcher.mjs'
+$arguments=@(('"'+$launcher+'"'))
+'@
+Set-Content -LiteralPath $launchScript -Encoding UTF8 -Value ($launchBody + "`r`n" + 'Start-Process -FilePath $runtime -ArgumentList $arguments -WorkingDirectory $PSScriptRoot -WindowStyle Hidden')
 $backgroundScript=Join-Path $installRoot 'Background Workspace.ps1'
-Set-Content -LiteralPath $backgroundScript -Encoding UTF8 -Value "Start-Process -FilePath '$escapedNode' -ArgumentList @('`"$escapedLauncher`"','--background') -WindowStyle Hidden"
+Set-Content -LiteralPath $backgroundScript -Encoding UTF8 -Value ($launchBody + "`r`n" + 'Start-Process -FilePath $runtime -ArgumentList ($arguments + @(''--background'')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden')
 $shell=New-Object -ComObject WScript.Shell
 $locations=@([Environment]::GetFolderPath('Desktop'),(Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'))
 foreach($location in $locations){
   $shortcut=$shell.CreateShortcut((Join-Path $location 'Agent Workspace.lnk'))
   $shortcut.TargetPath=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
   $shortcut.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$launchScript+'"'
-  $shortcut.WorkingDirectory=$target
+  $shortcut.WorkingDirectory=$installRoot
   $shortcut.WindowStyle=7
   $shortcut.Description='Open your local human and agent workspace'
   $shortcut.Save()
@@ -46,7 +51,7 @@ if($StartOnLogin){
   $startupShortcut=$shell.CreateShortcut((Join-Path $startupLocation 'Agent Workspace.lnk'))
   $startupShortcut.TargetPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $startupShortcut.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$backgroundScript+'"'
-  $startupShortcut.WorkingDirectory=$target
+  $startupShortcut.WorkingDirectory=$installRoot
   $startupShortcut.WindowStyle=7
   $startupShortcut.Description='Start Agent Workspace when you sign in'
   $startupShortcut.Save()

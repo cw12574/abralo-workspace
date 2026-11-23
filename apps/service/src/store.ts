@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { EventReplay, compactReplay } from './event-replay.js';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { randomUUID, createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -15,21 +16,13 @@ import { validTransition } from '../../../packages/contracts/src/index.js';
 import * as schema from './schema.js';
 import { archiveLegacyPlans } from './legacy-plans.js';
 import { attachArchivedPlanDocuments } from './plan-document-attachments.js';
+import { removeLegacyRooms } from './legacy-rooms.js';
+import { migrateAgentCapabilities } from './agent-capabilities.js';
 export const uid = () => randomUUID();
 export const now = () => new Date().toISOString();
-export function capitalizeInitial(value: string) {
-  const [first, ...rest] = Array.from(value);
-  return first ? first.toUpperCase() + rest.join('') : value;
-}
-export const sharedMessageSql = `(msg.run_id IS NULL OR NOT EXISTS (SELECT 1 FROM settings WHERE key='run.quiet.' || msg.run_id) OR EXISTS (SELECT 1 FROM settings WHERE key='run.sharedText.' || msg.run_id AND value NOT IN ('""','null')))`;
-export function mentionsChannel(text: string, name: string) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^\\p{L}\\p{N}_@#])[@#]${escaped}(?=$|[^\\p{L}\\p{N}_-])`, 'iu').test(text);
-}
-export function mentionsRoom(text: string, name: string) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(^|[^\\p{L}\\p{N}_#])#${escaped}(?=$|[^\\p{L}\\p{N}_-])`, 'iu').test(text);
-}
+// Messages replaced by editing and resending an earlier message stay saved but out of view.
+export const visibleMessageSql = `msg.superseded=0 AND NOT EXISTS (SELECT 1 FROM settings WHERE key='message.internal.' || msg.id AND value='true')`;
+
 function mentionsAtName(text: string, name: string) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`(^|[^\\p{L}\\p{N}_@])@${escaped}(?=$|[^\\p{L}\\p{N}_-])`, 'iu').test(text);
@@ -60,6 +53,7 @@ export class Store {
   orm: ReturnType<typeof drizzle>;
   bus = new EventEmitter();
   bootstrapToken: string;
+  replay: EventReplay;
   constructor(public dir: string) {
     ensureDirectory(dir);
     ensureDirectory(join(dir, 'artifacts'));
@@ -81,21 +75,11 @@ export class Store {
     this.orm = drizzle(this.db, { schema });
     this.bus.setMaxListeners(0);
     this.migrate();
+    this.replay = new EventReplay(this);
+    removeLegacyRooms(this);
     archiveLegacyPlans(this);
     attachArchivedPlanDocuments(this);
-    if (!this.setting('migration.room-name-capitalization')) {
-      for (const room of this.all("SELECT id,name FROM conversations WHERE kind='channel'")) {
-        const name = capitalizeInitial(room.name);
-        if (name !== room.name)
-          this.run('UPDATE conversations SET name=? WHERE id=?', name, room.id);
-      }
-      this.set('migration.room-name-capitalization', true);
-    }
-    if (this.one('SELECT 1 FROM humans LIMIT 1')) this.ensureTeam();
-    // Older delegation could accidentally grant employees access to someone else's DM.
-    this.run(
-      "DELETE FROM employee_conversations WHERE conversation_id IN (SELECT id FROM conversations WHERE kind<>'channel' AND (employee_id IS NULL OR employee_id<>employee_conversations.employee_id))",
-    );
+    migrateAgentCapabilities(this);
     if (!existsSync(key)) writeFileSync(key, randomBytes(32).toString('hex'), { mode: 0o600 });
     this.bootstrapToken = readFileSync(key, 'utf8').trim();
   }
@@ -109,7 +93,6 @@ export class Store {
  CREATE TABLE IF NOT EXISTS employee_grants(employee_id TEXT NOT NULL REFERENCES employees(id),user_id TEXT NOT NULL REFERENCES humans(id),PRIMARY KEY(employee_id,user_id));
  CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,name TEXT NOT NULL,kind TEXT NOT NULL,employee_id TEXT,created_at TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS members(conversation_id TEXT NOT NULL REFERENCES conversations(id),user_id TEXT NOT NULL REFERENCES humans(id),last_read INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(conversation_id,user_id));
- CREATE TABLE IF NOT EXISTS employee_conversations(employee_id TEXT NOT NULL,conversation_id TEXT NOT NULL,PRIMARY KEY(employee_id,conversation_id));
  CREATE TABLE IF NOT EXISTS messages(seq INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,conversation_id TEXT NOT NULL REFERENCES conversations(id),thread_id TEXT,author_id TEXT NOT NULL,author_name TEXT NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL,attachments TEXT NOT NULL DEFAULT '[]',created_at TEXT NOT NULL,run_id TEXT,edited_at TEXT,deleted_at TEXT,text_updated_at TEXT);
  CREATE INDEX IF NOT EXISTS message_conversation ON messages(conversation_id,seq);
  CREATE INDEX IF NOT EXISTS message_thread ON messages(conversation_id,thread_id,seq);
@@ -143,6 +126,9 @@ export class Store {
  CREATE INDEX IF NOT EXISTS goal_steps_goal ON goal_steps(goal_id,position);
  CREATE TABLE IF NOT EXISTS goal_updates(id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,author_id TEXT NOT NULL,summary TEXT NOT NULL,evidence TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS goal_updates_goal ON goal_updates(goal_id,created_at);
+ CREATE TABLE IF NOT EXISTS goal_execution(goal_id TEXT PRIMARY KEY REFERENCES goals(id) ON DELETE CASCADE,state TEXT NOT NULL DEFAULT 'saved',next_at TEXT,reason TEXT NOT NULL DEFAULT '',question TEXT NOT NULL DEFAULT '',autonomy TEXT NOT NULL DEFAULT 'prepare',daily_sessions INTEGER NOT NULL DEFAULT 0,session_minutes INTEGER NOT NULL DEFAULT 15,review_minutes INTEGER NOT NULL DEFAULT 1440,stalls INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS goal_cycles(message_id TEXT PRIMARY KEY,goal_id TEXT NOT NULL REFERENCES goals(id) ON DELETE CASCADE,employee_id TEXT NOT NULL,outbox_id TEXT,created_at TEXT NOT NULL,started_at TEXT,finished_at TEXT,report TEXT,cancelled INTEGER NOT NULL DEFAULT 0);
+ CREATE INDEX IF NOT EXISTS goal_cycles_goal ON goal_cycles(goal_id,finished_at,created_at);
  CREATE TABLE IF NOT EXISTS work_items(id TEXT PRIMARY KEY,owner_id TEXT NOT NULL,conversation_id TEXT NOT NULL,request_message_id TEXT NOT NULL,run_id TEXT NOT NULL,goal_id TEXT,title TEXT NOT NULL,done_when TEXT NOT NULL,proof_plan TEXT NOT NULL,checks TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'working',summary TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(owner_id,request_message_id));
  CREATE INDEX IF NOT EXISTS work_items_conversation ON work_items(owner_id,conversation_id,updated_at);
  INSERT OR IGNORE INTO migrations VALUES(1,datetime('now'));
@@ -154,6 +140,18 @@ export class Store {
       this.db.exec('ALTER TABLE messages ADD COLUMN deleted_at TEXT');
     if (!messageColumns.has('text_updated_at'))
       this.db.exec('ALTER TABLE messages ADD COLUMN text_updated_at TEXT');
+    // Edit and resend keeps every version: `version` is the shown version of an edited
+    // message; later messages record which version of which message they followed.
+    if (!messageColumns.has('superseded'))
+      this.db.exec('ALTER TABLE messages ADD COLUMN superseded INTEGER NOT NULL DEFAULT 0');
+    if (!messageColumns.has('version')) this.db.exec('ALTER TABLE messages ADD COLUMN version INTEGER');
+    if (!messageColumns.has('branch_root'))
+      this.db.exec('ALTER TABLE messages ADD COLUMN branch_root TEXT');
+    if (!messageColumns.has('branch_version'))
+      this.db.exec('ALTER TABLE messages ADD COLUMN branch_version INTEGER');
+    this.db.exec(
+      'CREATE TABLE IF NOT EXISTS message_versions(message_id TEXT NOT NULL,version INTEGER NOT NULL,text TEXT NOT NULL,attachments TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(message_id,version))',
+    );
     const memoryColumns = new Set(this.all('PRAGMA table_info(memories)').map((row) => row.name));
     if (!memoryColumns.has('scope'))
       this.db.exec("ALTER TABLE memories ADD COLUMN scope TEXT NOT NULL DEFAULT 'conversation'");
@@ -162,7 +160,9 @@ export class Store {
     const goalColumns = new Set(this.all('PRAGMA table_info(goals)').map((row) => row.name));
     if (!goalColumns.has('lead_agent_id')) {
       this.db.exec('ALTER TABLE goals ADD COLUMN lead_agent_id TEXT');
-      this.db.exec("UPDATE goals SET lead_agent_id=(SELECT employee_id FROM conversations WHERE id=goals.conversation_id AND kind='dm')");
+      this.db.exec(
+        "UPDATE goals SET lead_agent_id=(SELECT employee_id FROM conversations WHERE id=goals.conversation_id AND kind='dm')",
+      );
     }
     this.db.exec(
       'CREATE INDEX IF NOT EXISTS memories_owner_scope ON memories(owner_id,scope,deleted,created_at)',
@@ -191,9 +191,13 @@ export class Store {
   user(id: string) {
     return this.one('SELECT id,name,role FROM humans WHERE id=?', id);
   }
-  authorize(userId: string, conversationId: string, allowArchived = false) {
-    if (!allowArchived && this.setting('channel.archived.' + conversationId))
-      throw new ApiError(410, 'This channel is archived. Restore it to continue the conversation.');
+  authorize(userId: string, conversationId: string) {
+    if (
+      !['dm', 'human_dm'].includes(
+        this.one('SELECT kind FROM conversations WHERE id=?', conversationId)?.kind,
+      )
+    )
+      throw new ApiError(404, 'Conversation unavailable.');
     if (
       !this.one(
         'SELECT 1 FROM members WHERE user_id=? AND conversation_id=?',
@@ -223,115 +227,81 @@ export class Store {
   createOwner(name: string) {
     const id = uid();
     this.orm.insert(schema.humans).values({ id, name, role: 'owner', createdAt: now() }).run();
-    this.ensureTeam();
     return this.user(id);
-  }
-  ensureTeam() {
-    return this.db.transaction(() => {
-      let id = this.setting('workspace.team');
-      if (!id || !this.one("SELECT 1 FROM conversations WHERE id=? AND kind='channel'", id)) {
-        id =
-          this.one(
-            "SELECT id FROM conversations WHERE kind='channel' AND lower(name)='team' ORDER BY created_at LIMIT 1",
-          )?.id || uid();
-        this.run(
-          'INSERT OR IGNORE INTO conversations VALUES(?,?,?,?,?)',
-          id,
-          'Team',
-          'channel',
-          null,
-          now(),
-        );
-        this.set('workspace.team', id);
-      }
-      this.run(
-        'INSERT OR IGNORE INTO members(conversation_id,user_id) SELECT ?,id FROM humans',
-        id,
-      );
-      for (const row of this.all('SELECT id,data FROM employees')) {
-        const added = this.run(
-          'INSERT OR IGNORE INTO employee_conversations VALUES(?,?)',
-          row.id,
-          id,
-        );
-        if (added.changes)
-          this.addMessage(
-            id,
-            row.id,
-            JSON.parse(row.data).name,
-            'system',
-            `${JSON.parse(row.data).name} joined #team.`,
-          );
-      }
-      return id as string;
-    })();
   }
   authorizeEmployee(employeeId: string, conversationId: string) {
     const c = this.one('SELECT * FROM conversations WHERE id=?', conversationId);
-    if (
-      !c ||
-      this.setting('channel.archived.' + conversationId) ||
-      (c.kind !== 'channel' && c.employee_id !== employeeId) ||
-      !this.one(
-        'SELECT 1 FROM employee_conversations WHERE employee_id=? AND conversation_id=?',
-        employeeId,
-        conversationId,
-      )
-    )
+    if (!c || c.kind !== 'dm' || c.employee_id !== employeeId)
       throw new ApiError(
         403,
-        'Private messages are only available to their participants. Coordinate with other employees in a shared channel.',
+        'Private messages are only available to their participants. Use a bounded delegation to share a task with another employee.',
       );
   }
   recordNotifications(message: any, announce = true) {
-    if (!message?.id || !message.text?.trim() || message.kind === 'system') return;
-    const c = this.one('SELECT kind FROM conversations WHERE id=?', message.conversationId);
+    const preparationRun =
+      message?.runId && this.one('SELECT message_id FROM runs WHERE id=?', message.runId);
+    if (preparationRun && this.setting('briefing.message.' + preparationRun.message_id)) return;
+    if (
+      !message?.id ||
+      !message.text?.trim() ||
+      message.kind === 'system' ||
+      this.setting('message.internal.' + message.id, false)
+    )
+      return;
+    if (
+      !['dm', 'human_dm'].includes(
+        this.one('SELECT kind FROM conversations WHERE id=?', message.conversationId)?.kind,
+      )
+    )
+      return;
     for (const human of this.all(
       'SELECT h.id,h.name FROM humans h JOIN members m ON m.user_id=h.id WHERE m.conversation_id=? AND h.id<>?',
       message.conversationId,
       message.authorId,
     )) {
       const tagged = mentionsAtName(message.text, human.name);
-      const follows =
-        message.threadId &&
-        this.one(
-          'SELECT 1 FROM messages WHERE conversation_id=? AND (id=? OR thread_id=?) AND author_id=?',
-          message.conversationId,
-          message.threadId,
-          message.threadId,
-          human.id,
-        );
-      if (c?.kind !== 'channel' || tagged || follows) {
-        const added = this.run(
-          'INSERT OR IGNORE INTO inbox VALUES(?,?,0,?)',
-          human.id,
-          message.id,
-          now(),
-        );
-        if (added.changes && announce)
-          this.emit(
-            'notification.message',
-            message.conversationId,
-            { ...message, tagged },
-            human.id,
-          );
-      }
+      const added = this.run(
+        'INSERT OR IGNORE INTO inbox VALUES(?,?,0,?)',
+        human.id,
+        message.id,
+        now(),
+      );
+      if (added.changes && announce)
+        this.emit('notification.message', message.conversationId, { ...message, tagged }, human.id);
     }
   }
   emit(type: string, conversationId: string | null, payload: any, userId: string | null = null) {
+    const messageId = type.startsWith('message.') ? payload.id : payload.messageId;
+    const internalRun = payload.runId || (type === 'run.changed' ? payload.id : null);
+    if (
+      (messageId && this.setting('message.internal.' + messageId, false)) ||
+      (internalRun && this.setting('run.internal.' + internalRun, false))
+    )
+      // Preserve emit's return contract without publishing internal review traffic.
+      return {
+        id: uid(),
+        type,
+        conversationId,
+        userId,
+        payload,
+        createdAt: now(),
+        cursor: 0,
+        version: 1,
+      } as WorkspaceEvent;
     if (type === 'message.finished') {
       const row = this.one('SELECT * FROM messages WHERE id=?', payload.id);
       if (row) this.recordNotifications({ ...this.message(row), text: payload.text ?? row.text });
     }
     const id = uid();
     const createdAt = now();
+    const compact = compactReplay(type, payload);
     const result = this.run(
       'INSERT INTO events(id,type,conversation_id,user_id,payload,created_at) VALUES(?,?,?,?,?,?)',
       id,
-      type,
+      compact.type,
       conversationId,
       userId,
-      JSON.stringify(payload),
+      compact.json,
       createdAt,
     );
     const event: WorkspaceEvent = {
@@ -364,7 +334,7 @@ export class Store {
   eventsAfter(userId: string, cursor: number) {
     return this.all(
       `SELECT e.* FROM events e WHERE e.cursor>? AND (e.user_id IS NULL OR e.user_id=?) AND ((e.conversation_id IS NULL AND e.user_id IS NOT NULL) OR EXISTS(SELECT 1 FROM members m WHERE m.conversation_id=e.conversation_id AND m.user_id=?)) ORDER BY cursor LIMIT 500`,
-      cursor,
+      Math.max(cursor, this.replay.floor()),
       userId,
       userId,
     ).map((e) => ({
@@ -392,18 +362,28 @@ export class Store {
   createEmployee(ownerId: string, input: any) {
     const id = uid(),
       dmId = uid();
-    const e: Employee = { ...input, id, kind: 'agent', ownerId, dmId, createdAt: now() };
+    const e: Employee = {
+      ...input,
+      canDelegate: input.canDelegate === true,
+      id,
+      kind: 'agent',
+      ownerId,
+      dmId,
+      createdAt: now(),
+    };
     this.db.transaction(() => {
       this.run('INSERT INTO employees VALUES(?,?,?)', id, ownerId, JSON.stringify(e));
       this.run('INSERT INTO conversations VALUES(?,?,?,?,?)', dmId, e.name, 'dm', id, now());
       this.run('INSERT INTO members(conversation_id,user_id) VALUES(?,?)', dmId, ownerId);
-      this.run('INSERT INTO employee_conversations VALUES(?,?)', id, dmId);
-      this.ensureTeam();
+
       this.emit('workspace.changed', null, { employeeId: id }, ownerId);
     })();
     return e;
   }
   message(row: any, compactActivity = false): Message {
+    const preparation =
+      row.kind === 'system' &&
+      /^Prepare for morning briefing [0-9a-f-]+\. This is read-only preparation,/.test(row.text);
     return {
       id: row.id,
       seq: row.seq,
@@ -414,17 +394,31 @@ export class Store {
       conversationId: row.conversation_id,
       threadId: row.thread_id,
       authorId: row.author_id,
-      authorName: row.author_name,
+      authorName: preparation ? 'Morning briefing' : row.author_name,
       kind: row.kind,
-      text: row.text,
+      text: preparation ? 'Prepared for your morning briefing.' : row.text,
       attachments: JSON.parse(row.attachments),
       createdAt: row.created_at,
       textUpdatedAt: row.text_updated_at || undefined,
       editedAt: row.edited_at || undefined,
       deletedAt: row.deleted_at || undefined,
       runId: row.run_id,
+      ...(row.version
+        ? {
+            version: row.version,
+            versionCount: this.one(
+              'SELECT COUNT(*) n FROM message_versions WHERE message_id=?',
+              row.id,
+            ).n,
+          }
+        : {}),
+      ...(row.kind === 'human' &&
+      !row.deleted_at &&
+      this.one('SELECT 1 FROM outbox WHERE message_id=? LIMIT 1', row.id)
+        ? { resendable: true }
+        : {}),
       replyCount: this.one(
-        `SELECT COUNT(*) n FROM messages msg WHERE conversation_id=? AND thread_id=? AND ${sharedMessageSql}`,
+        `SELECT COUNT(*) n FROM messages msg WHERE conversation_id=? AND thread_id=? AND ${visibleMessageSql}`,
         row.conversation_id,
         row.id,
       ).n,
@@ -434,7 +428,7 @@ export class Store {
               ? `SELECT json_object('id',id,'type',json_extract(data,'$.type'),
               'title',json_extract(data,'$.title'),'state',json_extract(data,'$.state'),
               'time',json_extract(data,'$.time'),'updatedAt',json_extract(data,'$.updatedAt'),
-              'url',json_extract(data,'$.url'),
+              'url',json_extract(data,'$.url'),'textOffset',json_extract(data,'$.textOffset'),
               'hasDetail',json(CASE WHEN COALESCE(json_extract(data,'$.detail'),'') != '' THEN 'true' ELSE 'false' END)) data
              FROM activities WHERE run_id=?`
               : 'SELECT data FROM activities WHERE run_id=?',
@@ -449,23 +443,13 @@ export class Store {
     threadId?: string | null,
     compactActivity = false,
   ) {
-    const isRoom =
-      this.one('SELECT kind FROM conversations WHERE id=?', conversationId)?.kind === 'channel';
     const rows = this.all(
-      `SELECT msg.* FROM messages msg WHERE conversation_id=? AND seq<? ${threadId ? 'AND thread_id=?' : 'AND thread_id IS NULL'} ${isRoom ? 'AND ' + sharedMessageSql : ''} ORDER BY seq DESC LIMIT 80`,
+      `SELECT msg.* FROM messages msg WHERE conversation_id=? AND seq<? AND ${visibleMessageSql} ${threadId ? 'AND thread_id=?' : 'AND thread_id IS NULL'} ORDER BY seq DESC LIMIT 80`,
       ...[conversationId, before, ...(threadId ? [threadId] : [])],
     );
-    return rows.reverse().flatMap((r) => {
-      const message = this.message(r, compactActivity);
-      if (!isRoom) return [message];
-      if (r.run_id && this.setting('run.quiet.' + r.run_id, false)) {
-        const shared = this.setting('run.sharedText.' + r.run_id);
-        if (!shared) return [];
-        message.text = shared;
-      }
-      return [{ ...message, activity: [] }];
-    });
+    return rows.reverse().map((row) => this.message(row, compactActivity));
   }
+
   addMessage(
     conversationId: string,
     authorId: string,
@@ -475,6 +459,7 @@ export class Store {
     threadId: string | null = null,
     attachments: string[] = [],
     runId: string | null = null,
+    internal = false,
   ) {
     const id = uid();
     this.run(
@@ -490,6 +475,19 @@ export class Store {
       now(),
       runId,
     );
+    if (internal) this.set('message.internal.' + id, true);
+    // Follow the shown version of the latest edited-and-resent message before this one.
+    const root = this.one(
+      `SELECT id,version FROM messages WHERE conversation_id=? AND ${threadId ? 'thread_id=?' : 'thread_id IS NULL'} AND version IS NOT NULL AND superseded=0 AND id<>? ORDER BY seq DESC LIMIT 1`,
+      ...[conversationId, ...(threadId ? [threadId] : []), id],
+    );
+    if (root)
+      this.run(
+        'UPDATE messages SET branch_root=?,branch_version=? WHERE id=?',
+        root.id,
+        root.version,
+        id,
+      );
     const m = this.message(this.one('SELECT * FROM messages WHERE id=?', id));
     this.emit('message.created', conversationId, m);
     if (!runId) this.recordNotifications(m);
@@ -537,88 +535,20 @@ export class Store {
           throw new ApiError(400, 'An attachment is not ready for this conversation.');
       }
       const conv = this.one('SELECT * FROM conversations WHERE id=?', conversationId);
-      if (this.setting('channel.archived.' + conversationId))
-        throw new ApiError(409, 'Restore this room before posting.');
-      const channelTargets =
-        conv.kind === 'channel' && mentionsAtName(input.text, conv.name)
-          ? this.all(
-              'SELECT employee_id FROM employee_conversations WHERE conversation_id=?',
-              conversationId,
-            ).map((row) => row.employee_id)
-          : [];
-      const employeeMentions =
-        conv.kind === 'channel'
-          ? this.all(
-              'SELECT id,data FROM employees WHERE owner_id=? OR id IN (SELECT employee_id FROM employee_grants WHERE user_id=?)',
-              user.id,
-              user.id,
-            )
-              .map((row: any) => ({ id: row.id, ...JSON.parse(row.data) }))
-              .filter((e: any) => !e.deactivatedAt && mentionsAtName(input.text, e.name))
-          : [];
-      // A #room call wakes one room lead; @room remains the explicit broadcast.
-      // Keep room routing in shared conversations so a private DM never invites outsiders.
-      const roomTargets =
-        conv.kind === 'channel'
-          ? this.all(
-              `SELECT c.id,c.name FROM conversations c
-               JOIN members m ON m.conversation_id=c.id
-               WHERE c.kind='channel' AND m.user_id=?`,
-              user.id,
-            )
-              .filter((room) => mentionsRoom(input.text, room.name))
-              .flatMap((room) => {
-                const lead = this.all(
-                  `SELECT e.data,e.rowid AS employeeOrder FROM employee_conversations ec
-                   JOIN employees e ON e.id=ec.employee_id WHERE ec.conversation_id=?`,
-                  room.id,
-                )
-                  .map((row) => ({ ...JSON.parse(row.data), employeeOrder: row.employeeOrder }))
-                  .filter((e) => !e.deactivatedAt && this.canUseEmployee(user.id, e.id))
-                  .sort(
-                    (a, b) =>
-                      a.createdAt.localeCompare(b.createdAt) || a.employeeOrder - b.employeeOrder,
-                  )[0];
-                return lead ? [lead.id] : [];
-              })
-          : [];
       const targets = Array.from(
-        new Set<string>([
-          ...(input.recipients.length
-            ? input.recipients
-            : conv.employee_id
-              ? [conv.employee_id]
-              : []),
-          ...channelTargets,
-          ...roomTargets,
-          ...employeeMentions.map((e: any) => e.id),
-        ]),
+        new Set<string>(
+          input.recipients.length ? input.recipients : conv.employee_id ? [conv.employee_id] : [],
+        ),
       );
-      if (!targets.length && input.threadId && conv.kind === 'channel') {
-        const root = this.one('SELECT author_id,kind FROM messages WHERE id=?', input.threadId);
-        const owners =
-          root?.kind === 'agent'
-            ? [{ employee_id: root.author_id }]
-            : this.all(
-                'SELECT DISTINCT employee_id FROM outbox WHERE message_id=?',
-                input.threadId,
-              );
-        if (owners.length === 1) targets.push(owners[0].employee_id);
-      }
       for (const target of targets) {
-        if (conv.kind !== 'channel' && conv.employee_id !== target)
+        if (conv.employee_id !== target)
           throw new ApiError(
             403,
-            'Other employees cannot join a private direct message. Use a shared channel.',
+            'Other employees cannot join a private direct message. Open their conversation instead.',
           );
         const e = this.employee(target);
         if (!e || !this.canUseEmployee(user.id, e.id))
           throw new ApiError(403, 'The account owner must grant access to this employee.');
-        this.run(
-          'INSERT OR IGNORE INTO employee_conversations VALUES(?,?)',
-          target,
-          conversationId,
-        );
       }
       const message = this.addMessage(
         conversationId,
@@ -649,7 +579,7 @@ export class Store {
           input.newTask ? 'new' : 'pending',
           now(),
         );
-        if (employeeMentions.some((employee: any) => employee.id === target))
+        if (mentionsAtName(input.text, this.employee(target)!.name))
           this.set('outbox.mention.' + outboxId, true);
       }
       this.run(
@@ -681,6 +611,7 @@ export class Store {
     });
   }
   close() {
+    this.replay.close();
     this.db.close();
   }
 }

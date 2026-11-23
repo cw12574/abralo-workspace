@@ -33,26 +33,17 @@ const growth = store.createEmployee(owner.id, {
   cwd: '',
   instructions: '',
 });
-const channel = uid();
-store.run(
-  'INSERT INTO conversations VALUES(?,?,?,?,?)',
-  channel,
-  'product',
-  'channel',
-  null,
-  now(),
-);
-store.run('INSERT INTO members(conversation_id,user_id) VALUES(?,?)', channel, owner.id);
-store.set('conversation.workingFolder.' + channel, dir);
+const conversationId = growth.dmId;
+store.set('conversation.workingFolder.' + conversationId, dir);
 const threadRoot = store.addMessage(
-  channel,
+  conversationId,
   owner.id,
   'Chris',
   'human',
   'Let’s make the first experience feel effortless.',
 );
 store.addMessage(
-  channel,
+  conversationId,
   growth.id,
   growth.name,
   'agent',
@@ -60,14 +51,14 @@ store.addMessage(
   threadRoot.id,
 );
 store.addMessage(
-  channel,
+  conversationId,
   chief.id,
   chief.name,
   'agent',
-  'The foundation is ready for review.\n\n- Messages persist through a restart.\n- Employee identities stay separate from their model sessions.\n- Reviews happen here, in conversation.\n\n@Ada — please check the attachment flow next. Use #team to share the result; literal `@Ada #team` stays code.',
+  'The foundation is ready for review.\n\n- Messages persist through a restart.\n- Employee identities stay separate from their model sessions.\n- Reviews happen here, in conversation.\n\n@Ada — please check the attachment flow next. Send the findings back; literal `@Ada sample` stays code.',
 );
 const adaReply = store.addMessage(
-  channel,
+  conversationId,
   ada.id,
   ada.name,
   'agent',
@@ -110,14 +101,14 @@ for (const [index, activity] of [
 }
 const { app } = await createApp(store);
 // Persist synthetic run state so cache revalidation sees the same fixture as events.
-for (const [runId, message, conversationId] of [
-  ['synthetic-stream', adaReply, channel],
+for (const [runId, message, runConversationId] of [
+  ['synthetic-stream', adaReply, conversationId],
   ['synthetic-toolchain', toolReply, ada.dmId],
 ] as const) {
   store.run(
     'INSERT INTO runs(id,conversation_id,user_id,employee_id,message_id,response_id,state,created_at,updated_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,?)',
     runId,
-    conversationId,
+    runConversationId,
     owner.id,
     ada.id,
     message.id,
@@ -140,7 +131,7 @@ const bootstrap = await page.request.post(address + '/api/bootstrap', {
 });
 if (!bootstrap.ok()) throw new Error(await bootstrap.text());
 await page.goto(address);
-await page.getByRole('button', { name: 'product', exact: false }).first().click();
+await page.getByRole('button', { name: 'Growth Engineer', exact: false }).first().click();
 const focusedComposer = page.getByRole('textbox', { name: 'Message', exact: true });
 await focusedComposer.fill('Keep this draft focused');
 await focusedComposer.focus();
@@ -149,7 +140,7 @@ const accessDecisionId = uid();
 store.run(
   'INSERT INTO runs(id,conversation_id,thread_id,user_id,employee_id,message_id,response_id,state,created_at,updated_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
   accessRunId,
-  channel,
+  conversationId,
   null,
   owner.id,
   ada.id,
@@ -178,7 +169,7 @@ await page.evaluate((conversationId) => {
       detail: { conversationId, type: 'decision.created', payload: { id: 'new-access-request' } },
     }),
   );
-}, channel);
+}, conversationId);
 await page.getByRole('textbox', { name: 'Approved GitHub repository' }).waitFor();
 const accessCard = page
   .locator('.decision')
@@ -193,35 +184,20 @@ await page.keyboard.type(' still goes to the composer');
 if ((await focusedComposer.inputValue()) !== 'Keep this draft focused still goes to the composer')
   throw new Error('Typing after an access request did not stay in the composer');
 await focusedComposer.fill('');
-await page.getByRole('button', { name: 'product', exact: false }).first().click();
+await page.getByRole('button', { name: 'Growth Engineer', exact: false }).first().click();
 await page.locator('.entity-mention').getByText('@Ada', { exact: true }).waitFor();
-await page.locator('.entity-channel').getByText('#team', { exact: true }).click();
-await page.getByRole('heading', { name: 'Team', exact: true }).waitFor();
-if (!(await page.getByRole('button', { name: '#product', exact: false }).first().isVisible()))
-  throw new Error('Room names in the sidebar do not show their # reference');
-const roomComposer = page.getByRole('textbox', { name: 'Message', exact: true });
-await roomComposer.fill('#pro');
-await page.getByRole('listbox', { name: 'Choose a room' }).waitFor();
-await page.getByRole('option', { name: /#product/ }).waitFor();
-if ((await page.getByRole('option').count()) !== 1)
-  throw new Error('Room suggestions did not filter to the matching room');
-await page.screenshot({ path: 'evidence/room-suggestions.png' });
-await roomComposer.press('Enter');
-if ((await roomComposer.inputValue()) !== '#product ')
-  throw new Error('Selecting a room did not insert its # reference');
-await roomComposer.fill('');
-await page.getByRole('button', { name: 'product', exact: false }).first().click();
-const literalCode = page.locator('.prose code').getByText('@Ada #team', { exact: true });
+await expect(page.getByRole('button', { name: 'Add room', exact: true })).toHaveCount(0);
+const literalCode = page.locator('.prose code').getByText('@Ada sample', { exact: true });
 if ((await literalCode.count()) !== 1)
   throw new Error(
-    `Inline code content was transformed as a mention or channel reference: ${JSON.stringify(await page.locator('.prose code').allTextContents())}`,
+    `Inline code content was transformed as a mention or conversationId reference: ${JSON.stringify(await page.locator('.prose code').allTextContents())}`,
   );
 await page
   .getByRole('textbox', { name: 'Message', exact: true })
   .fill('Draft retained across conversations');
 await page.waitForTimeout(650);
 await page.getByRole('button', { name: 'Chief of Staff', exact: false }).first().click();
-await page.getByRole('button', { name: 'product', exact: false }).first().click();
+await page.getByRole('button', { name: 'Growth Engineer', exact: false }).first().click();
 await page.waitForTimeout(500);
 if (
   (await page.getByRole('textbox', { name: 'Message', exact: true }).inputValue()) !==
@@ -324,7 +300,7 @@ await page.evaluate(
     );
   },
   {
-    conversationId: channel,
+    conversationId: conversationId,
     messageId: adaReply.id,
     run: store.one("SELECT * FROM runs WHERE id='synthetic-stream'"),
     offset: adaReply.text.length,
@@ -398,11 +374,11 @@ const timelineText = (await timelineSteps.allTextContents()).join('|');
 if (timelineText.indexOf('Read project files') > timelineText.indexOf('Run focused checks'))
   throw new Error('Toolchain steps are not shown in chronological order');
 await page.screenshot({ path: 'evidence/agent-toolchain.png' });
-await page.getByRole('button', { name: 'product', exact: false }).first().click();
-const team = store.one("SELECT id FROM conversations WHERE lower(name)='team'");
+await page.getByRole('button', { name: 'Growth Engineer', exact: false }).first().click();
+const notificationConversation = { id: chief.dmId };
 store.emit(
   'notification.message',
-  team.id,
+  notificationConversation.id,
   { id: threadRoot.id, authorName: growth.name, text: 'A useful update arrived.', threadId: null },
   owner.id,
 );
@@ -433,7 +409,7 @@ if (!(await notificationButton.evaluate((el) => el === document.activeElement)))
 await page.screenshot({ path: 'evidence/workspace-desktop.png', fullPage: true });
 await page.getByRole('button', { name: 'Toggle theme' }).click();
 const darkConfirmMessage = store.addMessage(
-  channel,
+  conversationId,
   owner.id,
   owner.name,
   'human',
@@ -473,7 +449,7 @@ await page.screenshot({ path: 'evidence/message-edit-mobile.png' });
 await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 await page.setViewportSize({ width: 1033, height: 768 });
 const planMessage = store.addMessage(
-  channel,
+  conversationId,
   chief.id,
   chief.name,
   'agent',
@@ -485,7 +461,7 @@ await page.evaluate((conversationId) => {
       detail: { conversationId, type: 'artifact.created', payload: {} },
     }),
   );
-}, channel);
+}, conversationId);
 const planCover = page
   .locator('.message')
   .filter({ hasText: 'A concise plan for the next workstream:' })
@@ -524,7 +500,7 @@ console.log(
       'batched streaming updates without a blinking caret',
       'thread open/close',
       'thread mention suggestions and keyboard selection',
-      'sidebar # room labels and filtered composer room suggestions',
+      'agent navigation has no room creation controls',
       'incoming access requests keep composer focus',
       'messages and following access requests have no overlap',
       'dismissible bottom-right notification toast',

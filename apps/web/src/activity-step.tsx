@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { Activity } from '../../../packages/contracts/src/index';
 import { api } from './api';
+import { conversationCache } from './conversation-cache';
 
 export function ActivityStep({
   activity,
@@ -14,7 +15,7 @@ export function ActivityStep({
   title: string;
   time: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => conversationCache.isExpanded(messageId, activity.id));
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{ key: string; detail?: string; error?: string } | null>(
     null,
@@ -51,11 +52,18 @@ export function ActivityStep({
       className={`toolchain-step state-${activity.state || 'complete'} ${activity.state === 'failed' ? 'is-failed' : ''}`}
     >
       <span className="toolchain-node" aria-hidden="true" />
-      <details className="tool-detail" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <details
+        className="tool-detail"
+        open={open}
+        onToggle={(event) => {
+          setOpen(event.currentTarget.open);
+          conversationCache.setExpanded(messageId, activity.id, event.currentTarget.open);
+        }}
+      >
         <summary>
           <span>{title}</span>
           <time>{time}</time>
-          <ChevronDown size={12} aria-hidden="true" />
+          <ChevronRight size={12} aria-hidden="true" />
         </summary>
         {open && (
           <>

@@ -105,7 +105,7 @@ try {
   await choose('Atlas');
   await expect(page.getByText('Latest Atlas response', { exact: true })).toBeVisible();
   const compactHistory = await page.request.get(
-    `${origin}/api/conversations/${agents[0].dmId}/messages?agentView=1&activity=summary`,
+    `${origin}/api/conversations/${agents[0].dmId}/messages?activity=summary`,
   );
   expect((await compactHistory.body()).length).toBeLessThan(100000);
   let detailRequests = 0;
@@ -116,7 +116,7 @@ try {
       await route.fulfill({ status: 503, json: { error: 'Step temporarily unavailable' } });
     else await route.continue();
   });
-  await page.getByRole('button', { name: 'Show 2 activity steps' }).click();
+  await page.getByRole('button', { name: /^Show activity timeline/ }).click();
   expect(detailRequests).toBe(0);
   await page.locator('.tool-detail summary').filter({ hasText: 'Inspect changes' }).click();
   await expect(page.getByRole('button', { name: 'Retry step details' })).toBeVisible();
@@ -138,7 +138,7 @@ try {
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
   await page.screenshot({ path: 'evidence/conversation-detail-mobile.png' });
   await page.setViewportSize({ width: 1280, height: 640 });
-  await page.getByRole('button', { name: 'Hide 2 activity steps' }).click();
+  await page.getByRole('button', { name: /^Hide activity timeline/ }).click();
   report.checks.push(
     '20 MiB of tool output stays out of history; details load only on opening and recover after failure',
   );

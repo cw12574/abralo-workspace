@@ -1,26 +1,6 @@
-# Abralo â€” lasting goals for your AI team
+# Abralo
 
-**Give your AI team a goal you can pick up tomorrow.**
-
-Abralo is an open-source, local workspace for people and coding agents. Keep an outcome, its current position, decisions and next step together across sessions. A named lead maintains the goal; substantial tasks record checks and inspectable results.
-
-1. Tell your agent what you want to achieve and ask it to keep a lasting goal.
-2. Agree on success and a useful next step. Ask the agent to do that work and show its checks.
-3. Reopen Abralo, review the saved progress and continue the same project.
-
-Work starts from your requests or an explicit schedule. Lasting goals do not promise continuous background execution or guaranteed outcomes. Ordinary conversation remains available while work runs.
-
-**[Website and assisted trial](https://abralo.com/#try)** Â· **[Release status and older previews](https://github.com/cw12574/abralo-workspace/releases)** Â· **[Goals walkthrough](docs/preview/GOALS-TRIAL.md)** Â· **[Setup guide](docs/preview/START-HERE.md)**
-
-## Durable-goals release candidate
-
-Version `0.2.0-preview` adds lasting goals, task checks, shared browser tools and durable connection actions. Windows x64, Linux x64, macOS Intel and macOS Apple silicon are build targets. Until a release is published with matching assets and checksums, a CI build is a candidate, not a supported download. The older `0.1.3-preview` download does not include durable goals.
-
-Use disposable, non-sensitive files and your own supported provider account for initial trials. Packages are unsigned; macOS notarization and interactive platform acceptance remain separate checks. Model requests go to your selected provider. See [release notes](docs/preview/RELEASE-NOTES.md) and [data durability requirements](docs/preview/DATA-DURABILITY.md).
-
-This source tree is licensed under [Apache-2.0](LICENSE).
-
-## Source development
+Abralo is a local, cross-platform workspace where people and AI agents work together through direct conversations, goals, and project context. The Chief of Staff can delegate bounded tasks and return results to the original conversation. Other agents can opt in through the "Delegate work and create employees" setting when created or edited. Start with the [tester guide](docs/preview/START-HERE.md) and [conversation workflow](docs/conversation-workflow.md). This source tree is licensed under [Apache-2.0](LICENSE).
 
 Requires Node 24.16+ (24.x) for source development. `pnpm install`, `pnpm exec playwright install chromium`, `pnpm build`, `pnpm test`, `pnpm start`. `pnpm dev` runs the service from source; `pnpm web` runs Vite. The service serves built browser assets at http://127.0.0.1:4317.
 
@@ -32,7 +12,7 @@ Native harnesses use the owner's supported login. Invitations do not grant other
 
 This is a working preview, not a signed public release. No sample conversations or simulated agent activity are installed in the user's workspace.
 
-On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings â†’ General lets you turn automatic startup off or on.
+On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings → General lets you turn automatic startup off or on.
 
 The default data directory is `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS and `$XDG_DATA_HOME/AgentWorkspace` (or `~/.local/share/AgentWorkspace`) on Linux. Installation code and user data are separate. Backups omit provider tokens; `scripts/restore.mjs` restores into a new directory and leaves schedules disabled until explicitly re-enabled.
 
@@ -46,7 +26,7 @@ Notifications are on by default. The installed, single-user Windows host sends d
 
 ## Packaging and development
 
-All direct dependency versions and the lockfile are pinned. `pnpm build` emits the web bundle and service modules. No Docker, Redis, external vector database or Electron runtime is required. Desktop packages include Chromium for agent browser sessions. Native coding harnesses and Chromium dominate the installation's disk size; the service's measured memory is not a total-agent memory claim.
+All direct dependency versions and the lockfile are pinned. `pnpm build` emits the web bundle and service modules. No Docker, Redis, external vector database or Electron runtime is required. Windows packages include Chromium for agent browser sessions. Native coding harnesses and Chromium dominate the installation's disk size; the service's measured memory is not a total-agent memory claim.
 
 Set `WORKSPACE_PNPM_CLI` to pnpm's JavaScript entry point and run `node scripts/package.mjs NEW_OUTPUT_DIRECTORY`. Packaging uses a hoisted production dependency tree for portable Windows copies, includes the pinned Chromium browser, and removes redundant OpenCode binary copies. On Windows run `scripts/install-windows.ps1 -ReleaseDirectory OUTPUT`. On macOS/Linux run the packaged `runtime/node scripts/install-posix.mjs`; those installers still require platform acceptance testing.
 

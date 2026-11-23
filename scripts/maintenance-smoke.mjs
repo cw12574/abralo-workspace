@@ -8,6 +8,8 @@ import {
   readFileSync,
   writeFileSync,
   symlinkSync,
+  linkSync,
+  unlinkSync,
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -15,8 +17,13 @@ import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { Store } from '../dist/service/apps/service/src/store.js';
-import { alive, health, readJson } from '../dist/service/apps/service/src/maintenance-files.js';
+import { pathToFileURL } from 'node:url';
+import { gunzipSync } from 'node:zlib';
+const built = resolve(process.env.WORKSPACE_TEST_DIST || 'dist');
+const { Store } = await import(pathToFileURL(join(built, 'service/apps/service/src/store.js')));
+const { alive, health, readJson } = await import(
+  pathToFileURL(join(built, 'service/apps/service/src/maintenance-files.js'))
+);
 const source = resolve('.');
 const fixture = mkdtempSync(join(tmpdir(), 'workspace-maintenance-'));
 const install = join(fixture, 'program');
@@ -31,9 +38,15 @@ const errors = [];
 function version(name, bad = false) {
   const root = join(install, 'versions', name);
   mkdirSync(root);
-  cpSync(join(source, 'dist'), join(root, 'dist'), { recursive: true });
+  cpSync(built, join(root, 'dist'), { recursive: true });
   mkdirSync(join(root, 'scripts'));
-  for (const file of ['launcher.mjs', 'maintenance-helper.mjs', 'installed-launcher.mjs'])
+  for (const file of [
+    'launcher.mjs',
+    'maintenance-helper.mjs',
+    'maintenance-compact.mjs',
+    'maintenance-build.mjs',
+    'installed-launcher.mjs',
+  ])
     copyFileSync(join(source, 'scripts', file), join(root, 'scripts', file));
   copyFileSync(join(source, 'package.json'), join(root, 'package.json'));
   symlinkSync(
@@ -42,9 +55,39 @@ function version(name, bad = false) {
     process.platform === 'win32' ? 'junction' : 'dir',
   );
   mkdirSync(join(root, 'runtime'));
-  copyFileSync(
-    process.execPath,
-    join(root, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'),
+  const runtime = join(root, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
+  try {
+    linkSync(process.execPath, runtime);
+  } catch {
+    copyFileSync(process.execPath, runtime);
+  }
+  const main = join(root, 'dist/service/apps/service/src/main.js');
+  writeFileSync(
+    main,
+    readFileSync(main, 'utf8').replace(
+      'const host =',
+      `
+const { existsSync: fixtureExists, unlinkSync: fixtureUnlink, writeFileSync: fixtureWrite } = await import('node:fs');
+const originalBackup = store.db.backup.bind(store.db);
+store.db.backup = (...args) => {
+  const crash = join(store.dir, 'crash-backup-once');
+  if (fixtureExists(crash)) {
+    fixtureUnlink(crash);
+    fixtureWrite(args[0], 'incomplete fixture backup');
+    process.exit(91);
+  }
+  return originalBackup(...args);
+};
+const hold = join(store.dir, 'hold-fixture-work');
+if (fixtureExists(hold)) {
+  supervisor.active.set('fixture-work', new AbortController());
+  const poll = setInterval(() => {
+    if (!fixtureExists(hold)) { supervisor.active.delete('fixture-work'); clearInterval(poll); }
+  }, 100);
+  poll.unref();
+}
+const host =`,
+    ),
   );
   writeFileSync(
     join(root, 'release.json'),
@@ -60,6 +103,15 @@ function version(name, bad = false) {
   return root;
 }
 const a = version('version-a');
+// Model the currently installed controller: it has no compaction handoff flag.
+const legacyController = join(a, 'dist/service/apps/service/src/maintenance.js');
+writeFileSync(
+  legacyController,
+  readFileSync(legacyController, 'utf8').replace(
+    'compactOnHandoff: true',
+    'compactOnHandoff: false',
+  ),
+);
 const b = version('version-b');
 const bad = version('version-broken', true);
 const incompatible = version('version-schema-change');
@@ -75,6 +127,7 @@ copyFileSync(join(source, 'scripts/installed-launcher.mjs'), join(install, 'laun
 writeFileSync(join(install, 'current.txt'), a + '\n');
 const store = new Store(data);
 const owner = store.createOwner('Fixture owner');
+store.set('notifications.' + owner.id, { enabled: false, sound: false, privatePreview: true });
 store.set('workspace.onboarded', true);
 const agent = store.createEmployee(owner.id, {
   name: 'Fixture agent',
@@ -91,8 +144,19 @@ const original = store.addMessage(
   'human',
   'Keep this conversation through an update.',
 );
+store.run(
+  'INSERT INTO drafts(user_id,conversation_id,thread_id,data) VALUES(?,?,?,?)',
+  owner.id,
+  agent.dmId,
+  '',
+  JSON.stringify({ text: 'Keep my unsent draft' }),
+);
+store.db.exec('CREATE TABLE compaction_fixture(payload BLOB)');
+store.db.prepare('INSERT INTO compaction_fixture VALUES(zeroblob(?))').run(20 * 1024 ** 2);
+store.db.exec('DELETE FROM compaction_fixture');
 const cookie = 'workspace=' + store.newSession(owner.id);
 const member = store.createOwner('Fixture member');
+store.set('notifications.' + member.id, { enabled: false, sound: false, privatePreview: true });
 store.run("UPDATE humans SET role='member' WHERE id=?", member.id);
 const memberCookie = 'workspace=' + store.newSession(member.id);
 store.close();
@@ -117,6 +181,14 @@ async function until(fn, timeout = 45000) {
   }
   throw new Error('Timed out waiting for fixture condition');
 }
+async function prepare(input) {
+  const queued = await api('maintenance/prepare', input);
+  assert.equal(queued.job.phase, 'queued');
+  await until(() => ['prepared', 'failed'].includes(readJson(jobFile(queued.job.id)).phase));
+  const result = await api('maintenance');
+  assert.equal(result.job.phase, 'prepared', JSON.stringify(result));
+  return result;
+}
 async function launch() {
   const child = spawn(process.execPath, [join(install, 'launcher.mjs'), '--background'], {
     cwd: install,
@@ -138,6 +210,31 @@ async function launch() {
   });
   assert.equal(code, 0, errors.join(''));
 }
+async function launchBackgroundShortcut() {
+  if (process.platform !== 'win32') return launch();
+  const child = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      join(install, 'Background Workspace.ps1'),
+    ],
+    {
+      cwd: install,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  child.stdout.resume();
+  child.stderr.on('data', (d) => errors.push(d.toString()));
+  const code = await new Promise((r, reject) => {
+    child.once('error', reject);
+    child.once('exit', r);
+  });
+  assert.equal(code, 0, errors.join(''));
+}
 const jobFile = (id) => join(data, 'maintenance', id, 'job.json');
 async function terminal(id, expected) {
   await until(() => ['succeeded', 'rolled-back', 'failed'].includes(readJson(jobFile(id)).phase));
@@ -149,11 +246,18 @@ async function terminal(id, expected) {
   });
   // Mutation gate is released by the new process on its next controller tick.
   await delay(350);
-  const db = new Database(job.backup, { readonly: true });
+  if (expected === 'succeeded') await until(() => readJson(jobFile(id)).backup.endsWith('.gz'));
+  const latestBackup = readJson(jobFile(id)).backup;
+  const verified = latestBackup.endsWith('.gz')
+    ? join(data, 'maintenance', id, 'verified-archive.db')
+    : latestBackup;
+  if (latestBackup.endsWith('.gz')) writeFileSync(verified, gunzipSync(readFileSync(latestBackup)));
+  const db = new Database(verified, { readonly: true });
   assert.equal(db.pragma('quick_check', { simple: true }), 'ok');
   db.close();
 }
 try {
+  writeFileSync(join(data, 'hold-fixture-work'), 'fixture only');
   await launch();
   assert.equal((await health(port)).buildId, 'version-a');
   const initialPid = readJson(join(data, 'runtime.json')).pid;
@@ -164,13 +268,16 @@ try {
   });
   assert.equal(unauthenticated.status, 401);
   const nonOwner = await fetch(url + '/api/maintenance/prepare', {
-    method: 'POST', headers: { ...headers, cookie: memberCookie }, body: '{}',
+    method: 'POST',
+    headers: { ...headers, cookie: memberCookie },
+    body: '{}',
   });
   assert.equal(nonOwner.status, 403);
-  await api('maintenance/prepare', { candidateRoot: fixture }, 500);
+  const invalid = await api('maintenance/prepare', { candidateRoot: fixture });
+  await until(() => readJson(jobFile(invalid.job.id)).phase === 'failed');
   assert(alive(initialPid));
   checks.push('owner-only API; invalid candidate leaves original service running');
-  const prepared = await api('maintenance/prepare', { candidateRoot: b });
+  const prepared = await prepare({ candidateRoot: b });
   assert.equal(prepared.job.phase, 'prepared');
   assert(alive(initialPid));
   await api('maintenance/execute', { jobId: prepared.job.id });
@@ -180,16 +287,44 @@ try {
     headers,
     body: JSON.stringify({ jobId: prepared.job.id }),
   }).catch(() => null);
-  assert(!duplicate || [409, 503].includes(duplicate.status));
+  assert(!duplicate || [200, 409, 503].includes(duplicate.status));
+  await until(() => readJson(jobFile(prepared.job.id)).phase === 'draining');
+  assert.equal((await api('maintenance')).job.waitingForWork, true);
+  // Simulate a service crash during productive work. The independent helper
+  // must recover the same queue without a manual launcher or resubmission.
+  process.kill(initialPid, 'SIGKILL');
+  await until(() => !alive(initialPid));
+  assert(existsSync(join(data, 'maintenance/active.json')));
+  await until(async () => (await health(port))?.buildId === 'version-a');
+  await until(() => {
+    const job = readJson(jobFile(prepared.job.id));
+    return job.oldPid !== initialPid && job.phase === 'draining';
+  });
+  assert.equal((await api('maintenance')).job.id, prepared.job.id);
+  assert.equal((await health(port)).buildId, 'version-a');
+  unlinkSync(join(data, 'hold-fixture-work'));
   await terminal(prepared.job.id, 'succeeded');
   assert(!alive(initialPid));
   assert.equal((await health(port)).buildId, 'version-b');
   assert.equal(readFileSync(join(install, 'current.txt'), 'utf8').trim(), b);
   assert.equal((await api(`messages/${original.id}`)).text, original.text);
-  checks.push(
-    'helper survives original service exit; switches build; session/message persist; verified backup; duplicate rejected',
+  const compactedJob = readJson(jobFile(prepared.job.id));
+  assert.equal(compactedJob.compaction.state, 'switched');
+  assert.equal(compactedJob.compactionHandledBy, 'startup');
+  assert(compactedJob.compaction.recoveredBytes > 16 * 1024 ** 2);
+  const kept = new Database(join(data, 'workspace.db'), { readonly: true });
+  assert.equal(
+    JSON.parse(kept.prepare('SELECT data FROM drafts WHERE user_id=?').get(owner.id).data).text,
+    'Keep my unsent draft',
   );
-  const failing = await api('maintenance/prepare', { candidateRoot: bad });
+  kept.close();
+  checks.push(
+    'closed-database compaction, complete row verification, draft preservation and verified compressed recovery archives',
+  );
+  checks.push(
+    'approved queue survives service crash; helper automatically recovers it without relaunch; work release installs automatically; session/message persist; backup verified; no duplicate helper',
+  );
+  const failing = await prepare({ candidateRoot: bad });
   await api('maintenance/execute', { jobId: failing.job.id });
   await terminal(failing.job.id, 'rolled-back');
   assert.equal((await health(port)).buildId, 'version-b');
@@ -197,7 +332,7 @@ try {
   checks.push(
     'failed candidate automatically returns to previous compatible build without restoring data',
   );
-  const restart = await api('maintenance/prepare', {});
+  const restart = await prepare({});
   const before = readJson(join(data, 'runtime.json')).pid;
   await api('maintenance/execute', { jobId: restart.job.id });
   await terminal(restart.job.id, 'succeeded');
@@ -207,7 +342,31 @@ try {
   checks.push(
     'same-version restart; stable launcher follows selected build and reuses healthy service',
   );
-  const unsafe = await api('maintenance/prepare', { candidateRoot: incompatible });
+  writeFileSync(join(data, 'crash-backup-once'), 'fixture only');
+  const interrupted = await prepare({});
+  await api('maintenance/execute', { jobId: interrupted.job.id });
+  await terminal(interrupted.job.id, 'succeeded');
+  assert.equal(readJson(jobFile(interrupted.job.id)).serviceRestarts, 1);
+  assert.equal((await api(`messages/${original.id}`)).text, original.text);
+  assert(!existsSync(join(data, 'maintenance', interrupted.job.id, 'workspace.db.partial')));
+  checks.push(
+    'service crash during backup automatically recovers; incomplete backup replaced and verified; original approval retained',
+  );
+  const shortcutPid = readJson(join(data, 'runtime.json')).pid;
+  process.kill(shortcutPid, 'SIGKILL');
+  await until(() => !alive(shortcutPid));
+  // A historical runtime path must never be baked into the sign-in script.
+  if (process.platform === 'win32') {
+    const script = readFileSync(join(install, 'Background Workspace.ps1'), 'utf8');
+    assert(script.includes('current.txt'));
+    assert(!script.includes(a));
+  }
+  await launchBackgroundShortcut();
+  await until(async () => (await health(port))?.buildId === 'version-b');
+  checks.push(
+    'Windows background sign-in launcher starts the currently selected release after service exit',
+  );
+  const unsafe = await prepare({ candidateRoot: incompatible });
   await api('maintenance/execute', { jobId: unsafe.job.id });
   await until(() => readJson(jobFile(unsafe.job.id)).phase === 'failed');
   const unsafeJob = readJson(jobFile(unsafe.job.id));

@@ -7,6 +7,7 @@ const store = new Store(join(tmpdir(), `workspace-proposal-preview-${uid()}`));
 const user = store.createOwner('Morgan');
 const chief = store.createEmployee(user.id, {
   name: 'Chief of Staff',
+    canDelegate: true,
   harness: 'codex',
   role: 'Coordinates both projects',
   model: '',
@@ -19,7 +20,7 @@ const proposals = [
     version: 1,
     conversationId: chief.dmId,
     chiefId: chief.id,
-    purpose: 'Grow PollyTalks and launch Abralo with separate project teams.',
+    purpose: 'Grow PollyTalks and launch Abralo with focused roles.',
     approved: false,
     employees: [
       { name: 'Growth Lead', role: 'Customer research and revenue growth', harness: 'codex' },
@@ -32,18 +33,6 @@ const proposals = [
         name: 'Developer Advocate',
         role: 'Developer adoption and open source community',
         harness: 'codex',
-      },
-    ],
-    rooms: [
-      {
-        name: 'PollyTalks',
-        purpose: 'Grow school adoption and recurring revenue.',
-        employeeIndexes: [0, 1],
-      },
-      {
-        name: 'Abralo',
-        purpose: 'Build developer adoption, feedback and launch readiness.',
-        employeeIndexes: [1, 2],
       },
     ],
   },

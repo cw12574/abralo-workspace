@@ -20,12 +20,22 @@ const data =
     'AgentWorkspace',
   );
 const lock = join(data, 'maintenance/active.json');
-if (existsSync(lock))
-  throw new Error(
-    'An update is pending or needs recovery. Inspect ' +
-      join(data, 'maintenance/latest.json') +
-      ' and its job status before starting another service.',
-  );
+if (existsSync(lock)) {
+  const { id } = JSON.parse(readFileSync(lock, 'utf8'));
+  if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid pending update identity.');
+  const job = JSON.parse(readFileSync(join(data, 'maintenance', id, 'job.json'), 'utf8'));
+  const recoverable =
+    ['armed', 'draining'].includes(job.phase) &&
+    normalize(realpathSync(job.previous.root)) === normalize(root) &&
+    normalize(realpathSync(job.installRoot)) === normalize(realpathSync(installRoot)) &&
+    normalize(realpathSync(job.data)) === normalize(realpathSync(data));
+  if (!recoverable)
+    throw new Error(
+      'An update is pending or needs recovery. Inspect ' +
+        join(data, 'maintenance/latest.json') +
+        ' and its job status before starting another service.',
+    );
+}
 const node = join(root, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
 const child = spawn(node, [join(root, 'scripts/launcher.mjs'), ...process.argv.slice(2)], {
   cwd: root,

@@ -17,6 +17,17 @@ export async function checkAgentLifecycle(page: Page, store: Store) {
           theme === 'dark' ? 'rgb(37, 40, 48)' : 'rgb(255, 255, 255)',
         );
         await expect(dialog).toBeVisible();
+        if (state === 'populated' || state.startsWith('delegation-edit')) {
+          const field = dialog
+            .locator('.ui-field')
+            .filter({ has: page.locator('input[name="canDelegate"]') });
+          await field.scrollIntoViewIfNeeded();
+          const label = (await field.locator('label').boundingBox())!;
+          const hint = (await field.locator('.caption').boundingBox())!;
+          expect(hint.y - label.y - label.height).toBeGreaterThanOrEqual(7);
+          const footerTop = (await dialog.locator('footer').boundingBox())!.y;
+          expect(hint.y + hint.height).toBeLessThanOrEqual(footerTop);
+        }
         if (await dialog.getByRole('alert').count())
           await expect(dialog.getByRole('alert')).toBeInViewport();
         const footer = dialog.locator('footer');
@@ -30,9 +41,17 @@ export async function checkAgentLifecycle(page: Page, store: Store) {
   }
 
   await page.getByRole('button', { name: 'Add employee', exact: true }).click();
+  const delegation = dialog.getByRole('checkbox', {
+    name: 'Delegate work and create employees',
+    exact: true,
+  });
+  await expect(delegation).not.toBeChecked();
   await capture('initial');
   await dialog.getByLabel('Name', { exact: true }).fill('Mira');
   await dialog.getByLabel('Role', { exact: true }).fill('Product design');
+  await dialog.getByLabel('Model', { exact: true }).selectOption('@recommended');
+  await delegation.check();
+  await delegation.scrollIntoViewIfNeeded();
   await capture('populated');
   let posts = 0;
   await page.route('**/api/employees', async (route) => {
@@ -45,6 +64,7 @@ export async function checkAgentLifecycle(page: Page, store: Store) {
   await dialog.getByRole('button', { name: 'Create agent', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('Please try again');
   await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('Mira');
+  await expect(delegation).toBeChecked();
   await capture('error');
   await page.unroute('**/api/employees');
 
@@ -94,7 +114,32 @@ export async function checkAgentLifecycle(page: Page, store: Store) {
   expect(posts).toBe(2);
   await page.unroute('**/api/employees');
 
+  const mira = store
+    .all('SELECT data FROM employees')
+    .map((row) => JSON.parse(row.data))
+    .find((e) => e.name === 'Mira');
+  expect(mira.canDelegate).toBe(true);
+  expect(mira.model).toBe('@recommended');
   await page.getByRole('button', { name: 'Mira settings', exact: true }).click();
+  await expect(delegation).toBeChecked();
+  await delegation.uncheck();
+  await delegation.scrollIntoViewIfNeeded();
+  await capture('delegation-edit');
+  await page.route('**/api/employees/' + mira.id, async (route) => {
+    if (route.request().method() === 'PATCH')
+      await route.fulfill({ status: 503, json: { error: 'Could not save. Please try again.' } });
+    else await route.continue();
+  });
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Could not save');
+  await expect(delegation).not.toBeChecked();
+  await capture('delegation-edit-error');
+  await page.unroute('**/api/employees/' + mira.id);
+  await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(store.employee(mira.id)?.canDelegate).toBe(false);
+  await page.getByRole('button', { name: 'Mira settings', exact: true }).click();
+  await expect(delegation).not.toBeChecked();
   await dialog
     .getByRole('button', { name: 'Deactivate agent', exact: true })
     .scrollIntoViewIfNeeded();
@@ -102,6 +147,30 @@ export async function checkAgentLifecycle(page: Page, store: Store) {
   await dialog.getByRole('button', { name: 'Deactivate agent', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Deactivate agent', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  const endpoint = new URL('/api/employees/' + mira.id, page.url()).href;
+  expect(
+    (
+      await page.request.post(endpoint + '/deactivate', { headers: { 'x-workspace-request': '1' } })
+    ).ok(),
+  ).toBe(true);
+  await expect(page.locator('.inactive-nav-title')).toHaveText('Inactive');
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 640 });
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
+      await expect(page.locator('.conversation-inactive-notice')).toContainText(
+        'This agent is deactivated',
+      );
+      await page.screenshot({ path: `evidence/inactive-agent-${width}-${theme}.png` });
+    }
+  }
+  expect(
+    (
+      await page.request.post(endpoint + '/reactivate', { headers: { 'x-workspace-request': '1' } })
+    ).ok(),
+  ).toBe(true);
+  await expect(page.locator('.inactive-nav-title')).toHaveCount(0);
+  await page.setViewportSize({ width: 1280, height: 640 });
   await page.getByRole('button', { name: 'Mira settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Delete agent…', exact: true }).click();
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);

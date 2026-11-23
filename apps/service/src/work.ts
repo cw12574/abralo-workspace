@@ -28,7 +28,7 @@ export class Work {
   private owned(id: string, ownerId: string) {
     const row = this.store.one('SELECT * FROM work_items WHERE id=? AND owner_id=?', id, ownerId);
     if (!row) throw new ApiError(404, 'Work unavailable');
-    this.store.authorize(ownerId, row.conversation_id, true);
+    this.store.authorize(ownerId, row.conversation_id);
     return row;
   }
   private shape(row: any) {
@@ -55,13 +55,19 @@ export class Work {
       updatedAt: row.updated_at,
     };
   }
-  list(ownerId: string, conversationId: string) {
-    this.store.authorize(ownerId, conversationId, true);
+  list(ownerId: string, conversationId: string, messageIds?: string[]) {
+    this.store.authorize(ownerId, conversationId);
+    if (messageIds && !messageIds.length) return [];
     return this.store
       .all(
-        'SELECT * FROM work_items WHERE owner_id=? AND conversation_id=? ORDER BY updated_at DESC LIMIT 20',
+        messageIds
+          ? `SELECT * FROM work_items WHERE owner_id=? AND conversation_id=?
+             AND request_message_id IN (${messageIds.map(() => '?').join(',')})
+             ORDER BY created_at,id`
+          : 'SELECT * FROM work_items WHERE owner_id=? AND conversation_id=? ORDER BY updated_at DESC LIMIT 20',
         ownerId,
         conversationId,
+        ...(messageIds || []),
       )
       .map((row) => this.shape(row));
   }
@@ -84,10 +90,8 @@ export class Work {
       const leadCanWork = goal?.lead_agent_id
         ? goal.lead_agent_id === run.employee_id
         : goal?.conversation_id === run.conversation_id;
-      const inGoalRoom =
-        conversation?.kind === 'channel' && goal?.conversation_id === run.conversation_id;
       const inLeadDm = conversation?.kind === 'dm' && conversation.employee_id === run.employee_id;
-      if (!goal || !leadCanWork || (!inGoalRoom && !inLeadDm))
+      if (!goal || !leadCanWork || !inLeadDm)
         throw new ApiError(400, 'This goal is unavailable to this agent here.');
     }
     const existing = this.store.one(
@@ -144,8 +148,17 @@ export class Work {
 
 export function registerWorkRoutes(app: any, work: Work) {
   app.get('/api/work', async (req: any) => {
-    const { conversationId } = z.object({ conversationId: z.string().uuid() }).parse(req.query);
-    return work.list(req.user.id, conversationId);
+    const { conversationId, messageIds } = z
+      .object({
+        conversationId: z.string().uuid(),
+        messageIds: z
+          .string()
+          .transform((value) => value.split(','))
+          .pipe(z.array(z.string().uuid()).min(1).max(160))
+          .optional(),
+      })
+      .parse(req.query);
+    return work.list(req.user.id, conversationId, messageIds);
   });
   app.get('/api/work/:id', async (req: any) => work.get(req.params.id, req.user.id));
 }

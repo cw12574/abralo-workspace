@@ -1,3 +1,4 @@
+import { checkModelUpdates } from './model-updates-ui-checks.js';
 import { chromium, expect } from '@playwright/test';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -5,6 +6,7 @@ import { join } from 'node:path';
 import { Store, uid, now } from '../apps/service/src/store.js';
 import { createApp } from '../apps/service/src/app.js';
 import { checkAgentLifecycle } from './agent-lifecycle-ui-checks.js';
+import { checkUpdatePreparationStatus } from './update-status-ui-checks.js';
 
 // This temporary test server is independent of the host app's restart handoff.
 delete process.env.WORKSPACE_MAINTENANCE_JOB;
@@ -15,8 +17,9 @@ store.run('INSERT INTO humans VALUES(?,?,?,?,?)', collaboratorId, 'Taylor', 'mem
 store.set('workspace.onboarded', true);
 const employee = store.createEmployee(user.id, {
   name: 'Chief of Staff',
+  canDelegate: true,
   harness: 'codex',
-  model: '',
+  model: 'saved-older-model',
   cwd: '',
   role: 'Coordinates the team',
   instructions: '',
@@ -51,12 +54,18 @@ for (const content of [
     0,
     now(),
   );
-const { app } = await createApp(store);
+const { app, supervisor } = await createApp(store);
+for (const harness of ['codex', 'claude', 'opencode'] as const) {
+  const info = { harness, installed: true, authenticated: true, version: 'fixture', detail: 'Fixture connection', accountKey: harness, models: [{ id: 'fixture', name: 'Fixture model', isDefault: true }] };
+  supervisor.adapters[harness] = { info: async () => info, run: async () => {}, dispose: async () => {} };
+  supervisor.catalogue.accept(harness, info);
+}
 await app.listen({ host: '127.0.0.1', port: 0 });
 const origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
-const page = await browser.newPage({ viewport: { width: 1280, height: 640 } });
-await page.route('**/api/providers*', (route) => route.fulfill({ json: [] }));
+const context = await browser.newContext({ viewport: { width: 1280, height: 640 } });
+const page = await context.newPage();
+
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(e.message));
 const report: any = { checks: [] };
@@ -67,8 +76,39 @@ try {
   await page.goto(origin + '/#setup=' + store.bootstrapToken);
   await expect.poll(() => page.title()).toContain(' · Workspace');
   mkdirSync('evidence', { recursive: true });
+  await checkModelUpdates(page, store, supervisor, employee);
+  for (const count of [1, 2]) {
+    store.set('proposals.' + user.id, [{
+      id: uid(), version: 1, conversationId: employee.dmId, chiefId: employee.id,
+      purpose: 'Research customer needs', approved: false,
+      employees: Array.from({ length: count }, (_, i) => ({
+        name: i === 0 ? 'Researcher' : 'Designer', role: 'Understand customer needs', harness: 'codex',
+      })),
+    }]);
+    await page.goto(origin + '/?conversation=' + employee.dmId);
+    const card = page.locator('.proposal');
+    const action = card.getByRole('button', {
+      name: count === 1 ? 'Create this employee' : 'Create these employees', exact: true,
+    });
+    await expect(action).toBeVisible();
+    await expect(card.locator('.eyebrow')).toHaveText(count === 1 ? 'PROPOSED EMPLOYEE' : 'PROPOSED EMPLOYEES');
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 640 });
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((t) => (document.documentElement.dataset.theme = t), theme);
+        await action.scrollIntoViewIfNeeded();
+        await expect(action).toBeInViewport();
+        expect(await card.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
+        await page.screenshot({ path: `evidence/employee-proposal-${count}-${width}-${theme}.png` });
+      }
+    }
+  }
+  store.set('proposals.' + user.id, []);
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.goto(origin + '/?conversation=' + employee.dmId);
   await checkAgentLifecycle(page, store);
   await page.getByRole('button', { name: 'Workspace settings', exact: true }).click();
+  await checkUpdatePreparationStatus(page);
   const dialog = page.getByRole('dialog');
   const save = page.getByRole('button', { name: 'Save changes', exact: true });
   await page.getByLabel('Workspace name', { exact: true }).fill('A considered workspace');
@@ -169,96 +209,8 @@ try {
   await page.keyboard.press('Control+Shift+F');
   await expect(searchPopover).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Add room', exact: true }).click();
-  await page.getByLabel('Room name').fill('launch');
-  await page.getByRole('checkbox', { name: /Chief of Staff/ }).check();
-  await page.screenshot({ path: 'evidence/create-channel-dark.png' });
-  await page.getByRole('button', { name: 'Create room', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page).toHaveTitle('#launch · A considered workspace');
-  const channelStart = page.locator('.conversation-start');
-  await expect(channelStart.getByRole('heading', { name: 'launch', exact: true })).toBeVisible();
-  await expect(channelStart.locator('.channel-start-icon')).toBeVisible();
-  await expect(channelStart).toContainText('A shared space for your team');
-  for (const viewport of [
-    { width: 1280, height: 640 },
-    { width: 390, height: 844 },
-  ]) {
-    await page.setViewportSize(viewport);
-    for (const theme of ['dark', 'light']) {
-      await page.evaluate((value) => {
-        document.documentElement.dataset.theme = value;
-      }, theme);
-      await expect(channelStart).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
-      if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
-        throw Error('Empty channel overflows viewport');
-      const introBox = (await channelStart.boundingBox())!;
-      const composerBox = (await page.locator('.composer').boundingBox())!;
-      if (introBox.y + introBox.height > composerBox.y)
-        throw Error('Empty channel introduction overlaps composer');
-      await page.screenshot({ path: `evidence/channel-start-${viewport.width}-${theme}.png` });
-    }
-  }
-  await page.setViewportSize({ width: 1280, height: 640 });
-  await page.evaluate(() => {
-    document.documentElement.dataset.theme = 'dark';
-  });
-  const createdChannel = store.one("SELECT id FROM conversations WHERE name='launch'");
-  if (
-    !createdChannel ||
-    !store.one(
-      'SELECT 1 FROM employee_conversations WHERE conversation_id=? AND employee_id=?',
-      createdChannel.id,
-      employee.id,
-    )
-  )
-    throw Error('Agent membership missing');
-  await page.getByRole('button', { name: 'launch settings' }).click();
-  await page.locator('.channel-settings-dialog').waitFor();
-  const channelSettings = page.locator('.channel-settings-dialog');
-  await expect(channelSettings).toContainText('Chief of Staff');
-  await page.screenshot({ path: 'evidence/channel-settings-dark.png' });
-  await channelSettings.getByLabel('Room name').fill('launch-team');
-  await channelSettings.locator('textarea').fill('Coordinate the first public launch.');
-  await page.keyboard.press('Escape');
-  await expect(channelSettings).toContainText('Unsaved room details');
-  await channelSettings.getByRole('button', { name: 'Keep editing' }).click();
-  await channelSettings.getByRole('button', { name: 'Save details' }).click();
-  await expect(page).toHaveTitle('#launch-team · A considered workspace');
-  await expect
-    .poll(() => store.one('SELECT name FROM conversations WHERE id=?', createdChannel.id)?.name)
-    .toBe('launch-team');
-  await expect
-    .poll(() => store.setting(`channel.${createdChannel.id}.purpose`))
-    .toBe('Coordinate the first public launch.');
-  await page.getByRole('button', { name: 'Add people' }).click();
-  await page.getByRole('checkbox', { name: /Ada/ }).check();
-  await page.getByRole('checkbox', { name: /Taylor/ }).check();
-  await page.getByRole('button', { name: 'Add 2 people' }).click();
-  await expect(channelSettings).toContainText('Ada');
-  await expect(channelSettings).toContainText('Taylor');
-  await page.getByRole('button', { name: 'Remove Chief of Staff from room' }).click();
-  await expect
-    .poll(() =>
-      store.one(
-        'SELECT 1 FROM employee_conversations WHERE conversation_id=? AND employee_id=?',
-        createdChannel.id,
-        employee.id,
-      ),
-    )
-    .toBeUndefined();
-  await page.getByRole('button', { name: 'Done' }).click();
-  await expect(
-    channelStart.getByRole('heading', { name: 'launch-team', exact: true }),
-  ).toBeVisible();
-  await expect(channelStart).toContainText('Coordinate the first public launch.');
-  await page.screenshot({ path: 'evidence/channel-start-purpose.png' });
-  await page.getByRole('button', { name: 'Add room', exact: true }).click();
-  await page.getByLabel('Room name').fill('launch-team');
-  await page.getByRole('button', { name: 'Create room', exact: true }).click();
-  await expect(page.getByRole('dialog')).toContainText('A channel with that name already exists.');
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Add room', exact: true })).toHaveCount(0);
+  await expect(page.locator('.sidebar nav')).not.toContainText('Rooms');
   await page.getByRole('button', { name: 'Add employee', exact: true }).click();
   await page.getByRole('button', { name: 'Human', exact: true }).click();
   await page.getByRole('button', { name: 'Create invitation', exact: true }).click();
@@ -294,12 +246,14 @@ try {
   await page.screenshot({ path: 'evidence/settings-mobile.png' });
   if (errors.length) throw Error(errors.join('\n'));
   report.checks = [
+    'model notices update across tabs, persist dismissal/preferences, preserve a missing pinned model, save recommended mode, and recover from check failure in both themes/sizes',
+    'singular and plural employee creation cards, reachable actions and no overflow on laptop/mobile in both themes',
     'agent creation immediate busy state, repeated-submit guard, preserved error inputs, safe conversation retry, reduced motion; checkbox-free deletion and repeat guard; both themes at laptop and mobile sizes',
+    'delegation defaults off for new agents; opt-in persists through create retry; edit opt-out survives save errors and reload; label/hint gaps checked in both themes and sizes',
     'visible laptop save; persisted rename; close/escape protect dirty edits; discard',
     'both themes and all settings sections; mobile footer and overflow',
     'permission menu selection, keyboard and Escape',
-    'channel purpose and rename; protect unsaved edits; add/remove humans and agents',
-    'empty channel identity, saved purpose and rename; visible composer in both themes on laptop and mobile',
+    'navigation contains goals and agents, with no room controls',
   ];
   report.status = 'passed';
 } catch (e) {

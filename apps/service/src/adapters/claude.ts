@@ -1,12 +1,50 @@
+import { createHash } from 'node:crypto';
+import type { Executable } from '../../../../packages/host/src/index.js';
 import { connectionTools } from '../connection-tools.js';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync } from 'node:fs';
 import { executable, execFileAsync } from '../../../../packages/host/src/index.js';
 import type { Adapter, ProviderInfo, RunInput } from '../../../../packages/contracts/src/index.js';
 import { providerLimitFromError } from './provider-limit.js';
+const LIMITS_TTL = 60000;
+type LimitWindow = { usedPercent: number; windowDurationMins: number; resetsAt: number; label: string };
+export type ClaudeLimits = { rateLimitsByLimitId: Record<string, { primary?: LimitWindow; secondary?: LimitWindow }> };
+type UsageWindow = { utilization: number | null; resets_at: string | null } | null | undefined;
+
+function limitWindow(value: UsageWindow, label: string, windowDurationMins: number): LimitWindow | undefined {
+  if (!value || typeof value.utilization !== 'number' || !value.resets_at) return undefined;
+  const reset = Date.parse(value.resets_at);
+  if (!Number.isFinite(reset)) return undefined;
+  // Whole seconds keep the reset stable across readings, so usage trends line up.
+  return { usedPercent: Math.min(100, Math.max(0, value.utilization)), windowDurationMins, resetsAt: Math.round(reset / 1000), label };
+}
+
+/** Map Claude Code's /usage response onto the shared provider-limit shape. */
+export function claudeLimits(usage: { rate_limits_available?: boolean; rate_limits?: Record<string, any> | null }): ClaudeLimits | undefined {
+  const limits = usage?.rate_limits;
+  if (!usage?.rate_limits_available || !limits) return undefined;
+  const buckets: ClaudeLimits['rateLimitsByLimitId'] = {};
+  const plan = { primary: limitWindow(limits.five_hour, 'This session', 300), secondary: limitWindow(limits.seven_day, 'This week', 10080) };
+  if (plan.primary || plan.secondary) buckets.plan = plan;
+  for (const [key, name] of [['seven_day_opus', 'Opus'], ['seven_day_sonnet', 'Sonnet']] as const) {
+    const primary = limitWindow(limits[key], `${name} this week`, 10080);
+    if (primary) buckets[key] = { primary };
+  }
+  for (const scoped of Array.isArray(limits.model_scoped) ? limits.model_scoped : []) {
+    const name = String(scoped?.display_name || '').slice(0, 60);
+    const primary = name && limitWindow(scoped, `${name} this week`, 10080);
+    if (primary) buckets['model.' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-')] = { primary };
+  }
+  return Object.keys(buckets).length ? { rateLimitsByLimitId: buckets } : undefined;
+}
+
 export class ClaudeAdapter implements Adapter {
+  private discovery = new Set<{ controller: AbortController; stream?: ReturnType<typeof query>; release: () => void }>();
+  private limits?: { at: number; value: ClaudeLimits | undefined };
+  private limitsPending?: Promise<ClaudeLimits | undefined>;
+  constructor(public binary?: Executable) {}
   async info(): Promise<ProviderInfo> {
-    const bin = executable('claude');
+    const bin = this.binary || executable('claude');
     if (!bin)
       return {
         harness: 'claude',
@@ -19,31 +57,18 @@ export class ClaudeAdapter implements Adapter {
       const r = await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
         windowsHide: true,
         timeout: 20000,
-      }).catch((error) => {
-        // The CLI exits nonzero when signed out but still returns structured
-        // status. A spawn/timeout/parse failure is an unknown state, not logout.
-        if (error.stdout) {
-          const status = JSON.parse(error.stdout);
-          if (status.loggedIn === false) return { stdout: error.stdout };
-        }
-        throw error;
       });
       const auth = JSON.parse(r.stdout);
-      if (typeof auth.loggedIn !== 'boolean') throw new Error('Invalid Claude status');
       return {
         harness: 'claude',
         installed: true,
         authenticated: auth.loggedIn && auth.authMethod === 'claude.ai',
         version: 'native Claude Code',
         detail: auth.loggedIn
-          ? `Sign-in detected: ${auth.authMethod} · ${auth.subscriptionType || auth.apiProvider}. Abralo will confirm access when a task runs.`
+          ? `${auth.authMethod} · ${auth.subscriptionType || auth.apiProvider}`
           : 'Sign in with Claude Code',
-        models: [
-          { id: '', name: 'Provider default' },
-          { id: 'sonnet', name: 'Sonnet' },
-          { id: 'opus', name: 'Opus' },
-          { id: 'haiku', name: 'Haiku' },
-        ],
+        accountKey: createHash('sha256').update(JSON.stringify([auth.email, auth.accountUuid, auth.orgUuid, auth.authMethod])).digest('hex'),
+        ...(auth.loggedIn ? await this.catalogue(bin) : { models: [] }),
       };
     } catch {
       return {
@@ -51,16 +76,69 @@ export class ClaudeAdapter implements Adapter {
         installed: true,
         authenticated: null,
         version: '',
-        detail: 'Claude Code could not check your account. Try again, or restart Abralo.',
+        detail: 'Could not check Claude Code on this host.',
       };
     }
+  }
+  private async control<T>(bin: Executable, use: (stream: ReturnType<typeof query>) => Promise<T>): Promise<T> {
+    // Initialize the native SDK control channel without submitting a user turn.
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    async function* emptyInput(): AsyncGenerator<any> { await gate; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    const env = { ...process.env };
+    delete env.CLAUDECODE;
+    delete env.ANTHROPIC_API_KEY;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+    const discovery: { controller: AbortController; stream?: ReturnType<typeof query>; release: () => void } = { controller, release };
+    this.discovery.add(discovery);
+    let stream: ReturnType<typeof query> | undefined;
+    try {
+      stream = query({ prompt: emptyInput(), options: {
+      pathToClaudeCodeExecutable: bin.args[0] || bin.command,
+      abortController: controller, env, persistSession: false,
+      tools: [], mcpServers: {}, strictMcpConfig: true, settingSources: [],
+      } });
+      discovery.stream = stream;
+      return await use(stream);
+    } finally {
+      clearTimeout(timer); release(); stream?.close(); this.discovery.delete(discovery);
+    }
+  }
+  private async catalogue(bin: Executable): Promise<Pick<ProviderInfo, 'models' | 'catalogueError'>> {
+    try {
+      const models = await this.control(bin, stream => stream.supportedModels());
+      return { models: models.map(m => ({ id: m.resolvedModel || m.value, name: m.displayName, aliases: [m.value], isDefault: m.value === 'default' })) };
+    } catch {
+      return { catalogueError: 'Could not refresh Claude models. Your saved choices are still available.' };
+    }
+  }
+  /** Plan allowance from Claude Code's /usage data. Cached briefly and shared by every open Usage panel. */
+  readLimits(): Promise<ClaudeLimits | undefined> {
+    if (this.limits && Date.now() - this.limits.at < LIMITS_TTL) return Promise.resolve(this.limits.value);
+    if (this.limitsPending) return this.limitsPending;
+    const bin = this.binary || executable('claude');
+    if (!bin) return Promise.resolve(undefined);
+    const work = this.control(bin, stream =>
+      stream.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }))
+      .then(usage => {
+        const value = claudeLimits(usage);
+        this.limits = { at: Date.now(), value };
+        return value;
+      })
+      // Keep the last reading if a refresh fails; never block the panel on it.
+      .catch(() => this.limits?.value)
+      .finally(() => { this.limitsPending = undefined; });
+    this.limitsPending = work;
+    return work;
   }
   async run(input: RunInput) {
     if (input.signal.aborted) {
       input.emit({ type: 'complete', data: { cancelled: true } });
       return;
     }
-    const bin = executable('claude');
+    const bin = this.binary || executable('claude');
     if (!bin) throw new Error('Claude Code is not installed');
     const auth = JSON.parse(
       (
@@ -109,6 +187,16 @@ export class ClaudeAdapter implements Adapter {
     input.signal.addEventListener('abort', abort, { once: true });
     if (input.signal.aborted) abort();
     let received = false;
+    let paragraphBreak = false;
+    // Each thinking block is its own step so it appears where it happened.
+    let thinkingCount = 0;
+    const openThinking = new Map<number, string>();
+    const finishThinking = (id: string) =>
+      input.emit({
+        type: 'activity',
+        id,
+        data: { id, type: 'reasoning', title: 'Thinking', state: 'complete' },
+      });
     const blocks: any[] = [{ type: 'text', text: input.prompt }];
     for (const a of input.attachments) {
       if (['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(a.mime))
@@ -134,7 +222,7 @@ export class ClaudeAdapter implements Adapter {
       stream = query({
         prompt: prompt(),
         options: {
-          pathToClaudeCodeExecutable: bin.command,
+          pathToClaudeCodeExecutable: bin.args[0] || bin.command,
           cwd: input.employee.cwd,
           model: input.employee.model || undefined,
           resume: input.sessionId,
@@ -210,16 +298,31 @@ export class ClaudeAdapter implements Adapter {
         }
         if (m.type === 'stream_event' && !m.parent_tool_use_id) {
           const ev = m.event;
+          // Text written between tool calls arrives as separate blocks. Keep them as
+          // separate paragraphs instead of running sentences together.
+          if (ev.type === 'content_block_start' && ev.content_block?.type === 'text' && received)
+            paragraphBreak = true;
           if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            if (paragraphBreak && ev.delta.text.trim()) {
+              input.emit({ type: 'text', text: '\n\n' });
+              paragraphBreak = false;
+            }
             received = true;
             input.emit({ type: 'text', text: ev.delta.text });
           }
-          if (ev.type === 'content_block_start' && ev.content_block?.type === 'thinking')
+          if (ev.type === 'content_block_start' && ev.content_block?.type === 'thinking') {
+            const id = `thinking-${++thinkingCount}`;
+            openThinking.set(ev.index, id);
             input.emit({
               type: 'activity',
-              id: 'thinking',
-              data: { id: 'thinking', type: 'reasoning', title: 'Thinking', state: 'running' },
+              id,
+              data: { id, type: 'reasoning', title: 'Thinking', state: 'running' },
             });
+          }
+          if (ev.type === 'content_block_stop' && openThinking.has(ev.index)) {
+            finishThinking(openThinking.get(ev.index)!);
+            openThinking.delete(ev.index);
+          }
         }
         if (m.type === 'assistant') {
           for (const block of m.message?.content || []) {
@@ -240,27 +343,25 @@ export class ClaudeAdapter implements Adapter {
         if (m.type === 'user') {
           for (const b of m.message?.content || [])
             if (b.type === 'tool_result')
+              // The result completes the tool's own step: keep its name and input, add the output.
               input.emit({
                 type: 'activity',
                 id: b.tool_use_id,
                 data: {
                   id: b.tool_use_id,
                   type: 'tool',
-                  title: 'Tool result',
-                  detail:
-                    typeof b.content === 'string'
+                  append:
+                    '\n\nResult:\n' +
+                    (typeof b.content === 'string'
                       ? b.content.slice(0, 30000)
-                      : JSON.stringify(b.content).slice(0, 30000),
+                      : JSON.stringify(b.content).slice(0, 30000)),
                   state: b.is_error ? 'failed' : 'complete',
                 },
               });
         }
         if (m.type === 'result') {
-          input.emit({
-            type: 'activity',
-            id: 'thinking',
-            data: { type: 'reasoning', title: 'Thinking', state: 'complete' },
-          });
+          for (const id of openThinking.values()) finishThinking(id);
+          openThinking.clear();
           input.emit({
             type: 'usage',
             data: {
@@ -292,16 +393,17 @@ export class ClaudeAdapter implements Adapter {
         input.emit({ type: 'complete', data: { cancelled: true } });
         return;
       }
-      const message = e instanceof Error ? e.message : String(e);
-      if (/oauth session expired|could not be refreshed|refresh token.*expired/i.test(message))
-        throw new Error(
-          'Claude sign-in expired. Sign in again with Claude Code, then retry this task.',
-        );
       throw providerLimitFromError(e, 'claude') || e;
     } finally {
       input.signal.removeEventListener('abort', abort);
       stream?.close();
     }
   }
-  async dispose() {}
+  async dispose() {
+    for (const discovery of this.discovery) {
+      discovery.controller.abort();
+      discovery.release();
+      discovery.stream?.close();
+    }
+  }
 }

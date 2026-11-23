@@ -32,10 +32,10 @@ it('lets people edit and delete only their own messages while preserving thread 
     cwd: '',
     instructions: '',
   });
-  const room = store.setting('workspace.team');
-  const parent = store.addMessage(room, owner.id, owner.name, 'human', 'Original wording');
+  const conversationId = agent.dmId;
+  const parent = store.addMessage(conversationId, owner.id, owner.name, 'human', 'Original wording');
   const reply = store.addMessage(
-    room,
+    conversationId,
     agent.id,
     agent.name,
     'agent',
@@ -96,7 +96,7 @@ it('lets people edit and delete only their own messages while preserving thread 
   });
 
   const thread = await app.inject({
-    url: `/api/conversations/${room}/messages?threadId=${parent.id}`,
+    url: `/api/conversations/${conversationId}/messages?threadId=${parent.id}`,
     headers,
   });
   expect(thread.json().messages.map((message: any) => message.id)).toContain(reply.id);
@@ -136,7 +136,7 @@ it('clears the saved composer draft after its message is accepted', async () => 
   const dir = mkdtempSync(join(tmpdir(), 'workspace-sent-draft-'));
   const store = new Store(dir);
   const owner = store.createOwner('Chris');
-  const room = store.setting('workspace.team');
+  const conversationId = store.createEmployee(owner.id, { name: 'Agent', harness: 'codex' }).dmId;
   const { app } = await createApp(store);
   fixtures.push({ store, dir, app });
   const headers = {
@@ -146,7 +146,7 @@ it('clears the saved composer draft after its message is accepted', async () => 
 
   const savedDraft = await app.inject({
     method: 'PUT',
-    url: `/api/conversations/${room}/draft`,
+    url: `/api/conversations/${conversationId}/draft`,
     headers,
     payload: { text: 'A message ready to send', attachments: [], threadId: '' },
   });
@@ -154,7 +154,7 @@ it('clears the saved composer draft after its message is accepted', async () => 
 
   const sent = await app.inject({
     method: 'POST',
-    url: `/api/conversations/${room}/messages`,
+    url: `/api/conversations/${conversationId}/messages`,
     headers,
     payload: {
       text: 'A message ready to send',
@@ -167,7 +167,7 @@ it('clears the saved composer draft after its message is accepted', async () => 
   expect(sent.statusCode).toBe(200);
 
   const draft = await app.inject({
-    url: `/api/conversations/${room}/draft`,
+    url: `/api/conversations/${conversationId}/draft`,
     headers,
   });
   expect(draft.json()).toEqual({ text: '', attachments: [] });

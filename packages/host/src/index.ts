@@ -1,7 +1,7 @@
 import { homedir, platform, arch } from 'node:os';
 import { createRequire } from 'node:module';
 import { join, delimiter, dirname } from 'node:path';
-import { existsSync, mkdirSync, statSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 export const execFileAsync = promisify(execFile);
@@ -26,22 +26,6 @@ export function executable(name: string): { command: string; args: string[] } | 
   if (name === 'opencode') {
     const bundled = join(process.cwd(), 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
     if (existsSync(bundled)) return { command: bundled, args: [] };
-  }
-  if (name === 'claude') {
-    // Resolve from the real SDK path for both pnpm's symlink layout and the
-    // hoisted release layout. Prefer the pinned runtime over an unrelated CLI.
-    try {
-      const req = createRequire(
-        realpathSync(
-          join(process.cwd(), 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'sdk.mjs'),
-        ),
-      );
-      const pkg = req.resolve(
-        `@anthropic-ai/claude-agent-sdk-${platform()}-${arch()}/package.json`,
-      );
-      const command = join(dirname(pkg), platform() === 'win32' ? 'claude.exe' : 'claude');
-      if (existsSync(command)) return { command, args: [] };
-    } catch {}
   }
   const paths = [
     ...(process.env.PATH || '').split(delimiter),
@@ -71,10 +55,24 @@ export function executable(name: string): { command: string; args: string[] } | 
     const local = join(process.cwd(), 'node_modules', 'opencode-ai', 'bin', 'opencode');
     if (existsSync(local)) return { command: process.execPath, args: [local] };
   }
+  if (name === 'claude') {
+    // Prefer the user's native install above; the SDK's pinned binary is a fallback.
+    try {
+      const req = createRequire(
+        join(process.cwd(), 'node_modules', '@anthropic-ai', 'claude-agent-sdk', 'sdk.mjs'),
+      );
+      const pkg = req.resolve(
+        `@anthropic-ai/claude-agent-sdk-${platform()}-${arch()}/package.json`,
+      );
+      const command = join(dirname(pkg), platform() === 'win32' ? 'claude.exe' : 'claude');
+      if (existsSync(command)) return { command, args: [] };
+    } catch {}
+  }
   return null;
 }
-export function launch(name: string, args: string[], options: any = {}) {
-  const bin = executable(name);
+export type Executable = { command: string; args: string[] };
+export function launch(name: string, args: string[], options: any = {}, binary?: Executable) {
+  const bin = binary || executable(name);
   if (!bin) throw new Error(`${name} is not installed on this host.`);
   return spawn(bin.command, [...bin.args, ...args], {
     windowsHide: true,

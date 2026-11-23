@@ -34,16 +34,12 @@ for(const name of readdirSync(join(target,'node_modules')).filter(n=>/^opencode-
   if(existsSync(binary)){const within=relative(realpathSync(target),realpathSync(binary));if(within.startsWith('..')||isAbsolute(within))throw new Error('Native binary escaped package directory');unlinkSync(binary);}
 }
 mkdirSync(join(target, 'runtime'), { recursive: true });
-const browserExecutable = chromium.executablePath();
-if (!existsSync(browserExecutable))
-  throw new Error('Install the pinned Chromium with pnpm exec playwright install chromium before packaging.');
-let browserRoot = dirname(browserExecutable);
-while (!/^chromium-\d+$/.test(browserRoot.split(/[\\/]/).pop())) {
-  const parent = dirname(browserRoot);
-  if (parent === browserRoot) throw new Error('Cannot locate the pinned Chromium package root.');
-  browserRoot = parent;
+if (process.platform === 'win32') {
+  const browserRoot = dirname(dirname(chromium.executablePath()));
+  if (!existsSync(join(browserRoot, 'chrome-win64', 'chrome.exe')))
+    throw new Error('Install the pinned Chromium with pnpm exec playwright install chromium before packaging.');
+  cpSync(browserRoot, join(target, 'runtime', 'chromium'), { recursive: true });
 }
-cpSync(browserRoot, join(target, 'runtime', 'chromium'), { recursive: true });
 copyFileSync(
   process.execPath,
   join(target, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'),
@@ -52,12 +48,11 @@ writeFileSync(
   join(target, 'release.json'),
   JSON.stringify(
     {
-      version: (process.env.ABRALO_VERSION || '0.2.0-preview').replace(/^v/, ''),
+      version: '0.1.0-preview',
       platform: process.platform,
       arch: process.arch,
       node: process.version,
       builtAt: new Date().toISOString(),
-      chromiumExecutable: ['runtime', 'chromium', relative(browserRoot, browserExecutable)].join('/').replaceAll('\\', '/'),
       maintenanceProtocol: 1,
       dataCompatibility: 'workspace-v1',
     },
