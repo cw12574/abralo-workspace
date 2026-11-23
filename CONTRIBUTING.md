@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking an interest in Abralo. The project is an early preview, so please check open issues before starting a large change.
+Thanks for taking an interest in Abralo. Please check open issues before starting a large change.
 
 ## Report a bug
 

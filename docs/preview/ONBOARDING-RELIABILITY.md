@@ -1,6 +1,6 @@
 # Onboarding reliability review — 3 October 2026
 
-> Release follow-up: v0.1.3-preview was subsequently published from `873d79e`. All four platform jobs and publication passed in [run 37115385405](https://github.com/cw12574/abralo-workspace/actions/runs/37115385405). The local-only validation statements below describe the original review, before that run. Live-account acceptance and matching the original tester's logs remain separate, unresolved work. See the [current launch readiness record](LAUNCH-READINESS.md).
+> Release follow-up: v0.1.3-preview was subsequently published from `873d79e`. All four platform jobs and publication passed in [run 37115385405](https://github.com/cw12574/abralo-workspace/actions/runs/37115385405). The local-only validation statements below describe the original review, before that run. Live-account acceptance and matching the original tester's logs remain separate, unresolved work.
 
 ## Incident and confidence
 

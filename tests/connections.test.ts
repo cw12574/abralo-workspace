@@ -9,6 +9,7 @@ import { Store, uid, hash } from '../apps/service/src/store.js';
 import { ConnectionBroker, registerConnectionRoutes } from '../apps/service/src/connections.js';
 import { Supervisor } from '../apps/service/src/supervisor.js';
 import { registerWorkspaceTools } from '../apps/service/src/workspace-tools.js';
+import { Goals } from '../apps/service/src/goals.js';
 
 const cleanup: (() => Promise<void>)[] = [];
 vi.setConfig({ testTimeout: 15000 });
@@ -62,6 +63,127 @@ function fixture(harness: 'codex' | 'claude' | 'opencode' = 'codex', service = '
 }
 
 describe('durable connected actions', () => {
+  it('reuses a confirmed write across goal sessions after a restart instead of executing it again', async () => {
+    const { s, user, employee, broker, id, run, provider } = fixture();
+    const goals = new Goals(s);
+    const goal = goals.create(user.id, {
+      title: 'Publish the prepared result',
+      leadAgentId: employee.id,
+      start: true,
+    });
+    s.run(
+      'INSERT INTO goal_cycles(message_id,goal_id,employee_id,created_at) VALUES(?,?,?,?)',
+      run.message_id,
+      goal.id,
+      employee.id,
+      new Date().toISOString(),
+    );
+    const first = broker.actions.request(run, id, 'write', { item: 1 });
+    broker.actions.decide(first.actionId, user.id, true);
+    await Promise.all([...broker.actions.inflight]);
+    expect(provider).toHaveBeenCalledTimes(1);
+    const next = { ...run, id: uid(), message_id: uid() };
+    s.run(
+      'INSERT INTO goal_cycles(message_id,goal_id,employee_id,created_at) VALUES(?,?,?,?)',
+      next.message_id,
+      goal.id,
+      employee.id,
+      new Date().toISOString(),
+    );
+    const restarted = new ConnectionBroker(s, () => 'http://localhost');
+    try {
+      const receipt = restarted.actions.request(next, id, 'write', { item: 1 });
+      expect(receipt.actionId).toBe(first.actionId);
+      expect(receipt.status).toBe('succeeded');
+      expect(s.all('SELECT * FROM connection_actions')).toHaveLength(1);
+    } finally {
+      await restarted.close();
+    }
+  });
+  it('dismisses and restores a card without changing its action or executing it', async () => {
+    const { s, user, broker, id, run, provider } = fixture();
+    const action = broker.actions.request(run, id, 'write', {});
+    const before = broker.actions.get(action.actionId, user.id);
+    const emit = vi.spyOn(s, 'emit');
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => {
+      req.user = user;
+    });
+    registerConnectionRoutes(app, broker);
+    try {
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/api/connection-actions/${action.actionId}/dismissal`,
+        payload: { dismissed: true },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(broker.actions.get(action.actionId, user.id)).toEqual(before);
+      expect(provider).not.toHaveBeenCalled();
+      expect(emit).toHaveBeenCalledWith(
+        'connection.action.dismissed',
+        run.conversation_id,
+        { id: action.actionId, dismissed: true },
+        user.id,
+      );
+      expect(emit.mock.calls.some((call) => call[0] === 'connection.action')).toBe(false);
+      const listed = await app.inject({
+        method: 'GET',
+        url: `/api/connection-actions?conversationId=${run.conversation_id}`,
+      });
+      expect(listed.json()[0]).toMatchObject({
+        actionId: action.actionId,
+        dismissed: true,
+        status: 'awaiting_approval',
+      });
+      await app.inject({
+        method: 'PUT',
+        url: `/api/connection-actions/${action.actionId}/dismissal`,
+        payload: { dismissed: false },
+      });
+      expect(broker.actions.isDismissed(before)).toBe(false);
+    } finally {
+      await app.close();
+    }
+  });
+  it('retains dismissal for unchanged receipts but shows a newly changed status', () => {
+    const { s, user, broker, id, run } = fixture();
+    const action = broker.actions.request(run, id, 'write', {});
+    s.run("UPDATE connection_actions SET state='failed' WHERE id=?", action.actionId);
+    broker.actions.dismiss(action.actionId, user.id, true);
+    expect(broker.actions.isDismissed(broker.actions.get(action.actionId, user.id))).toBe(true);
+    s.run("UPDATE connection_actions SET state='unknown' WHERE id=?", action.actionId);
+    expect(broker.actions.isDismissed(broker.actions.get(action.actionId, user.id))).toBe(false);
+  });
+  it('does not let another account dismiss or restore an action', () => {
+    const { broker, user, id, run } = fixture();
+    const action = broker.actions.request(run, id, 'write', {});
+    expect(() => broker.actions.dismiss(action.actionId, uid(), true)).toThrow(
+      'Action unavailable',
+    );
+    expect(broker.actions.isDismissed(broker.actions.get(action.actionId, user.id))).toBe(false);
+  });
+  it('does not dispatch a prepared action after its goal was paused', () => {
+    const { s, user, employee, broker, id, run, provider } = fixture();
+    const goals = new Goals(s);
+    const goal = goals.create(user.id, {
+      conversationId: employee.dmId,
+      title: 'Launch',
+      success: 'Release verified',
+      start: true,
+    });
+    s.run(
+      'INSERT INTO goal_cycles(message_id,goal_id,employee_id,created_at) VALUES(?,?,?,?)',
+      run.message_id,
+      goal.id,
+      employee.id,
+      new Date().toISOString(),
+    );
+    const action = broker.actions.request(run, id, 'write', {});
+    goals.change(goal.id, user.id, { version: goal.version, status: 'paused' });
+    expect(() => broker.actions.decide(action.actionId, user.id, true)).toThrow(/goal was stopped/);
+    expect(provider).not.toHaveBeenCalled();
+    expect(broker.actions.get(action.actionId, user.id).state).toBe('awaiting_approval');
+  });
   it('resumes the original task once after its harness turn has ended', async () => {
     const { s, broker, run, employee, user, id } = fixture();
     const message = s.addMessage(
@@ -93,8 +215,11 @@ describe('durable connected actions', () => {
     await broker.actions.resume(broker.actions.get(action.actionId, user.id));
     expect(s.all('SELECT * FROM outbox')).toHaveLength(1);
     expect(dispatch).toHaveBeenCalledTimes(1);
-    expect(s.messages(employee.dmId).at(-1)?.text).toContain(action.actionId);
-    expect(s.messages(employee.dmId).at(-1)?.text).toContain('Do not repeat');
+    // The agent receives the instruction; the human never sees it in the conversation.
+    const queued = s.one('SELECT m.id,m.text FROM outbox o JOIN messages m ON m.id=o.message_id');
+    expect(queued.text).toContain(action.actionId);
+    expect(queued.text).toContain('Do not repeat');
+    expect(s.messages(employee.dmId).map((m: any) => m.id)).not.toContain(queued.id);
   });
 
   it('isolates action receipts and approvals from other users and employees', () => {
@@ -239,6 +364,8 @@ describe('connection setup and recovery', () => {
   it('reuses one card, upgrades its requested access, and resolves request IDs after approval', async () => {
     const { s, broker, run, id, employee, user } = fixture();
     s.run('DELETE FROM grants');
+    // The owner chose to be asked before an account is shared.
+    s.set('connections.askBeforeSharing.' + user.id, true);
     const read = broker.request(run, 'railway', 'read');
     const write = broker.request(run, 'railway', 'write');
     expect(read.requestId).toBe(write.requestId);
@@ -273,6 +400,7 @@ describe('connection setup and recovery', () => {
   it('does not downgrade an existing write grant when an older read card is approved', async () => {
     const { s, broker, run, employee, user, id } = fixture();
     s.run('DELETE FROM grants');
+    s.set('connections.askBeforeSharing.' + user.id, true);
     const read = broker.request(run, 'railway', 'read');
     s.run('INSERT INTO grants VALUES(?,?,?)', id, employee.id, '["read","write"]');
     const app = Fastify();
@@ -340,7 +468,10 @@ describe.each(['codex', 'claude', 'opencode'] as const)('%s shared MCP contract'
     };
     const status = await call('workspace_connection_status', { connectionId: id });
     expect(status.capabilities).toEqual(['read', 'write']);
-    const discovered = await call('workspace_connection_tools', { connectionId: id, query: 'read' });
+    const discovered = await call('workspace_connection_tools', {
+      connectionId: id,
+      query: 'read',
+    });
     expect(discovered.tools.map((tool: any) => tool.name)).toEqual(['read']);
     expect(discovered.totalTools).toBe(2);
     const result = await call('workspace_connection_call', {

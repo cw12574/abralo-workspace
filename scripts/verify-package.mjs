@@ -10,6 +10,7 @@ const release = JSON.parse(readFileSync(join(root, 'release.json'), 'utf8'));
 if (release.platform !== process.platform || release.arch !== process.arch)
   throw new Error('Run verification on the package target OS and CPU.');
 for (const name of ['dist/web/index.html', 'dist/service/apps/service/src/main.js', 'README.md',
+  'dist/web/notification.png', 'dist/web/notification.ico',
   'docs/preview/START-HERE.md', 'docs/preview/ACCESS-AND-PRIVACY.md', 'docs/preview/RECOVERY.md', 'docs/preview/FEEDBACK.md',
   'docs/preview/GOALS-TRIAL.md', 'dist/service/apps/service/src/goals.js', 'dist/service/apps/service/src/work.js'])
   if (!existsSync(join(root, name))) throw new Error('Missing package file: ' + name);

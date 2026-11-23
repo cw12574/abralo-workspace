@@ -54,7 +54,8 @@ export class GmailConnection {
     });
     return client;
   }
-  async authorize(write = false) {
+  /** chooseAccount makes Google show its account picker when another Gmail account is connected. */
+  async authorize(write = false, chooseAccount = false) {
     const client = this.client(),
       state = randomBytes(32).toString('base64url'),
       pkce = await client.generateCodeVerifierAsync();
@@ -67,7 +68,7 @@ export class GmailConnection {
     return client.generateAuthUrl({
       state,
       access_type: 'offline',
-      prompt: 'consent',
+      prompt: chooseAccount ? 'consent select_account' : 'consent',
       scope: [
         'https://www.googleapis.com/auth/gmail.readonly',
         ...(write ? ['https://www.googleapis.com/auth/gmail.send'] : []),
@@ -85,6 +86,10 @@ export class GmailConnection {
     const old = this.vault.get(this.id);
     this.vault.set(this.id, { ...old, tokens: { ...old.tokens, ...tokens }, verifier: undefined });
     return this.profile();
+  }
+  /** Ends this sign-in at Google. Best effort; local credentials are removed regardless. */
+  async revoke() {
+    await this.client().revokeCredentials();
   }
   async profile() {
     const { data } = await this.client().request<any>({

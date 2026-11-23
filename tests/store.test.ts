@@ -197,15 +197,17 @@ describe('durable workspace', () => {
       headers,
     });
     expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toEqual({ path: realpathSync(f.dir), name: f.dir.split(/[\\/]/).pop() });
+    // Folders are stored by their canonical path (macOS /private/var, Windows long names).
+    const canonical = realpathSync.native(f.dir);
+    expect(saved.json()).toEqual({ path: canonical, name: canonical.split(/[\\/]/).pop() });
     expect(
       (
         await app.inject({
           url: `/api/conversations/${f.employee.dmId}/working-folder`,
           headers,
         })
-    ).json().path,
-    ).toBe(realpathSync(f.dir));
+      ).json().path,
+    ).toBe(canonical);
     const invalid = await app.inject({
       method: 'PUT',
       url: `/api/conversations/${f.employee.dmId}/working-folder`,

@@ -1,6 +1,6 @@
 {
   "name": "agent-workspace",
-  "version": "0.2.0-preview",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "build": "tsc --noEmit && vite build --config apps/web/vite.config.ts --configLoader native && tsc -p tsconfig.service.json",
     "start": "node dist/service/apps/service/src/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --maxWorkers=2 --testTimeout 15000",
+    "test": "vitest run --testTimeout=20000 --hookTimeout=20000",
     "test:live": "tsx scripts/live-smoke.ts",
     "package": "node scripts/package.mjs"
   },
@@ -22,18 +22,18 @@
     "@anthropic-ai/claude-agent-sdk": "0.3.280",
     "@fastify/cookie": "11.1.2",
     "@fastify/multipart": "9.4.0",
-    "@fastify/static": "10.1.2",
-    "@modelcontextprotocol/sdk": "1.32.0",
+    "@fastify/static": "10.1.12",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@openai/codex": "0.156.1",
     "better-sqlite3": "12.11.1",
     "drizzle-orm": "0.45.3",
-    "fastify": "5.12.6",
+    "fastify": "5.12.8",
     "google-auth-library": "11.1.0",
     "node-notifier": "11.0.0",
     "opencode-ai": "1.18.32",
     "playwright": "1.63.0",
     "web-push": "3.6.7",
-    "zod": "4.6.6"
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",
@@ -57,7 +57,7 @@
     "remark-gfm": "4.0.1",
     "tsx": "4.23.15",
     "typescript": "5.9.3",
-    "vite": "7.3.7",
+    "vite": "7.3.8",
     "vitest": "4.1.12"
   },
   "pnpm": {
@@ -72,6 +72,8 @@
     "scripts/launcher.mjs",
     "scripts/installed-launcher.mjs",
     "scripts/maintenance-helper.mjs",
+    "scripts/maintenance-build.mjs",
+    "scripts/maintenance-compact.mjs",
     "scripts/stage-update.mjs",
     "scripts/install-windows.ps1",
     "scripts/open-goals-preview.cmd",

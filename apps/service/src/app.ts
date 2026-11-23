@@ -1,3 +1,6 @@
+import { ProviderUpdates } from './provider-updates.js';
+import { defaultProvider, rememberFirstProvider, saveDefaultProvider } from './provider-default.js';
+import { RECOMMENDED_MODEL } from './model-catalogue.js';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
@@ -22,17 +25,13 @@ import {
   hash,
   passwordHash,
   verifyPassword,
-  sharedMessageSql,
+  visibleMessageSql,
 } from './store.js';
 import { Supervisor } from './supervisor.js';
-import { EmployeeInput, SendMessage } from '../../../packages/contracts/src/index.js';
+import { MessageBranches } from './message-branches.js';
+import { EmployeeInput, Harness, SendMessage } from '../../../packages/contracts/src/index.js';
 import { summaryEvent } from '../../../packages/contracts/src/activity-summary.js';
-import {
-  ensureDirectory,
-  execFileAsync,
-  launch,
-  killTree,
-} from '../../../packages/host/src/index.js';
+import { ensureDirectory, execFileAsync, killTree, launch } from '../../../packages/host/src/index.js';
 import { CodexAdapter } from './adapters/codex.js';
 import { registerWorkspaceTools } from './workspace-tools.js';
 import { registerNotifications } from './notifications.js';
@@ -42,11 +41,15 @@ import { quotaForecasts } from './usage.js';
 import { handoffTeam } from './team-handoff.js';
 import { createMaintenance, type MaintenanceConfig } from './maintenance.js';
 import { Goals, registerGoalRoutes } from './goals.js';
+import { protectGoalLead } from './goal-staffing.js';
+import { GoalRunner } from './goal-runner.js';
 import { Work, registerWorkRoutes } from './work.js';
 import { ComputerUse } from './computer-use.js';
+import { Briefings, registerBriefingRoutes } from './briefings.js';
+import { APP_VERSION } from './version.js';
 export async function createApp(
   store: Store,
-  options: { supervisor?: Supervisor; staticRoot?: string; maintenance?: MaintenanceConfig } = {},
+  options: { providerUpdates?: boolean; supervisor?: Supervisor; staticRoot?: string; maintenance?: MaintenanceConfig } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 200000, trustProxy: false });
   const canonicalDataDirectory = realpathSync(store.dir);
@@ -56,9 +59,16 @@ export async function createApp(
   const buildId = process.env.WORKSPACE_BUILD_ID || 'unmanaged';
   const supervisor = options.supervisor || new Supervisor(store);
   const maintenance = createMaintenance(store, supervisor, options.maintenance);
+  supervisor.approvalActions.set('maintenance', async (data, decision) => {
+    if (store.user(decision.user_id)?.role !== 'owner')
+      throw new ApiError(403, 'Owner access required.');
+    return maintenance.execute(data.detail.jobId);
+  });
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   const authAttempts = new Map<string, { count: number; until: number }>();
+  // The Vite dev server's origin is trusted only when running from source, never in a build.
+  const devOrigin = import.meta.url.endsWith('.ts') ? 'http://127.0.0.1:5178' : undefined;
   app.decorateRequest('user', null);
   app.addHook('onRequest', async (req, reply) => {
     const configured = process.env.WORKSPACE_PUBLIC_URL;
@@ -77,7 +87,7 @@ export async function createApp(
       const u = new URL(origin);
       if (
         !allowed.has(u.hostname) ||
-        (u.host !== req.headers.host && origin !== configured && origin !== 'http://127.0.0.1:5178')
+        (u.host !== req.headers.host && origin !== configured && origin !== devOrigin)
       )
         throw new ApiError(403, 'Origin is not allowed.');
     }
@@ -143,12 +153,21 @@ export async function createApp(
     // A long-lived goal outlives the conversation that first named it. Move it
     // to another active assistant conversation owned by the same person.
     for (const goal of store.all('SELECT id,owner_id FROM goals WHERE conversation_id=?', id)) {
-      const replacement = store.all('SELECT data FROM employees WHERE owner_id=?', goal.owner_id)
+      const replacement = store
+        .all('SELECT data FROM employees WHERE owner_id=?', goal.owner_id)
         .map((row: any) => JSON.parse(row.data))
         .find((agent: any) => !agent.deactivatedAt && agent.dmId !== id);
       if (!replacement)
-        throw new ApiError(409, 'This conversation has a lasting goal. Keep another active agent before deleting it.');
-      store.run('UPDATE goals SET conversation_id=?,lead_agent_id=CASE WHEN lead_agent_id=(SELECT employee_id FROM conversations WHERE id=?) THEN ? ELSE lead_agent_id END,source_message_id=NULL,updated_at=? WHERE id=?', replacement.dmId, id, replacement.id, now(), goal.id);
+        throw new ApiError(
+          409,
+          'This conversation has a lasting goal. Keep another active agent before deleting it.',
+        );
+      store.run(
+        'UPDATE goals SET conversation_id=?,source_message_id=NULL,updated_at=? WHERE id=?',
+        replacement.dmId,
+        now(),
+        goal.id,
+      );
       store.emit('goal.changed', replacement.dmId, { id: goal.id }, goal.owner_id);
     }
     store.run('DELETE FROM work_items WHERE conversation_id=?', id);
@@ -195,15 +214,15 @@ export async function createApp(
     store.run('DELETE FROM attachments WHERE conversation_id=?', id);
     store.run('DELETE FROM events WHERE conversation_id=?', id);
     store.run('DELETE FROM members WHERE conversation_id=?', id);
-    store.run('DELETE FROM employee_conversations WHERE conversation_id=?', id);
+
     store.run('DELETE FROM conversations WHERE id=?', id);
-    store.run('DELETE FROM settings WHERE key LIKE ?', `channel.${id}.%`);
-    store.run('DELETE FROM settings WHERE key=?', 'archive.schedules.' + id);
     return { paths };
   };
   const canonicalFolder = (path: string) => {
     try {
-      const canonical = realpathSync(path);
+      // Native resolution also expands Windows short names (RUNNER~1), so one folder
+      // has one stored path, matching how task worktrees resolve it.
+      const canonical = realpathSync.native(path);
       if (!statSync(canonical).isDirectory()) throw new Error();
       return canonical;
     } catch {
@@ -400,7 +419,7 @@ if ($selected) { [Console]::WriteLine($selected) }
   app.get('/api/health', async () => ({
     ok: true,
     product: 'agent-workspace',
-    version: '0.1.0',
+    version: APP_VERSION,
     buildId,
     dataDirectoryId,
     maintenanceJob: process.env.WORKSPACE_MAINTENANCE_JOB || null,
@@ -446,7 +465,7 @@ if ($selected) { [Console]::WriteLine($selected) }
     const u = user(req);
     const conversations = store
       .all(
-        `SELECT c.*,m.last_read,(SELECT COUNT(*) FROM messages msg WHERE msg.conversation_id=c.id AND msg.seq>m.last_read AND msg.author_id<>? AND msg.kind<>'system' AND msg.text<>'' AND ${sharedMessageSql}) unread FROM conversations c JOIN members m ON m.conversation_id=c.id WHERE m.user_id=? ORDER BY c.created_at`,
+        `SELECT c.*,m.last_read,(SELECT COUNT(*) FROM messages msg WHERE msg.conversation_id=c.id AND msg.seq>m.last_read AND msg.author_id<>? AND msg.kind<>'system' AND msg.text<>'' AND ${visibleMessageSql}) unread FROM conversations c JOIN members m ON m.conversation_id=c.id WHERE m.user_id=? AND c.kind IN ('dm','human_dm') ORDER BY c.created_at`,
         u.id,
         u.id,
       )
@@ -457,7 +476,6 @@ if ($selected) { [Console]::WriteLine($selected) }
         employeeId: c.employee_id,
         createdAt: c.created_at,
         unread: c.unread,
-        archivedAt: store.setting('channel.archived.' + c.id),
       }));
     const availableEmployees = store
       .all(
@@ -468,7 +486,7 @@ if ($selected) { [Console]::WriteLine($selected) }
       .map((e) => {
         const value = JSON.parse(e.data);
         value.attentionUnread = store.one(
-          'SELECT COUNT(*) n FROM inbox i JOIN messages msg ON msg.id=i.message_id JOIN members m ON m.conversation_id=msg.conversation_id AND m.user_id=i.user_id WHERE i.user_id=? AND i.seen=0 AND msg.author_id=?',
+          "SELECT COUNT(*) n FROM inbox i JOIN messages msg ON msg.id=i.message_id JOIN members m ON m.conversation_id=msg.conversation_id AND m.user_id=i.user_id WHERE i.user_id=? AND i.seen=0 AND msg.author_id=? AND msg.conversation_id IN (SELECT id FROM conversations WHERE kind IN ('dm','human_dm'))",
           u.id,
           value.id,
         ).n;
@@ -484,7 +502,7 @@ if ($selected) { [Console]::WriteLine($selected) }
             u.id,
           )?.at || null;
         const recent = store.one(
-          'SELECT r.conversation_id,r.thread_id,r.state,c.name FROM runs r JOIN conversations c ON c.id=r.conversation_id JOIN members m ON m.conversation_id=c.id AND m.user_id=? WHERE r.employee_id=? ORDER BY r.created_at DESC LIMIT 1',
+          "SELECT r.conversation_id,r.thread_id,r.state,c.name FROM runs r JOIN conversations c ON c.id=r.conversation_id JOIN members m ON m.conversation_id=c.id AND m.user_id=? WHERE r.employee_id=? AND c.kind='dm' ORDER BY r.created_at DESC LIMIT 1",
           u.id,
           value.id,
         );
@@ -502,37 +520,27 @@ if ($selected) { [Console]::WriteLine($selected) }
     const ownedEmployees = store
       .all('SELECT data FROM employees WHERE owner_id=?', u.id)
       .map(({ data }) => JSON.parse(data));
-    const chiefOfStaffId = store.setting('workspace.chiefOfStaff.' + u.id);
     return {
       user: u,
       name: store.setting('workspace.name', 'Workspace'),
+      chiefOfStaffId: store.setting('workspace.chiefOfStaff.' + u.id, ''),
       purpose: store.setting('workspace.purpose', ''),
       objectives: store.setting(
         'workspace.objectives.' + u.id,
         store.setting('workspace.purpose', '') ? [store.setting('workspace.purpose', '')] : [],
       ),
       onboarded: store.setting('workspace.onboarded', false),
-      employees: availableEmployees
-        .filter((e) => !e.deactivatedAt)
-        .map((e) => ({ ...e, isChiefOfStaff: e.id === chiefOfStaffId })),
-      inactiveEmployees: ownedEmployees
-        .filter((e) => !!e.deactivatedAt)
-        .map((e) => ({ ...e, isChiefOfStaff: e.id === chiefOfStaffId })),
+      employees: availableEmployees.filter((e) => !e.deactivatedAt),
+      inactiveEmployees: ownedEmployees.filter((e) => !!e.deactivatedAt),
       conversations: conversations.map((conversation) => ({
         ...conversation,
-        archivedAt: store.setting('channel.archived.' + conversation.id),
-        isTeamChannel: conversation.id === store.setting('workspace.team'),
         agentDeactivated: !!ownedEmployees.find(
           (employee) => employee.id === conversation.employeeId && employee.deactivatedAt,
         ),
       })),
-      archivedChannels: conversations.filter(
-        (conversation) =>
-          conversation.kind === 'channel' && store.setting('channel.archived.' + conversation.id),
-      ),
       humans: store.all('SELECT id,name,role FROM humans'),
-      cursor: store.one('SELECT COALESCE(MAX(cursor),0) cursor FROM events').cursor,
-      capabilities: { remoteConfigured: !!process.env.WORKSPACE_PUBLIC_URL, version: '0.1.0' },
+      cursor: store.replay.head(),
+      capabilities: { remoteConfigured: !!process.env.WORKSPACE_PUBLIC_URL, version: APP_VERSION },
     };
   });
   app.patch('/api/profile', async (req) => {
@@ -564,61 +572,81 @@ if ($selected) { [Console]::WriteLine($selected) }
       } else store.set('workspace.' + k, v);
     return { ok: true };
   });
+  const providerUpdates = new ProviderUpdates(supervisor);
+  if (options.providerUpdates) providerUpdates.restore();
+  app.get('/api/models', async req => {
+    owner(req);
+    return { ...supervisor.catalogue.status(user(req).id), updates: providerUpdates.status() };
+  });
+  app.post('/api/models/check', async req => {
+    owner(req);
+    for (const provider of supervisor.catalogue.snapshot()) {
+      if (!provider.installed || (provider.harness === 'opencode' && provider.authenticated !== true)) continue;
+      await supervisor.catalogue.refresh(provider.harness, true);
+    }
+    if (options.providerUpdates) void providerUpdates.retryChecks().catch(() => {});
+    return { ok: true };
+  });
+  app.post('/api/models/dismiss', async req => {
+    owner(req);
+    const { ids } = z.object({ ids: z.array(z.string()).max(20) }).parse(req.body);
+    supervisor.catalogue.dismiss(user(req).id, ids);
+    return { ok: true };
+  });
+  app.put('/api/models/preferences', async req => {
+    owner(req);
+    const b = z.object({ notifications: z.boolean().optional(), autoUpdate: z.boolean().optional() }).parse(req.body);
+    if (b.notifications !== undefined) store.set('models.notifications.' + user(req).id, b.notifications);
+    if (b.autoUpdate !== undefined) store.set('models.autoUpdate', b.autoUpdate);
+    store.emit('models.changed', null, {}, user(req).id);
+    return { ok: true };
+  });
   app.get('/api/providers', async (req) => {
     owner(req);
-    const { check } = z
-      .object({ check: z.enum(['codex', 'claude', 'opencode']).optional() })
-      .parse(req.query);
-    return supervisor.infos(check);
+    const infos = await supervisor.infos((req.query as any).check);
+    const preferred = defaultProvider(store, infos);
+    return infos.map((p) => ({ ...p, isDefault: p.harness === preferred }));
+  });
+  app.put('/api/providers/default', async (req) => {
+    owner(req);
+    const b = z.object({ harness: Harness }).parse(req.body);
+    const info = supervisor.catalogue.snapshot().find((p) => p.harness === b.harness);
+    if (info?.authenticated !== true)
+      throw new ApiError(409, 'Connect this provider before making it the default.');
+    saveDefaultProvider(store, b.harness);
+    store.emit('models.changed', null, {}, user(req).id);
+    return { harness: b.harness };
   });
   app.post('/api/providers/codex/login', async (req) => {
     owner(req);
-    const { type } = z
-      .object({ type: z.enum(['chatgpt', 'chatgptDeviceCode']).default('chatgpt') })
-      .parse(req.body || {});
-    return (supervisor.adapters.codex as CodexAdapter).login(type);
-  });
-  app.post('/api/providers/codex/cancel', async (req) => {
-    owner(req);
-    await (supervisor.adapters.codex as CodexAdapter).cancelLogin();
-    return { ok: true };
+    return (supervisor.adapters.codex as CodexAdapter).login();
   });
   let claudeLogin: any = null;
-  const stopClaudeLogin = async () => {
-    const attempt = claudeLogin;
-    if (!attempt) return;
+  const stopClaudeLogin = () => {
+    const current = claudeLogin;
     claudeLogin = null;
-    clearTimeout(attempt.timer);
-    if (attempt.process.pid) await killTree(attempt.process.pid);
+    if (!current) return;
+    clearTimeout(current.timer);
+    if (current.process.pid) void killTree(current.process.pid);
   };
-  app.get('/api/providers/claude/login', async (req) => {
-    owner(req);
-    if (!claudeLogin)
-      throw new ApiError(
-        409,
-        'Claude sign-in ended. Check your connection or start sign-in again.',
-      );
-    return claudeLogin.info;
-  });
-  app.post('/api/providers/claude/cancel', async (req) => {
-    owner(req);
-    await stopClaudeLogin();
-    return { ok: true };
-  });
+  app.addHook('onClose', async () => stopClaudeLogin());
   app.post('/api/providers/claude/login', async (req) => {
     owner(req);
-    if (claudeLogin) return claudeLogin.info;
+    // Every click starts a clean attempt. An abandoned one must never hand back
+    // a stale link or block the next sign-in.
+    stopClaudeLogin();
     const process = launch('claude', ['auth', 'login', '--claudeai']);
     const info: any = {
       message:
-        'Complete the native Claude Code sign-in in your browser, then check the connection.',
+        'Complete the Claude sign-in in your browser. This page will notice when it finishes.',
+      startedAt: now(),
     };
-    claudeLogin = { process, info };
-    const attempt = claudeLogin;
+    const attempt: any = { process, info };
+    claudeLogin = attempt;
     attempt.timer = setTimeout(() => {
-      if (claudeLogin === attempt) void stopClaudeLogin();
-    }, 10 * 60000);
-    attempt.timer.unref();
+      if (claudeLogin === attempt) stopClaudeLogin();
+    }, 5 * 60 * 1000);
+    attempt.timer.unref?.();
     let output = '';
     const capture = (d: Buffer) => {
       output = (output + d.toString()).slice(-8000);
@@ -629,19 +657,17 @@ if ($selected) { [Console]::WriteLine($selected) }
     };
     process.stdout.on('data', capture);
     process.stderr.on('data', capture);
-    const ended = () => {
+    const finish = (code: number | null) => {
       clearTimeout(attempt.timer);
       if (claudeLogin === attempt) claudeLogin = null;
+      // Re-read the native account so every open page sees the result at once.
+      if (code === 0) void supervisor.catalogue.refresh('claude', true).catch(() => {});
     };
-    process.on('error', ended);
-    process.stdin.on('error', ended);
-    process.on('exit', ended);
-    await new Promise((r) => setTimeout(r, 1000));
-    if (claudeLogin !== attempt)
-      throw new ApiError(
-        409,
-        'Claude sign-in ended. Check your connection or start sign-in again.',
-      );
+    process.on('error', () => finish(null));
+    process.on('exit', finish);
+    // Give the CLI a moment to print its link, but return as soon as it does.
+    for (let i = 0; i < 40 && !info.authUrl && claudeLogin === attempt; i++)
+      await new Promise((r) => setTimeout(r, 100));
     return info;
   });
   app.post('/api/providers/claude/code', async (req) => {
@@ -718,10 +744,14 @@ if ($selected) { [Console]::WriteLine($selected) }
     return store.createEmployee(user(req).id, b);
   });
   const protectLastAgent = (ownerId: string, removingId: string) => {
-    const alternative = store.all('SELECT id,data FROM employees WHERE owner_id=?', ownerId)
+    const alternative = store
+      .all('SELECT id,data FROM employees WHERE owner_id=?', ownerId)
       .some((row: any) => row.id !== removingId && !JSON.parse(row.data).deactivatedAt);
     if (!alternative)
-      throw new ApiError(409, 'Keep one active agent so you can continue the conversation. Add or reactivate another agent first.');
+      throw new ApiError(
+        409,
+        'Keep one active agent so you can continue the conversation. Add or reactivate another agent first.',
+      );
   };
   app.post('/api/employees/:id/deactivate', async (req) => {
     const actor = owner(req);
@@ -729,6 +759,7 @@ if ($selected) { [Console]::WriteLine($selected) }
     const employee = store.employee(id);
     if (!employee || employee.ownerId !== actor.id) throw new ApiError(404, 'Agent not found.');
     if (employee.deactivatedAt) return { ok: true };
+    protectGoalLead(store, id);
     protectLastAgent(actor.id, id);
     for (const run of store.all(
       "SELECT id,user_id FROM runs WHERE employee_id=? AND state NOT IN ('completed','cancelled','failed','interrupted')",
@@ -792,6 +823,7 @@ if ($selected) { [Console]::WriteLine($selected) }
     const id = (req.params as any).id;
     const employee = store.employee(id);
     if (!employee || employee.ownerId !== actor.id) throw new ApiError(404, 'Agent not found.');
+    protectGoalLead(store, id, true);
     if (!employee.deactivatedAt) protectLastAgent(actor.id, id);
     const activeRuns = store
       .all(
@@ -836,42 +868,20 @@ if ($selected) { [Console]::WriteLine($selected) }
         409,
         'The agent has stopped accepting work, but its current run is still stopping. Retry deletion shortly.',
       );
-    const rooms = store.all(
-      `SELECT c.id,c.name FROM conversations c
-       JOIN employee_conversations ec ON ec.conversation_id=c.id
-       WHERE ec.employee_id=? AND c.kind='channel'`,
-      id,
-    );
-    const roomMembers = rooms.flatMap((room: any) =>
-      store
-        .all('SELECT user_id FROM members WHERE conversation_id=?', room.id)
-        .map((member: any) => member.user_id as string),
-    );
     const viewers = new Set([
       actor.id,
-      ...roomMembers,
       ...store
         .all('SELECT user_id FROM employee_grants WHERE employee_id=?', id)
         .map((row: any) => row.user_id),
     ]);
     const { paths } = store.db.transaction(() => {
       if (!employee.deactivatedAt) protectLastAgent(actor.id, id);
-      for (const room of rooms)
-        store.addMessage(
-          room.id,
-          employee.id,
-          employee.name,
-          'system',
-          `${employee.name} left #${room.name}.`,
-        );
       const purged = purgeConversation(employee.dmId);
-      store.run('UPDATE goals SET lead_agent_id=NULL,updated_at=? WHERE lead_agent_id=?', now(), id);
       store.run('DELETE FROM employee_grants WHERE employee_id=?', id);
       store.run('DELETE FROM grants WHERE employee_id=?', id);
       store.run('DELETE FROM schedules WHERE employee_id=?', id);
       store.run('DELETE FROM outbox WHERE employee_id=?', id);
       store.run('DELETE FROM native_sessions WHERE employee_id=?', id);
-      store.run('DELETE FROM employee_conversations WHERE employee_id=?', id);
       store.run('DELETE FROM employees WHERE id=?', id);
       return purged;
     })();
@@ -903,12 +913,14 @@ if ($selected) { [Console]::WriteLine($selected) }
       const prior = store.setting('onboarding.' + u.id);
       if (prior) return prior;
       store.run('UPDATE humans SET name=? WHERE id=?', body.userName, u.id);
+      rememberFirstProvider(store, body.employee.harness);
       const employee = store.createEmployee(u.id, {
         ...body.employee,
         name: 'Chief of Staff',
+        canDelegate: true,
         role: 'Organizes the team and keeps work moving',
         instructions:
-          'You are the Chief of Staff, the first employee and owner of continuity. Help the human turn substantial requests into lasting goals, agree on a useful next step, and report checked results. Keep ordinary conversation available while work continues. Do useful, bounded work yourself or delegate to existing employees when the human asks for it. Ask the human a specific question only when a material decision or missing fact blocks progress. Use a new employee or team proposal only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Avoid parallel work without a concrete reason and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.',
+          'You are the Chief of Staff, the first employee and owner of continuity. Help the human turn substantial requests into lasting goals, agree on a useful next step, and report checked results. Keep ordinary conversation available while work continues. Do useful, bounded work yourself or delegate to existing employees when the human asks for it. Ask the human a specific question only when a material decision or missing fact blocks progress. Propose one or more new employees only when a recurring skill or capacity gap clearly warrants it; explain the evidence and expected benefit, and never claim new employees exist before approval. Avoid parallel work without a concrete reason and do not keep agents busy for its own sake. Respect existing workspace access, permissions, and approval boundaries.',
       });
       const objectives = body.objectives?.length ? body.objectives : [body.purpose!.trim()];
       const objectiveText = objectives.map((objective, i) => `${i + 1}. ${objective}`).join('\n');
@@ -942,45 +954,6 @@ if ($selected) { [Console]::WriteLine($selected) }
     })();
     queueMicrotask(() => void supervisor.dispatch());
     return result;
-  });
-  app.post('/api/chief-of-staff', async (req) => {
-    const actor = owner(req);
-    const { harness } = z
-      .object({ harness: z.enum(['codex', 'claude', 'opencode']) })
-      .parse(req.body);
-    const owned = store
-      .all('SELECT id,data FROM employees WHERE owner_id=?', actor.id)
-      .map((row: any) => ({ id: row.id, ...JSON.parse(row.data) }));
-    const priorId = store.setting('workspace.chiefOfStaff.' + actor.id);
-    const prior = owned.find((employee: any) => employee.id === priorId);
-    const existing = prior || owned.find((employee: any) => employee.name === 'Chief of Staff');
-    if (existing && !existing.deactivatedAt) {
-      store.set('workspace.chiefOfStaff.' + actor.id, existing.id);
-      return existing;
-    }
-    if (existing?.deactivatedAt)
-      throw new ApiError(
-        409,
-        'Reactivate the existing Chief of Staff from Archived before creating another.',
-      );
-
-    const employee = store.createEmployee(actor.id, {
-      name: 'Chief of Staff',
-      role: 'Organizes the team and keeps work moving',
-      harness,
-      model: '',
-      cwd: '',
-      instructions: 'You are the Chief of Staff. Help the human maintain lasting goals, agree on the next step, and report checked results. Work starts from requests or explicit schedules.',
-    });
-    store.set('workspace.chiefOfStaff.' + actor.id, employee.id);
-    store.addMessage(
-      employee.dmId,
-      employee.id,
-      employee.name,
-      'system',
-      'A new Chief of Staff has been created. Your saved workspace objectives are still available; the previous private conversation was deleted.',
-    );
-    return employee;
   });
   app.post('/api/humans/:id/conversation', async (req) => {
     const other = store.user((req.params as any).id),
@@ -1053,244 +1026,29 @@ if ($selected) { [Console]::WriteLine($selected) }
     const id = (req.params as any).id;
     const e = store.employee(id);
     if (e?.ownerId !== user(req).id) throw new ApiError(403, 'Employee is unavailable.');
-    const b = EmployeeInput.parse({ ...e, ...(req.body as any) });
+    const patch = req.body as any;
+    const b = EmployeeInput.parse({ ...e, ...patch });
+    if (b.harness !== e.harness) {
+      // Switching provider is only safe between runs: the supervisor reads the
+      // employee's harness at dispatch, and model ids do not cross providers.
+      if (
+        store.one(
+          "SELECT 1 FROM runs WHERE employee_id=? AND state IN ('accepted','dispatching','running','waiting_input','waiting_permission','provider_limited','cancelling')",
+          id,
+        )
+      )
+        throw new ApiError(409, 'Finish or cancel the current run before changing provider.');
+      const info = supervisor.catalogue.snapshot().find((p) => p.harness === b.harness);
+      if (info?.authenticated !== true)
+        throw new ApiError(409, 'Connect this provider before switching to it.');
+      const known = !b.model || b.model === RECOMMENDED_MODEL ||
+        info.models?.some((m) => m.id === b.model || m.aliases?.includes(b.model));
+      if (!known || patch.model === undefined) b.model = '';
+    }
     store.run('UPDATE employees SET data=? WHERE id=?', JSON.stringify({ ...e, ...b }), id);
     store.run('UPDATE conversations SET name=? WHERE id=?', b.name, e.dmId);
     store.emit('workspace.changed', null, {}, user(req).id);
     return { ...e, ...b };
-  });
-  app.post('/api/channels', async (req) => {
-    const b = z
-      .object({
-        name: z.string().trim().min(1).max(80),
-        members: z.array(z.string()).default([]),
-        employees: z.array(z.string()).default([]),
-      })
-      .parse(req.body);
-    const id = uid();
-    store.db.transaction(() => {
-      if (
-        store.one(
-          "SELECT 1 FROM conversations WHERE kind='channel' AND lower(name)=lower(?)",
-          b.name,
-        )
-      )
-        throw new ApiError(409, 'A channel with that name already exists.');
-      for (const employeeId of b.employees)
-        if (!store.canUseEmployee(user(req).id, employeeId))
-          throw new ApiError(403, 'An employee is unavailable to you.');
-      store.run('INSERT INTO conversations VALUES(?,?,?,?,?)', id, b.name, 'channel', null, now());
-      for (const m of new Set([user(req).id, ...b.members])) {
-        if (!store.user(m)) throw new ApiError(400, 'Unknown human');
-        store.run('INSERT INTO members(conversation_id,user_id) VALUES(?,?)', id, m);
-        store.emit('workspace.changed', null, {}, m);
-      }
-      for (const employeeId of new Set(b.employees))
-        store.run('INSERT INTO employee_conversations VALUES(?,?)', employeeId, id);
-    })();
-    return { id };
-  });
-  app.get('/api/channels/:id', async (req) => {
-    const id = (req.params as any).id;
-    const channel = store.one(
-      "SELECT id,name FROM conversations WHERE id=? AND kind='channel'",
-      id,
-    );
-    if (!channel) throw new ApiError(404, 'Channel not found.');
-    if (!store.one('SELECT 1 FROM members WHERE user_id=? AND conversation_id=?', user(req).id, id))
-      throw new ApiError(403, 'This channel is not available to you.');
-    return {
-      ...channel,
-      archivedAt: store.setting('channel.archived.' + id),
-      purpose: store.setting('channel.' + id + '.purpose', ''),
-      humans: store.all(
-        'SELECT h.id,h.name,h.role FROM humans h JOIN members m ON m.user_id=h.id WHERE m.conversation_id=? ORDER BY h.name COLLATE NOCASE',
-        id,
-      ),
-      employees: store
-        .all(
-          'SELECT e.data FROM employees e JOIN employee_conversations m ON m.employee_id=e.id WHERE m.conversation_id=?',
-          id,
-        )
-        .map(({ data }: any) => {
-          const employee = JSON.parse(data);
-          return {
-            id: employee.id,
-            name: employee.name,
-            role: employee.role,
-            harness: employee.harness,
-          };
-        })
-        .sort((a: any, b: any) => a.name.localeCompare(b.name)),
-    };
-  });
-  app.patch('/api/channels/:id', async (req) => {
-    const id = (req.params as any).id;
-    const actor = user(req);
-    const body = z
-      .object({
-        name: z.string().trim().min(1).max(80).optional(),
-        purpose: z.string().trim().max(500).optional(),
-        addHumans: z.array(z.string()).max(200).default([]),
-        removeHumans: z.array(z.string()).max(200).default([]),
-        addEmployees: z.array(z.string()).max(200).default([]),
-        removeEmployees: z.array(z.string()).max(200).default([]),
-      })
-      .parse(req.body);
-    const channel = store.one(
-      "SELECT id,name FROM conversations WHERE id=? AND kind='channel'",
-      id,
-    );
-    if (!channel) throw new ApiError(404, 'Channel not found.');
-    store.authorize(actor.id, id);
-    if (store.setting('channel.archived.' + id))
-      throw new ApiError(409, 'Restore this channel before changing it.');
-    const name = body.name?.replace(/^#/, '').trim();
-    if (body.name !== undefined && !name) throw new ApiError(400, 'Enter a channel name.');
-    const sets = [
-      [new Set(body.addHumans), new Set(body.removeHumans)],
-      [new Set(body.addEmployees), new Set(body.removeEmployees)],
-    ];
-    if (sets.some(([add, remove]) => [...add].some((member) => remove.has(member))))
-      throw new ApiError(400, 'A member cannot be added and removed at the same time.');
-    const affectedHumans = new Set<string>(
-      store
-        .all('SELECT user_id FROM members WHERE conversation_id=?', id)
-        .map((row: any) => row.user_id),
-    );
-    store.db.transaction(() => {
-      if (
-        name &&
-        store.one(
-          "SELECT 1 FROM conversations WHERE kind='channel' AND lower(name)=lower(?) AND id<>?",
-          name,
-          id,
-        )
-      )
-        throw new ApiError(409, 'A channel with that name already exists.');
-      const remainingHumans =
-        Number(store.one('SELECT COUNT(*) n FROM members WHERE conversation_id=?', id).n) -
-        body.removeHumans.filter((member) =>
-          store.one('SELECT 1 FROM members WHERE conversation_id=? AND user_id=?', id, member),
-        ).length;
-      if (remainingHumans + body.addHumans.length < 1)
-        throw new ApiError(400, 'A channel needs at least one person in it.');
-      for (const member of body.removeHumans) {
-        store.run('DELETE FROM members WHERE conversation_id=? AND user_id=?', id, member);
-        affectedHumans.add(member);
-      }
-      for (const member of body.addHumans) {
-        if (!store.user(member)) throw new ApiError(400, 'Unknown person.');
-        store.run('INSERT OR IGNORE INTO members(conversation_id,user_id) VALUES(?,?)', id, member);
-        affectedHumans.add(member);
-      }
-      for (const employeeId of body.removeEmployees)
-        store.run(
-          'DELETE FROM employee_conversations WHERE conversation_id=? AND employee_id=?',
-          id,
-          employeeId,
-        );
-      for (const employeeId of body.addEmployees) {
-        if (!store.canUseEmployee(actor.id, employeeId))
-          throw new ApiError(403, 'You do not have access to that employee.');
-        store.run('INSERT OR IGNORE INTO employee_conversations VALUES(?,?)', employeeId, id);
-      }
-      if (name) store.run('UPDATE conversations SET name=? WHERE id=?', name, id);
-      if (body.purpose !== undefined) store.set('channel.' + id + '.purpose', body.purpose);
-    })();
-    for (const member of affectedHumans) store.emit('workspace.changed', null, {}, member);
-    return { ok: true };
-  });
-  app.post('/api/channels/:id/archive', async (req) => {
-    const actor = owner(req);
-    const id = (req.params as any).id;
-    const channel = store.one(
-      "SELECT id,name FROM conversations WHERE id=? AND kind='channel'",
-      id,
-    );
-    if (!channel) throw new ApiError(404, 'Channel not found.');
-    if (id === store.setting('workspace.team'))
-      throw new ApiError(400, 'The team channel cannot be archived.');
-    if (store.setting('channel.archived.' + id)) return { ok: true };
-    const users = store
-      .all('SELECT user_id FROM members WHERE conversation_id=?', id)
-      .map((row: any) => row.user_id as string);
-    const activeRuns = store.all(
-      "SELECT id,user_id FROM runs WHERE conversation_id=? AND state NOT IN ('completed','cancelled','failed','interrupted')",
-      id,
-    );
-    for (const run of activeRuns)
-      if (supervisor.active.has(run.id)) supervisor.cancel(run.user_id, run.id);
-    const scheduleIds = store
-      .all('SELECT id FROM schedules WHERE conversation_id=? AND enabled=1', id)
-      .map((row: any) => row.id as string);
-    store.db.transaction(() => {
-      store.set('channel.archived.' + id, now());
-      store.run('UPDATE schedules SET enabled=0 WHERE conversation_id=?', id);
-      store.run(
-        "UPDATE outbox SET status='cancelled' WHERE message_id IN (SELECT id FROM messages WHERE conversation_id=?) AND status IN ('pending','new')",
-        id,
-      );
-      store.set('archive.schedules.' + id, scheduleIds);
-    })();
-    for (const member of users)
-      store.emit('workspace.changed', null, { channelId: id, archived: true }, member);
-    store.emit('workspace.changed', null, { channelId: id, archived: true }, actor.id);
-    return { ok: true };
-  });
-  app.post('/api/channels/:id/restore', async (req) => {
-    const actor = owner(req);
-    const id = (req.params as any).id;
-    const channel = store.one("SELECT id FROM conversations WHERE id=? AND kind='channel'", id);
-    if (!channel) throw new ApiError(404, 'Channel not found.');
-    store.db.transaction(() => {
-      store.run('DELETE FROM settings WHERE key=?', 'channel.archived.' + id);
-      for (const scheduleId of store.setting('archive.schedules.' + id, []))
-        store.run(
-          'UPDATE schedules SET enabled=1 WHERE id=? AND conversation_id=?',
-          scheduleId,
-          id,
-        );
-      store.run('DELETE FROM settings WHERE key=?', 'archive.schedules.' + id);
-    })();
-    for (const { user_id } of store.all('SELECT user_id FROM members WHERE conversation_id=?', id))
-      store.emit('workspace.changed', null, { channelId: id, archived: false }, user_id);
-    store.emit('workspace.changed', null, { channelId: id, archived: false }, actor.id);
-    return { ok: true };
-  });
-  app.delete('/api/channels/:id', async (req) => {
-    const actor = owner(req);
-    const id = (req.params as any).id;
-    const channel = store.one("SELECT id FROM conversations WHERE id=? AND kind='channel'", id);
-    if (!channel) throw new ApiError(404, 'Channel not found.');
-    if (id === store.setting('workspace.team'))
-      throw new ApiError(400, 'The team channel cannot be permanently deleted.');
-    const users = new Set([
-      actor.id,
-      ...store
-        .all('SELECT user_id FROM members WHERE conversation_id=?', id)
-        .map((row: any) => row.user_id as string),
-    ]);
-    const activeRuns = store.all(
-      "SELECT id FROM runs WHERE conversation_id=? AND state NOT IN ('completed','cancelled','failed','interrupted')",
-      id,
-    );
-    if (activeRuns.some((run: any) => supervisor.active.has(run.id)))
-      throw new ApiError(
-        409,
-        'The channel still has active work. Archive it first and try again once work has stopped.',
-      );
-    const { paths } = store.db.transaction(() => purgeConversation(id))();
-    for (const path of paths)
-      if (existsSync(path))
-        try {
-          unlinkSync(path);
-        } catch {
-          /* already inaccessible */
-        }
-    for (const viewer of users)
-      store.emit('workspace.changed', null, { channelId: id, deleted: true }, viewer);
-    return { ok: true };
   });
   app.post('/api/invites', async (req) => {
     owner(req);
@@ -1326,62 +1084,16 @@ if ($selected) { [Console]::WriteLine($selected) }
         now(),
       );
     })();
-    store.ensureTeam();
     setSession(reply, id);
     return store.user(id);
   });
   app.get('/api/conversations/:id/messages', async (req) => {
     const id = (req.params as any).id;
-    store.authorize(user(req).id, id, true);
+    store.authorize(user(req).id, id);
     const q = req.query as any;
     const threadId = q.threadId || null;
-    const conversation = store.one('SELECT * FROM conversations WHERE id=?', id);
-    if (q.agentView === '1' && conversation.employee_id && !threadId) {
-      if (!store.canUseEmployee(user(req).id, conversation.employee_id))
-        throw new ApiError(403, 'Agent unavailable');
-      const runs = store.all(
-        'SELECT r.* FROM runs r JOIN members m ON m.conversation_id=r.conversation_id AND m.user_id=? WHERE r.employee_id=? ORDER BY r.created_at DESC LIMIT 100',
-        user(req).id,
-        conversation.employee_id,
-      );
-      const messages = store
-        .all(
-          `SELECT msg.* FROM messages msg JOIN members m ON m.conversation_id=msg.conversation_id AND m.user_id=?
-        WHERE msg.seq<? AND (msg.conversation_id=? OR msg.id IN (SELECT response_id FROM runs WHERE employee_id=?) OR msg.id IN (SELECT message_id FROM runs WHERE employee_id=?) OR (msg.author_id=? AND msg.conversation_id IN (SELECT id FROM conversations WHERE kind='channel')))
-        ORDER BY msg.seq DESC LIMIT 80`,
-          user(req).id,
-          q.before ? Number(q.before) : Number.MAX_SAFE_INTEGER,
-          id,
-          conversation.employee_id,
-          conversation.employee_id,
-          conversation.employee_id,
-        )
-        .reverse()
-        .map((row) => store.message(row, q.activity === 'summary'));
-      return {
-        messages,
-        runs: runs.map((r: any) => ({
-          ...r,
-          limit: store.setting('run.limit.' + r.id),
-          autoResume: store.setting('run.autoResume.' + r.id, false),
-        })),
-        decisions: store
-          .all(
-            "SELECT d.* FROM decisions d JOIN runs r ON r.id=d.run_id JOIN members m ON m.conversation_id=r.conversation_id AND m.user_id=? WHERE r.employee_id=? AND d.user_id=? AND d.state='pending'",
-            user(req).id,
-            conversation.employee_id,
-            user(req).id,
-          )
-          .map((d) => ({ ...d, ...JSON.parse(d.data) })),
-        attachments: store.all(
-          'SELECT a.id,a.name,a.mime,a.size FROM attachments a JOIN members m ON m.conversation_id=a.conversation_id AND m.user_id=? WHERE a.id IN (SELECT value FROM messages msg,json_each(msg.attachments) WHERE msg.id IN (SELECT response_id FROM runs WHERE employee_id=?) OR msg.conversation_id=?)',
-          user(req).id,
-          conversation.employee_id,
-          id,
-        ),
-      };
-    }
     return {
+      cursor: store.replay.head(),
       messages: store.messages(
         id,
         q.before ? Number(q.before) : undefined,
@@ -1415,14 +1127,14 @@ if ($selected) { [Console]::WriteLine($selected) }
   app.get('/api/messages/:id', async (req) => {
     const row = store.one('SELECT * FROM messages WHERE id=?', (req.params as any).id);
     if (!row) throw new ApiError(404, 'Message unavailable');
-    store.authorize(user(req).id, row.conversation_id, true);
+    store.authorize(user(req).id, row.conversation_id);
     return store.message(row, (req.query as any).activity === 'summary');
   });
   app.get('/api/messages/:id/activities/:activityId', async (req, reply) => {
     const { id, activityId } = req.params as any;
     const row = store.one('SELECT * FROM messages WHERE id=?', id);
     if (!row || row.deleted_at) throw new ApiError(404, 'Message unavailable');
-    store.authorize(user(req).id, row.conversation_id, true);
+    store.authorize(user(req).id, row.conversation_id);
     const run = row.run_id && store.one('SELECT employee_id FROM runs WHERE id=?', row.run_id);
     if (!run || !store.canUseEmployee(user(req).id, run.employee_id))
       throw new ApiError(403, 'Agent unavailable');
@@ -1435,6 +1147,9 @@ if ($selected) { [Console]::WriteLine($selected) }
     reply.header('Cache-Control', 'no-store');
     return JSON.parse(activity.data);
   });
+  const branches = new MessageBranches(store, supervisor, {
+    changed: (row: any) => broker.actions.changed(row),
+  });
   app.patch('/api/messages/:id', async (req) => {
     const id = (req.params as any).id;
     const row = store.one('SELECT * FROM messages WHERE id=?', id);
@@ -1443,7 +1158,11 @@ if ($selected) { [Console]::WriteLine($selected) }
     if (row.kind !== 'human' || row.author_id !== user(req).id)
       throw new ApiError(403, 'You can only edit your own messages.');
     if (row.deleted_at) throw new ApiError(409, 'This message has been deleted.');
-    const { text } = z.object({ text: z.string().max(100000) }).parse(req.body);
+    const { text, resend } = z
+      .object({ text: z.string().max(100000), resend: z.boolean().optional() })
+      .parse(req.body);
+    // Editing a message sent to an agent can rerun the conversation from it.
+    if (resend) return branches.resend(id, user(req).id, text);
     if (!text.trim() && JSON.parse(row.attachments).length === 0)
       throw new ApiError(400, 'A message cannot be empty.');
     const changed = store.run(
@@ -1454,9 +1173,17 @@ if ($selected) { [Console]::WriteLine($selected) }
     );
     if (!changed.changes)
       throw new ApiError(409, 'This message has changed. Reload and try again.');
+    branches.saved(id);
     const message = store.message(store.one('SELECT * FROM messages WHERE id=?', id));
     store.emit('message.edited', row.conversation_id, message);
     return message;
+  });
+  app.get('/api/messages/:id/resend-preview', async (req) =>
+    branches.preview((req.params as any).id, user(req).id),
+  );
+  app.put('/api/messages/:id/version', async (req) => {
+    const { version } = z.object({ version: z.number().int().min(1) }).parse(req.body);
+    return branches.switchVersion((req.params as any).id, user(req).id, version);
   });
   app.delete('/api/messages/:id', async (req) => {
     const id = (req.params as any).id;
@@ -1532,23 +1259,14 @@ if ($selected) { [Console]::WriteLine($selected) }
   });
   app.post('/api/conversations/:id/read', async (req) => {
     const id = (req.params as any).id;
-    store.authorize(user(req).id, id, true);
-    const { seq, agentView } = z
-      .object({ seq: z.number().int().nonnegative(), agentView: z.boolean().optional() })
-      .parse(req.body);
-    const employeeId = store.one(
-      'SELECT employee_id FROM conversations WHERE id=?',
+    store.authorize(user(req).id, id);
+    const { seq } = z.object({ seq: z.number().int().nonnegative() }).parse(req.body);
+    store.run(
+      'UPDATE inbox SET seen=1 WHERE user_id=? AND message_id IN (SELECT id FROM messages WHERE conversation_id=? AND seq<=?)',
+      user(req).id,
       id,
-    )?.employee_id;
-    if (agentView && employeeId && store.canUseEmployee(user(req).id, employeeId)) {
-      store.run(
-        'UPDATE inbox SET seen=1 WHERE user_id=? AND message_id IN (SELECT id FROM messages WHERE author_id=? AND seq<=?)',
-        user(req).id,
-        employeeId,
-        seq,
-      );
-      store.emit('inbox.changed', null, {}, user(req).id);
-    }
+      seq,
+    );
     const max = store.one(
       'SELECT COALESCE(MAX(seq),0) seq FROM messages WHERE conversation_id=?',
       id,
@@ -1559,6 +1277,8 @@ if ($selected) { [Console]::WriteLine($selected) }
       user(req).id,
       id,
     );
+    // Publish after the read cursor is saved so every tab refreshes the same count.
+    store.emit('inbox.changed', null, {}, user(req).id);
     return { ok: true };
   });
   app.get('/api/conversations/:id/draft', async (req) => {
@@ -1626,7 +1346,7 @@ if ($selected) { [Console]::WriteLine($selected) }
   app.get('/api/attachments/:id', async (req, reply) => {
     const a = store.one('SELECT * FROM attachments WHERE id=?', (req.params as any).id);
     if (!a) throw new ApiError(404, 'File unavailable');
-    store.authorize(user(req).id, a.conversation_id, true);
+    store.authorize(user(req).id, a.conversation_id);
     reply.type(a.mime).header('Content-Security-Policy', "default-src 'none'; sandbox");
     if (!a.mime.startsWith('image/') || (req.query as any).download === '1')
       reply.header(
@@ -1666,9 +1386,11 @@ if ($selected) { [Console]::WriteLine($selected) }
         version: z.number().int(),
         allow: z.boolean().optional(),
         answers: z.record(z.string(), z.any()).optional(),
+        path: z.string().max(2000).optional(),
+        repo: z.string().max(500).optional(),
       })
       .parse(req.body);
-    supervisor.resolve(user(req).id, (req.params as any).id, b.version, b);
+    await supervisor.resolve(user(req).id, (req.params as any).id, b.version, b);
     return { ok: true };
   });
   app.get('/api/usage', async (req) => ({
@@ -1688,9 +1410,23 @@ if ($selected) { [Console]::WriteLine($selected) }
   }));
   app.get('/api/usage/accounts', async (req) => {
     owner(req);
-    const providers = await supervisor.infos();
+    const providers = await supervisor.infos('usage');
     const quota = quotaForecasts(store, providers);
-    return { providers, ...quota, sampledAt: now() };
+    // Work waiting on a provider limit, so the page can say who resumes when.
+    const limited = store
+      .all(
+        "SELECT r.id,r.employee_id,json_extract(e.data,'$.name') name,json_extract(e.data,'$.harness') harness FROM runs r JOIN employees e ON e.id=r.employee_id WHERE r.user_id=? AND r.state='provider_limited' ORDER BY r.created_at DESC LIMIT 50",
+        user(req).id,
+      )
+      .map((r) => ({
+        runId: r.id,
+        employeeId: r.employee_id,
+        employeeName: r.name,
+        harness: r.harness,
+        retryAt: store.setting('run.limit.' + r.id)?.retryAt || null,
+        autoResume: store.setting('run.autoResume.' + r.id, false) === true,
+      }));
+    return { providers, ...quota, limited, sampledAt: now() };
   });
   app.get('/api/search', async (req) => {
     const q = z
@@ -1699,7 +1435,7 @@ if ($selected) { [Console]::WriteLine($selected) }
       .parse((req.query as any).q || '');
     return store
       .all(
-        `SELECT msg.* FROM messages msg JOIN members m ON m.conversation_id=msg.conversation_id WHERE m.user_id=? AND msg.text LIKE ? ESCAPE '\\' ORDER BY msg.seq DESC LIMIT 50`,
+        `SELECT msg.* FROM messages msg JOIN members m ON m.conversation_id=msg.conversation_id WHERE m.user_id=? AND ${visibleMessageSql} AND msg.conversation_id IN (SELECT id FROM conversations WHERE kind IN ('dm','human_dm')) AND msg.text LIKE ? ESCAPE '\\' ORDER BY msg.seq DESC LIMIT 50`,
         user(req).id,
         '%' + q.replace(/[\\%_]/g, '\\$&') + '%',
       )
@@ -1779,7 +1515,7 @@ if ($selected) { [Console]::WriteLine($selected) }
         end();
         return;
       }
-      const payload = (req.query as any).activity === 'summary' ? summaryEvent(e) : e;
+      const payload = summaryEvent(e);
       reply.raw.write(`id: ${e.cursor}\ndata: ${JSON.stringify(payload)}\n\n`);
     };
     const send = (e: any) => {
@@ -1791,6 +1527,12 @@ if ($selected) { [Console]::WriteLine($selected) }
       if (store.allowedEvent(u.id, e)) write(e);
     };
     store.bus.on('event', send);
+    if (store.replay.resetAfter(cursor)) {
+      cursor = store.replay.head();
+      reply.raw.write(`id: ${cursor}\ndata: ${JSON.stringify({
+        type: 'workspace.resync', cursor, payload: { reason: 'history_expired' },
+      })}\n\n`);
+    }
     let page;
     do {
       page = store.eventsAfter(u.id, cursor);
@@ -1849,13 +1591,46 @@ if ($selected) { [Console]::WriteLine($selected) }
     supervisor,
   );
   registerConnectionRoutes(app, broker);
-  const goals = new Goals(store);
+  const goalRunner = new GoalRunner(store, supervisor);
+  goalRunner.enabled = false;
+  app.addHook('onListen', async () => {
+    supervisor.origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
+    goalRunner.enabled = true;
+    void supervisor.dispatch();
+  });
+  supervisor.goals = goalRunner;
+  const goals = new Goals(store, goalRunner);
+  goals.reconcileAssignments();
+  let modelStartup: NodeJS.Timeout | undefined;
+  let modelTimer: NodeJS.Timeout | undefined;
+  if (options.providerUpdates) app.addHook('onListen', async () => {
+    const check = async (startup = false) => {
+      if (supervisor.closing || supervisor.maintenance) return;
+      await supervisor.catalogue.refreshDue(startup);
+      await providerUpdates.tick();
+    };
+    modelStartup = setTimeout(() => void check(true).catch(() => {}), 30000);
+    modelStartup.unref();
+    modelTimer = setInterval(() => void check().catch(() => {}), 15 * 60000);
+    modelTimer.unref();
+  });
+  const goalTimer = setInterval(() => void supervisor.dispatch(), 5000);
+  goalTimer.unref();
   registerGoalRoutes(app, goals);
   const work = new Work(store);
   registerWorkRoutes(app, work);
+  const briefings = new Briefings(store, supervisor);
+  supervisor.briefings = briefings;
+  registerBriefingRoutes(app, briefings, supervisor);
   const computer = new ComputerUse(store, supervisor);
-  app.get('/api/desktop-control', async (req) => { owner(req); return computer.status(user(req).id); });
-  app.post('/api/desktop-control/revoke', async (req) => { owner(req); return computer.revoke(user(req).id); });
+  app.get('/api/desktop-control', async (req) => {
+    owner(req);
+    return computer.status(user(req).id);
+  });
+  app.post('/api/desktop-control/revoke', async (req) => {
+    owner(req);
+    return computer.revoke(user(req).id);
+  });
   await registerWorkspaceTools(app, store, supervisor, broker, maintenance, goals, work, computer);
   app.get('/api/maintenance', async (req) => {
     owner(req);
@@ -1863,9 +1638,8 @@ if ($selected) { [Console]::WriteLine($selected) }
   });
   app.post('/api/maintenance/prepare', async (req) => {
     owner(req);
-    return maintenance.prepare(
-      z.object({ candidateRoot: z.string().optional() }).parse(req.body).candidateRoot,
-    );
+    const input = z.object({ candidateRoot: z.string().optional(), sourceRoot: z.string().optional(), pnpmCli: z.string().optional() }).parse(req.body);
+    return maintenance.prepare(input.candidateRoot, input.sourceRoot, input.pnpmCli);
   });
   app.post('/api/maintenance/execute', async (req) => {
     owner(req);
@@ -1883,9 +1657,12 @@ if ($selected) { [Console]::WriteLine($selected) }
     });
   }
   app.addHook('onClose', async () => {
+    clearInterval(goalTimer);
+    clearTimeout(modelStartup);
+    clearInterval(modelTimer);
+    await providerUpdates.close();
     maintenance.close();
     await computer.close();
-    await stopClaudeLogin();
     await supervisor.dispose();
     await broker.close();
     store.close();

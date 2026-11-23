@@ -11,6 +11,7 @@ supervisor.origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
 const harness = process.argv[2] || 'codex';
 const employee = store.createEmployee(user.id, {
   name: 'Chief of Staff',
+    canDelegate: true,
   role: 'Coordinator',
   harness,
   model: '',

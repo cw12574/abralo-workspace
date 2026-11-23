@@ -16,11 +16,11 @@ function fixture() {
     cwd: '',
     instructions: '',
   });
-  return { s, user, agent, room: s.setting('workspace.team') };
+  return { s, user, agent, conversationId: agent.dmId };
 }
 
-it('keeps execution in the agent view and only publishes final output in the room, with access boundaries', async () => {
-  const { s, user, agent, room } = fixture();
+it('keeps execution and results in the agent conversation with access boundaries', async () => {
+  const { s, user, agent, conversationId } = fixture();
   const { app, supervisor } = await createApp(s);
   let readOnly: boolean | undefined;
   supervisor.adapters.codex = {
@@ -47,7 +47,7 @@ it('keeps execution in the agent view and only publishes final output in the roo
   try {
     const res = await app.inject({
       method: 'POST',
-      url: `/api/conversations/${room}/messages`,
+      url: `/api/conversations/${conversationId}/messages`,
       headers,
       payload: {
         text: '@Chief fix the planning system and strategy editor',
@@ -61,27 +61,26 @@ it('keeps execution in the agent view and only publishes final output in the roo
     await Promise.all([...supervisor.inflight]);
     expect(readOnly).toBe(false);
     const shared = (
-      await app.inject({ url: `/api/conversations/${room}/messages`, headers })
+      await app.inject({ url: `/api/conversations/${conversationId}/messages`, headers })
     ).json();
     const final = shared.messages.find((m: any) => m.runId);
-    expect(final.text).toBe('Final recommendation.');
-    expect(final.activity).toEqual([]);
+    expect(final.text).toContain('Reading files.');
+    expect(final.activity).toEqual(
+      expect.arrayContaining([expect.objectContaining({ title: 'Read file' })]),
+    );
     const privateMessage = s.addMessage(agent.dmId, user.id, user.name, 'human', 'Private context');
     const feed = (
-      await app.inject({ url: `/api/conversations/${agent.dmId}/messages?agentView=1`, headers })
+      await app.inject({ url: `/api/conversations/${agent.dmId}/messages`, headers })
     ).json();
     expect(feed.messages.find((m: any) => m.id === final.id).text).toContain('Reading files.');
     expect(feed.messages.find((m: any) => m.id === final.id).activity).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ title: 'Read file' }),
-        expect.objectContaining({ type: 'workspace_post', url: `/?conversation=${room}` }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ title: 'Read file' })]),
     );
     const other = s.createOwner('Other');
     s.run('INSERT INTO employee_grants VALUES(?,?)', agent.id, other.id);
     const otherHeaders = { cookie: 'workspace=' + s.newSession(other.id) };
     const denied = await app.inject({
-      url: `/api/conversations/${agent.dmId}/messages?agentView=1`,
+      url: `/api/conversations/${agent.dmId}/messages`,
       headers: otherHeaders,
     });
     expect(denied.statusCode).toBe(403);
@@ -92,9 +91,9 @@ it('keeps execution in the agent view and only publishes final output in the roo
 });
 
 it('archives every plan revision once, preserves deleted messages and never routes by old plan state', async () => {
-  const { s, user, agent, room } = fixture();
-  const message = s.addMessage(room, agent.id, agent.name, 'agent', 'Old plan cover');
-  const removed = s.addMessage(room, agent.id, agent.name, 'agent', '');
+  const { s, user, agent, conversationId } = fixture();
+  const message = s.addMessage(conversationId, agent.id, agent.name, 'agent', 'Old plan cover');
+  const removed = s.addMessage(conversationId, agent.id, agent.name, 'agent', '');
   s.run('UPDATE messages SET deleted_at=? WHERE id=?', new Date().toISOString(), removed.id);
   const plan = {
     id: uid(),
@@ -102,7 +101,7 @@ it('archives every plan revision once, preserves deleted messages and never rout
     state: 'review',
     employeeId: agent.id,
     messageId: message.id,
-    conversationId: room,
+    conversationId: conversationId,
     threadId: null,
     revisions: [
       {
@@ -118,7 +117,7 @@ it('archives every plan revision once, preserves deleted messages and never rout
       'INSERT INTO plans VALUES(?,?,?,?,?,?)',
       uid(),
       id,
-      room,
+      conversationId,
       agent.id,
       JSON.stringify(plan),
       new Date().toISOString(),
@@ -137,14 +136,16 @@ it('archives every plan revision once, preserves deleted messages and never rout
   expect(
     reopened.message(reopened.one('SELECT * FROM messages WHERE id=?', message.id)),
   ).not.toHaveProperty('plan');
-  const followup = reopened.accept(user, room, {
+  const followup = reopened.accept(user, conversationId, {
     key: uid(),
     text: 'Go ahead',
     recipients: [],
     attachments: [],
   });
-  expect(reopened.all('SELECT * FROM outbox WHERE message_id=?', followup.id)).toHaveLength(0);
-  const threadReply = reopened.accept(user, room, {
+  expect(
+    reopened.one('SELECT employee_id FROM outbox WHERE message_id=?', followup.id).employee_id,
+  ).toBe(agent.id);
+  const threadReply = reopened.accept(user, conversationId, {
     key: uid(),
     text: 'Explain the earlier draft',
     threadId: message.id,

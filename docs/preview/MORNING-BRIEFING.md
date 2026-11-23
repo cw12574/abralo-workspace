@@ -1,0 +1,31 @@
+# Morning briefing
+
+The current morning briefing is a conversation with the existing Chief of Staff. Choose **Let’s talk**, or **Type instead**. Voice setup appears before microphone access when needed. The first spoken words of a new briefing remain “What good shall we do this day?”
+
+The conversation canvas has no page header or footer. Its illustrated portrait has a soft halo driven by the remote playback signal; the waveform responds to microphone audio and settles during pauses. Captions reveal whole phrases after playback starts and retain earlier replies in a scrollable transcript. Scrolling back pauses automatic following; **Back to live** returns to the newest text. Phrase timing is estimated because the voice transport supplies no word timestamps. Listening, thinking, speaking, muted and disconnected states also have text labels. Reduced-motion preferences suppress the animated waveform and halo. Audio analysis is local, does not play microphone audio, and is released when the call closes.
+
+**End conversation** immediately releases the microphone, waits for any final transcription, then asks for a saved recap and closes voice. Review the recap before confirming assignments. Asking for a recap by voice keeps the conversation open for spoken corrections; spoken confirmation still requires an uninterrupted readback. Explicit requests to create employees, delegate tasks or assign durable goals continue to use the existing workspace permissions and approvals.
+
+Voice configuration is in **Workspace settings → Voice**. Previous calls are available through **Morning briefings** in the Chief of Staff conversation. Mute, pause, conversation notes and save-and-leave are under **Conversation options** during a call. The sidebar contains only the Morning briefing entry. Typed briefs, editable recaps and previous records remain available.
+
+The Chief of Staff proposes concrete goals, success measures and suitable leads, including needed employees, and asks for agreement during the call. Agreed goals start immediately by default; an explicit request to defer saves them for later. Every agreed goal uses the durable goal runner, with normal permissions, employee capacity and saved work limits. Existing paused work stays paused unless the human asks to resume it. The recap records committed work without asking to approve it again. Pending unperformed assignments retain their confirmation step.
+
+Recoverable Realtime errors no longer close the call. Batched action results request one follow-up response, without replaying committed actions. A short transport disconnect has a recovery window; failed connections release the microphone. Each briefing retains at most 20 diagnostic events containing time, code, type and event IDs, with the same private access as the briefing. Raw provider prose, credentials and audio are not included.
+
+Verification: `tests/voice-meter.test.ts` checks signal measurement, silence and cleanup; `tests/briefing-voice.test.ts` covers the voice lifecycle and interruptions. `scripts/chief-briefing-ui-smoke.ts` uses generated Web Audio streams and a simulated provider transport to check the screen, streaming captions, reduced motion, microphone release, recap corrections, employee/task/goal handoffs and typed briefs at laptop/mobile sizes in both themes. Set `BRIEFING_STATIC_ROOT` to test an isolated web build. These checks do not establish live provider latency, recognition accuracy or naturalness; those still require a real conversation.
+
+## Earlier team briefing records
+
+The earlier team briefing interface is retained for existing records reached through **Morning briefings** in the Chief of Staff conversation. The notes below describe that older flow.
+
+Open Morning briefing and choose Start briefing. The whole existing team is included by default; expand the team line to change participants. Voice setup appears before microphone access if no account is configured. It uses an OpenAI API key and separate API billing. Type instead remains available.
+
+The AI host speaks as soon as the voice connection opens, then responds briefly as you finish each thought. You can interrupt it at any time. The opening is a conversation with the host; each employee still asks their own prepared question in the question phase. Resuming voice includes the saved brief and recent discussion. Automatic replies use semantic turn detection with high eagerness, following the [OpenAI voice activity detection guidance](https://developers.openai.com/api/docs/guides/realtime-vad). This removes intentional listening delays; it does not guarantee zero network or model latency.
+
+Give your brief and say “That’s everything.” Employees prepare against their existing work, two at a time, without starting the proposed assignments or producing completion notifications. Questions arrive one at a time. Answer naturally, or say “Next question” to move on. Say “That’s everything” again to finish questions early. Unfinished preparation and deferred questions remain visible in the recap.
+
+Abralo reads the proposed work back. Correct it by speaking, or expand Edit proposed work to change or remove an assignment. Say “Go ahead” after the full readback, or use the button after checking the visible proposals. A correction requires a fresh readback before spoken confirmation. Tentative or qualified phrases are not treated as confirmation. Confirmed work uses existing employee permissions and approvals.
+
+Mute keeps the call connected. Pause releases the microphone. Resume voice reconnects; Save and leave is in the options menu. Previous briefings retain the brief, answers and proposals. A completed briefing records one recap in the conversation from which it was opened, when available; it stays at that position in history. Each participating employee receives their relevant briefing record.
+
+This lightweight prototype reconnects voice between speakers, so there can be a short handoff gap. Automated checks use simulated transport and do not establish live latency, recognition accuracy or how natural the voices feel. The first listening test should use a short real briefing with the current team, including a thinking pause, interruption, correction and deferred question. Check the recap before confirming.

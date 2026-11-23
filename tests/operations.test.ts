@@ -38,8 +38,10 @@ describe('recovery and boundaries', () => {
     const session = s.newSession(owner.id);
     const { app } = await createApp(s);
     try {
-      for (let i = 0; i < 500; i++)
-        s.emit('replay.test', null, { body: 'x'.repeat(5000) }, owner.id);
+      // One transaction for the fixture: the test is about replay size, not 500 separate disk syncs.
+      s.db.transaction(() => {
+        for (let i = 0; i < 500; i++) s.emit('replay.test', null, { body: 'x'.repeat(5000) }, owner.id);
+      })();
       const response = await app.inject({
         method: 'GET',
         url: '/api/events?after=0',
@@ -51,7 +53,7 @@ describe('recovery and boundaries', () => {
     } finally {
       await app.close();
     }
-  }, 30000);
+  }, 15000);
 
   it('cancels an active run when its account-owner grant is revoked', async () => {
     const s = new Store(mkdtempSync(join(tmpdir(), 'workspace-revoke-')));

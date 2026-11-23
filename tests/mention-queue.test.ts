@@ -16,7 +16,7 @@ it('offers busy-agent mentions for a choice and preserves queued work until it r
     cwd: '',
     instructions: '',
   });
-  const team = store.setting('workspace.team');
+  const team = agent.dmId;
   const { app, supervisor } = await createApp(store);
   const busyRunId = uid();
   const activeRequest = store.addMessage(team, owner.id, owner.name, 'human', 'Current work');
@@ -138,7 +138,7 @@ it('offers busy-agent mentions for a choice and preserves queued work until it r
     expect(startedRuns).toBe(1);
     expect(store.one('SELECT status FROM outbox WHERE id=?', queuedJob.id).status).toBe('done');
     expect(lastPrompt).toContain('You were explicitly @mentioned');
-    expect(lastPrompt).toContain('acknowledge the mention and contribute usefully');
+    expect(lastPrompt).toContain('Respond in the same thread and handle the requested work');
     const reply = store.one(
       'SELECT m.thread_id,m.text FROM runs r JOIN messages m ON m.id=r.response_id WHERE r.message_id=?',
       queued.id,
@@ -148,4 +148,4 @@ it('offers busy-agent mentions for a choice and preserves queued work until it r
     await app.close();
     store.close();
   }
-}, 30_000);
+});

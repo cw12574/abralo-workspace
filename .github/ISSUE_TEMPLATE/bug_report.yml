@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Abralo version or commit
-      placeholder: v0.1.3-preview, or the commit if building from source
+      placeholder: v1.0.0, or the commit if building from source
     validations:
       required: true
   - type: input

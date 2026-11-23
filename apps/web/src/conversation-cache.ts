@@ -1,5 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { api } from './api';
+import { IndexedConversationStorage, type ConversationStorage } from './conversation-storage';
 import { messageSummary, summaryEvent } from '../../../packages/contracts/src/activity-summary';
 import type { Message } from '../../../packages/contracts/src/index';
 
@@ -7,10 +8,10 @@ export type ConversationView = {
   id: string;
   threadId?: string;
   employeeId?: string;
-  room?: boolean;
   before?: number | null;
 };
 export type HistoryData = {
+  cursor?: number;
   messages: Message[];
   runs: any[];
   decisions: any[];
@@ -56,8 +57,11 @@ type Entry = {
   journal?: any[];
   overflow?: boolean;
   viewport?: Viewport;
+  positionAt?: number;
   bytes: number;
   refreshTimer?: ReturnType<typeof setTimeout>;
+  persistTimer?: ReturnType<typeof setTimeout>;
+  expanded: string[];
 };
 type Session = {
   value: Composer;
@@ -78,8 +82,7 @@ const EMPTY: Composer = {
   sending: false,
   outgoing: [],
 };
-const baseKey = (view: ConversationView) =>
-  JSON.stringify([view.id, view.threadId || '', view.employeeId || '', !!view.room]);
+const baseKey = (view: ConversationView) => JSON.stringify([view.id, view.threadId || '']);
 const pageKey = (view: ConversationView) => `${baseKey(view)}:${view.before || 'latest'}`;
 // Reuse estimates for unchanged objects: streaming one word must not serialize
 // every message and tool result in all eight views again.
@@ -95,29 +98,82 @@ const sizeOf = (value: any): number => {
   return size;
 };
 
-// Recent data lives independently of mounted chats. No hidden React trees or disk history.
+// Recent data lives independently of mounted chats; the optional disk cache is bounded.
 export class ConversationCache {
   private entries = new Map<string, Entry>();
   private sessions = new Map<string, Session>();
   private scope = '';
   private access = new Set<string>();
   private tick = 0;
+  private generation = 0;
+  private accessSignature = '';
+  private employees?: Set<string>;
+  private restoring: Promise<void> = Promise.resolve();
   constructor(
     private fetcher = api,
     private maxViews = 8,
     private maxBytes = 16 * 1024 * 1024,
+    private storage: ConversationStorage | undefined = typeof indexedDB === 'undefined'
+      ? undefined
+      : new IndexedConversationStorage(),
   ) {}
 
   setScope(scope: string, allowed?: string[], employees?: string[]) {
-    if (scope !== this.scope) {
+    const changed = scope !== this.scope;
+    if (changed) {
       this.clear();
       this.scope = scope;
     }
     if (!allowed) return;
+    const signature = JSON.stringify([allowed, employees]);
+    const accessChanged = signature !== this.accessSignature;
+    this.accessSignature = signature;
+    this.employees = employees ? new Set(employees) : undefined;
     const next = new Set(allowed);
     const revoked = [...this.access].filter((id) => !next.has(id));
     this.access = next;
     for (const id of revoked) this.revoke(id);
+    if (this.storage && scope && (changed || accessChanged)) {
+      const generation = this.generation;
+      this.restoring = this.storage
+        .purge(scope, allowed, employees)
+        .then(async () => {
+          if (!changed || this.generation !== generation) return;
+          const saved = await this.storage!.load(scope);
+          if (this.generation !== generation) return;
+          for (const row of saved.views.sort((a, b) => (a.positionAt || 0) - (b.positionAt || 0))) {
+            if (
+              !this.access.has(row.view.id) ||
+              (row.view.employeeId && this.employees && !this.employees.has(row.view.employeeId))
+            )
+              continue;
+            const entry = this.entry(row.view);
+            if (entry.snapshot.data) continue; // A fresh network response always wins.
+            entry.viewport = row.viewport;
+            entry.positionAt = row.positionAt;
+            if (row.viewport) this.session(row.view).before = row.view.before || null;
+            entry.expanded = row.expanded || [];
+            const data = { ...row.data, messages: row.data.messages.map(messageSummary) };
+            this.publish(entry, { data, status: 'ready', error: '' });
+            entry.stale = true;
+          }
+          for (const row of saved.drafts) {
+            if (
+              !this.access.has(row.view.id) ||
+              (row.view.employeeId && this.employees && !this.employees.has(row.view.employeeId))
+            )
+              continue;
+            const session = this.session(row.view);
+            if (session.revision || session.value.ready) continue;
+            session.value = { ...session.value, draft: row.draft, files: row.files, ready: true };
+            session.dirty = true;
+            session.revision++;
+            session.listeners.forEach((notify) => notify());
+          }
+          this.trim();
+        })
+        .catch(() => {});
+    }
     if (employees) {
       const available = new Set(employees);
       const lostAgents = [...this.entries.values()].filter(
@@ -129,10 +185,20 @@ export class ConversationCache {
       for (const entry of lostAgents) this.revoke(entry.view.id);
     }
   }
+  ready() {
+    return this.restoring;
+  }
   clear() {
+    const oldScope = this.scope;
+    this.scope = '';
+    this.generation++;
+    this.accessSignature = '';
+    this.employees = undefined;
+    if (oldScope) void this.storage?.purge(oldScope).catch(() => {});
     for (const entry of this.entries.values()) {
       entry.controller?.abort();
       clearTimeout(entry.refreshTimer);
+      clearTimeout(entry.persistTimer);
       entry.snapshot = { data: null, status: 'loading', error: '' };
       entry.listeners.forEach((notify) => notify());
     }
@@ -157,9 +223,10 @@ export class ConversationCache {
         fetched: 0,
         stale: true,
         bytes: 0,
+        expanded: [],
       };
       this.entries.set(key, entry);
-    }
+    } else if (view.employeeId) entry.view.employeeId = view.employeeId;
     return entry;
   }
   read(view: ConversationView) {
@@ -182,16 +249,77 @@ export class ConversationCache {
   }
   saveViewport(view: ConversationView, viewport: Viewport) {
     const entry = this.entries.get(pageKey(view));
-    if (entry) entry.viewport = viewport;
+    if (entry) {
+      entry.viewport = viewport;
+      entry.positionAt = Date.now();
+      this.persist(entry);
+    }
   }
   clearViewport(view: ConversationView) {
     const entry = this.entries.get(pageKey(view));
-    if (entry) entry.viewport = undefined;
+    if (entry) {
+      entry.viewport = undefined;
+      this.persist(entry);
+    }
   }
   private publish(entry: Entry, snapshot: Snapshot) {
     entry.snapshot = snapshot;
     entry.bytes = sizeOf(snapshot.data);
     entry.listeners.forEach((notify) => notify());
+    this.persist(entry);
+  }
+  private persist(entry: Entry) {
+    if (!this.storage || !this.scope || !entry.snapshot.data || entry.persistTimer) return;
+    const scope = this.scope;
+    entry.persistTimer = setTimeout(() => {
+      entry.persistTimer = undefined;
+      if (
+        scope !== this.scope ||
+        this.entries.get(pageKey(entry.view)) !== entry ||
+        !this.access.has(entry.view.id) ||
+        !entry.snapshot.data
+      )
+        return;
+      void this.storage!.save(scope, {
+        view: entry.view,
+        data: entry.snapshot.data,
+        viewport: entry.viewport,
+        positionAt: entry.positionAt,
+        expanded: entry.expanded,
+        updatedAt: Date.now(),
+      }).catch(() => {});
+    }, 1000);
+  }
+  flush() {
+    for (const entry of this.entries.values()) {
+      clearTimeout(entry.persistTimer);
+      entry.persistTimer = undefined;
+      if (this.scope && this.access.has(entry.view.id) && entry.snapshot.data)
+        void this.storage
+          ?.save(this.scope, {
+            view: entry.view,
+            data: entry.snapshot.data,
+            viewport: entry.viewport,
+            positionAt: entry.positionAt,
+            expanded: entry.expanded,
+            updatedAt: Date.now(),
+          })
+          .catch(() => {});
+    }
+  }
+  isExpanded(messageId: string, activityId: string) {
+    const key = JSON.stringify([messageId, activityId]);
+    return [...this.entries.values()].some((entry) => entry.expanded.includes(key));
+  }
+  setExpanded(messageId: string, activityId: string, open: boolean) {
+    const key = JSON.stringify([messageId, activityId]);
+    for (const entry of this.entries.values())
+      if (entry.snapshot.data?.messages.some((m) => m.id === messageId)) {
+        entry.expanded = entry.expanded.filter((item) => item !== key);
+        if (open) entry.expanded.push(key);
+        entry.expanded = entry.expanded.slice(-128);
+        this.persist(entry);
+      }
   }
   private trim() {
     let bytes = [...this.entries.values()].reduce((sum, entry) => sum + entry.bytes, 0);
@@ -200,6 +328,7 @@ export class ConversationCache {
       // Mounted views own their visible data; only unused snapshots are evicted.
       if (entry.listeners.size) continue;
       clearTimeout(entry.refreshTimer);
+      clearTimeout(entry.persistTimer);
       bytes -= entry.bytes;
       this.entries.delete(key);
       entry.controller?.abort();
@@ -238,7 +367,6 @@ export class ConversationCache {
     const query = new URLSearchParams({
       activity: 'summary',
       ...(view.threadId ? { threadId: view.threadId } : {}),
-      ...(view.employeeId && !view.threadId ? { agentView: '1' } : {}),
       ...(view.before ? { before: String(view.before) } : {}),
     });
     const current = () => this.entries.get(key) === entry;
@@ -259,7 +387,11 @@ export class ConversationCache {
         let dirty = false;
         // Replay events received during the request so late responses cannot rewind a stream.
         for (const event of entry.journal || []) {
-          if (!belongs(event, view, data)) continue;
+          if (
+            !belongs(event, view) ||
+            (event.cursor && data.cursor !== undefined && event.cursor <= data.cursor)
+          )
+            continue;
           const result = reduceEvent(data, event, view);
           data = result.data;
           dirty ||= result.dirty;
@@ -311,9 +443,9 @@ export class ConversationCache {
   event(event: any) {
     event = summaryEvent(event);
     for (const entry of this.entries.values()) {
-      const relevant = belongs(event, entry.view, entry.snapshot.data);
+      const relevant = belongs(event, entry.view);
       if (entry.journal) {
-        if (relevant || entry.view.employeeId) {
+        if (relevant) {
           if (entry.journal.length < 512) entry.journal.push(event);
           else entry.overflow = true;
         }
@@ -323,6 +455,12 @@ export class ConversationCache {
         entry.stale = true;
         continue;
       }
+      if (
+        event.cursor &&
+        entry.snapshot.data.cursor !== undefined &&
+        event.cursor <= entry.snapshot.data.cursor
+      )
+        continue;
       const result = reduceEvent(entry.snapshot.data, event, entry.view);
       if (result.data !== entry.snapshot.data)
         this.publish(entry, { data: result.data, status: 'ready', error: '' });
@@ -333,21 +471,30 @@ export class ConversationCache {
     }
     this.trim();
   }
-  reconnect() {
-    for (const entry of this.entries.values()) {
+  reconnect(reconcile = true) {
+    for (const entry of reconcile ? this.entries.values() : []) {
       entry.stale = true;
+      if (entry.request) entry.overflow = true;
       if (entry.listeners.size) this.scheduleRefresh(entry);
     }
     for (const [key, session] of this.sessions) {
       if (!session.dirty) continue;
-      const [id, threadId, employeeId, room] = JSON.parse(key);
-      void this.saveDraft({ id, threadId, employeeId, room }).catch(() => {});
+      const [id, threadId] = JSON.parse(key);
+      void this.saveDraft({ id, threadId }).catch(() => {});
     }
   }
   revoke(id: string) {
+    if (this.scope)
+      void this.storage
+        ?.purge(
+          this.scope,
+          [...this.access].filter((value) => value !== id),
+        )
+        .catch(() => {});
     for (const entry of this.entries.values()) {
-      if (entry.view.id === id || entry.view.employeeId) {
+      if (entry.view.id === id) {
         clearTimeout(entry.refreshTimer);
+        clearTimeout(entry.persistTimer);
         entry.controller?.abort();
         // Replace identity to invalidate in-flight requests without reviving revoked data.
         const replacement = {
@@ -358,6 +505,8 @@ export class ConversationCache {
           stale: true,
           bytes: 0,
           viewport: undefined,
+          expanded: [],
+          persistTimer: undefined,
           snapshot: {
             data: null,
             status: 'error' as const,
@@ -432,6 +581,18 @@ export class ConversationCache {
       session.revision++;
       session.dirty = true;
       session.value.ready = true;
+      if (this.scope && this.access.has(view.id))
+        void this.storage
+          ?.draft(this.scope, view, {
+            view,
+            draft: session.value.draft,
+            files: session.value.files.map((file) =>
+              typeof file === 'string'
+                ? file
+                : { id: file.id, name: file.name, mime: file.mime, size: file.size },
+            ),
+          })
+          .catch(() => {});
       clearTimeout(session.timer);
       session.timer = setTimeout(() => void this.saveDraft(view).catch(() => {}), 400);
     }
@@ -465,6 +626,7 @@ export class ConversationCache {
     if (session.save) return session.save;
     if (!session.dirty) return Promise.resolve();
     const revision = session.revision;
+    const scope = this.scope;
     session.save = this.fetcher(
       `/conversations/${encodeURIComponent(view.id)}/draft`,
       {
@@ -475,7 +637,10 @@ export class ConversationCache {
       'PUT',
     )
       .then(() => {
-        if (session.revision === revision) session.dirty = false;
+        if (session.revision === revision && this.sessions.get(baseKey(view)) === session) {
+          session.dirty = false;
+          if (scope) void this.storage?.draft(scope, view).catch(() => {});
+        }
         session.value = { ...session.value, saveError: undefined };
         session.listeners.forEach((notify) => notify());
       })
@@ -499,18 +664,8 @@ export class ConversationCache {
   }
 }
 
-function belongs(event: any, view: ConversationView, data: HistoryData | null) {
-  const payload = event.payload || {};
-  if (event.conversationId === view.id) return true;
-  if (!view.employeeId) return false;
-  return (
-    (event.type === 'run.changed' && payload.employee_id === view.employeeId) ||
-    data?.runs.some((run) => run.id === payload.runId || run.id === payload.id) ||
-    data?.messages.some(
-      (message) => message.id === payload.messageId || message.id === payload.id,
-    ) ||
-    (event.type === 'message.created' && payload.authorId === view.employeeId)
-  );
+function belongs(event: any, view: ConversationView) {
+  return event.conversationId === view.id;
 }
 function reduceEvent(
   data: HistoryData,
@@ -525,15 +680,13 @@ function reduceEvent(
     messages: data.messages.map((item, i) => (i === index ? next : item)),
   });
   if (event.type === 'run.changed') {
-    if (view.employeeId && p.employee_id !== view.employeeId) return { data, dirty: false };
-    if (!view.employeeId && (p.thread_id || '') !== (view.threadId || ''))
-      return { data, dirty: false };
+    if ((p.thread_id || '') !== (view.threadId || '')) return { data, dirty: false };
     return {
       data: { ...data, runs: [p, ...data.runs.filter((run) => run.id !== p.id)].slice(0, 100) },
       dirty: !data.runs.some((run) => run.id === p.id),
     };
   }
-  if (event.type === 'message.updated' && (!view.room || !p.runId)) {
+  if (event.type === 'message.updated') {
     if (!message) return { data, dirty: true };
     const stamp = p.textUpdatedAt || event.createdAt;
     if (message.textUpdatedAt && stamp && stamp < message.textUpdatedAt)
@@ -547,7 +700,7 @@ function reduceEvent(
       };
     return { data, dirty: p.offset > message.text.length };
   }
-  if (event.type === 'activity.updated' && view.employeeId && message) {
+  if (event.type === 'activity.updated' && message) {
     const old = message.activity?.find((item) => item.id === p.activity.id);
     if (old?.updatedAt && p.activity.updatedAt && old.updatedAt > p.activity.updatedAt)
       return { data, dirty: false };
@@ -564,8 +717,7 @@ function reduceEvent(
   }
   if (['message.edited', 'message.deleted'].includes(event.type) && message)
     return { data: replace(p), dirty: true };
-  // Room filtering and aggregated agent views are decided by the server. Do not
-  // blindly append cross-room or quiet-run messages from the event stream.
+  // Refresh membership and thread contents from the server before appending new messages.
   if (
     [
       'message.created',

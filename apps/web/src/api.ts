@@ -1,4 +1,5 @@
 export async function api(path: string, body?: any, method?: string, signal?: AbortSignal) {
+  // Provider checks can hang on a slow sign-in; give them a deadline the user can act on.
   const deadline = path.startsWith('/providers') ? AbortSignal.timeout(35000) : undefined;
   const requestSignal =
     signal && deadline ? AbortSignal.any([signal, deadline]) : signal || deadline;
@@ -8,12 +9,14 @@ export async function api(path: string, body?: any, method?: string, signal?: Ab
       method: method || (body === undefined ? 'GET' : 'POST'),
       headers: {
         'x-workspace-request': '1',
-        ...(body instanceof FormData ? {} : { 'content-type': 'application/json' }),
+        // A body-less request (e.g. DELETE) must not claim JSON, or the server rejects it.
+        ...(body === undefined || body instanceof FormData ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
       signal: requestSignal,
     });
   } catch (error) {
+    // The caller cancelled: let it see its own abort. Never retry here; a sign-in may not be repeatable.
     if (signal?.aborted) throw error;
     throw Object.assign(
       new Error(
@@ -25,7 +28,10 @@ export async function api(path: string, body?: any, method?: string, signal?: Ab
     );
   }
   const data = await response.json().catch(() => {
-    throw new Error('Abralo returned an unexpected response. Reopen the app and try again.');
+    throw Object.assign(
+      new Error('Abralo returned an unexpected response. Reopen the app and try again.'),
+      { status: response.status },
+    );
   });
   if (!response.ok)
     throw Object.assign(

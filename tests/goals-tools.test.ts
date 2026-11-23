@@ -24,6 +24,7 @@ it('lets the running agent create a conversation goal and proof card, with revie
     role: '',
     instructions: '',
   });
+  const supervisor = new Supervisor(store);
   const message = store.addMessage(employee.dmId, owner.id, 'Owner', 'human', 'Grow this business');
   const runId = uid();
   store.run(
@@ -39,7 +40,6 @@ it('lets the running agent create a conversation goal and proof card, with revie
     now(),
     uid(),
   );
-  const supervisor = new Supervisor(store);
   supervisor.tokens.set(hash('test-token'), runId);
   const broker = new ConnectionBroker(store, () => 'http://127.0.0.1');
   const app = Fastify();
@@ -65,6 +65,7 @@ it('lets the running agent create a conversation goal and proof card, with revie
       title: 'Reach $10K MRR',
       success: 'Monthly revenue reaches $10K',
       nextStep: 'Find the baseline',
+      start: true,
     });
     expect(created.isError).not.toBe(true);
     const goal = JSON.parse((created.content as any)[0].text);
@@ -77,6 +78,23 @@ it('lets the running agent create a conversation goal and proof card, with revie
       proofPlan: ['Check revenue report'],
     });
     expect(work.isError).not.toBe(true);
+    const invalid = await call('workspace_goal_checkpoint', {
+      goalId: goal.id,
+      outcome: 'complete',
+      summary: 'Done without evidence',
+    });
+    expect(invalid.isError).toBe(true);
+    const checkpoint = await call('workspace_goal_checkpoint', {
+      goalId: goal.id,
+      outcome: 'needs_input',
+      summary: 'Baseline needs an account',
+      question: 'Which revenue account should I use?',
+    });
+    expect(checkpoint.isError, JSON.stringify(checkpoint)).not.toBe(true);
+    expect(
+      JSON.parse(store.one('SELECT report FROM goal_cycles WHERE goal_id=?', goal.id).report)
+        .outcome,
+    ).toBe('needs_input');
     store.set('run.readOnly.' + runId, true);
     expect(
       (await call('workspace_goal_create', { title: 'Another', success: 'Something' })).isError,

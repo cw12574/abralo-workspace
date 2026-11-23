@@ -1,57 +1,97 @@
-# Abralo — lasting goals for your AI team
+# Abralo
 
-**Give your AI team a goal you can pick up tomorrow.**
+**Your AI company, on your own computer.**
 
-Abralo is an open-source, local workspace for people and coding agents. Keep an outcome, its current position, decisions and next step together across sessions. A named lead maintains the goal; substantial tasks record checks and inspectable results.
+[![Build](https://github.com/cw12574/abralo-workspace/actions/workflows/build.yml/badge.svg)](https://github.com/cw12574/abralo-workspace/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/cw12574/abralo-workspace)](https://github.com/cw12574/abralo-workspace/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-1. Tell your agent what you want to achieve and ask it to keep a lasting goal.
-2. Agree on success and a useful next step. Ask the agent to do that work and show its checks.
-3. Reopen Abralo, review the saved progress and continue the same project.
+Abralo is an open-source workspace where you and a team of AI employees work towards lasting goals. Each employee runs on an agent you already use (Claude Code, Codex or OpenCode), signed in with your own account. A Chief of Staff organises the team, every goal has a lead and a success check, and nothing leaves your machine except the model requests you make.
 
-Work starts from your requests or an explicit schedule. Lasting goals do not promise continuous background execution or guaranteed outcomes. Ordinary conversation remains available while work runs.
+![An Abralo conversation with the Chief of Staff](docs/preview/images/conversation.png)
 
-**[Website and assisted trial](https://abralo.com/#try)** · **[Release status and older previews](https://github.com/cw12574/abralo-workspace/releases)** · **[Goals walkthrough](docs/preview/GOALS-TRIAL.md)** · **[Setup guide](docs/preview/START-HERE.md)**
+**[Download](https://github.com/cw12574/abralo-workspace/releases/latest)** · **[Getting started](docs/preview/START-HERE.md)** · **[Release notes](docs/preview/RELEASE-NOTES.md)** · **[Abralo Cloud](https://abralo.com)** (hosted for you)
 
-## Durable-goals release candidate
+## Features
 
-Version `0.2.0-preview` adds lasting goals, task checks, shared browser tools and durable connection actions. Windows x64, Linux x64, macOS Intel and macOS Apple silicon are build targets. Until a release is published with matching assets and checksums, a CI build is a candidate, not a supported download. The older `0.1.3-preview` download does not include durable goals.
+- **A team of AI employees.** Each has a name, a role and its own conversation. The Chief of Staff hands out work and keeps it moving.
+- **Lasting goals.** A goal has a lead, a definition of success and a next step. Work carries across sessions, and a goal closes only after an independent review against its success check.
+- **Morning briefing.** Talk or type with your Chief of Staff to see what moved and agree the day's priorities. Spoken briefings use OpenAI's Realtime API with your own OpenAI API key; typed briefings need nothing extra.
+- **Bring your own agent.** Claude Code, Codex and OpenCode are bundled and use your existing sign-in. Abralo never picks a model API you did not choose.
+- **Connected tools, with approvals.** Stripe and Railway through their official MCP servers, Gmail with your own Google OAuth client, and other services found in the public MCP registry. Any change to the outside world waits for your approval and is never blindly repeated.
+- **Safe with your work.** Git tasks run in their own worktree, agents get an isolated browser per run, and desktop control (Windows) needs a time-limited permission you can revoke.
 
-Use disposable, non-sensitive files and your own supported provider account for initial trials. Packages are unsigned; macOS notarization and interactive platform acceptance remain separate checks. Model requests go to your selected provider. See [release notes](docs/preview/RELEASE-NOTES.md) and [data durability requirements](docs/preview/DATA-DURABILITY.md).
+![The Goals page](docs/preview/images/goals.png)
 
-This source tree is licensed under [Apache-2.0](LICENSE).
+## Install
 
-## Source development
+Download the archive for your platform from the [latest release](https://github.com/cw12574/abralo-workspace/releases/latest) and follow [Getting started](docs/preview/START-HERE.md).
 
-Requires Node 24.16+ (24.x) for source development. `pnpm install`, `pnpm exec playwright install chromium`, `pnpm build`, `pnpm test`, `pnpm start`. `pnpm dev` runs the service from source; `pnpm web` runs Vite. The service serves built browser assets at http://127.0.0.1:4317.
+| Platform | Archive | Install |
+| --- | --- | --- |
+| Windows 10/11 x64 | `abralo-windows-x64.tar.gz` | `powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -ReleaseDirectory .` |
+| macOS, Apple silicon | `abralo-macos-arm64.tar.gz` | `xattr -dr com.apple.quarantine . && ./runtime/node scripts/install-posix.mjs` |
+| macOS, Intel | `abralo-macos-x64.tar.gz` | as above |
+| Linux x64 | `abralo-linux-x64.tar.gz` | `./runtime/node scripts/install-posix.mjs` |
 
-Data is stored under the OS user application-data directory, outside the checkout. Set `WORKSPACE_DATA_DIR` for an isolated test instance and `WORKSPACE_PORT` for another port. Never use a live database in OneDrive or a network share.
+Each archive bundles its own Node.js runtime, Chromium and the agent CLIs. No administrator rights, Docker or Electron are needed. Builds are not yet code-signed; verify downloads against `SHA256SUMS` in the release.
 
-Native harnesses use the owner's supported login. Invitations do not grant other humans access to the host owner's provider credentials. No model API fallback is selected automatically.
+## How it works
 
-## Local test build
+Abralo is a local web app: a Node.js service with a SQLite database serves a React interface to your browser on `http://127.0.0.1:4317`.
 
-This is a working preview, not a signed public release. No sample conversations or simulated agent activity are installed in the user's workspace.
+```
+apps/service       Fastify service: API, goals, supervisor, agent adapters, connections, SQLite store
+apps/web           React + Vite interface
+packages/contracts Shared types and activity helpers
+packages/host      Platform helpers: data directory, process launch, executables
+scripts/           Packaging, installers, launcher, maintenance and end-to-end checks
+tests/             Vitest suite
+```
 
-On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings → General lets you turn automatic startup off or on.
+The supervisor runs each employee's turns through an adapter for its engine (`apps/service/src/adapters`). Agents reach Abralo's own tools (goals, team, memory, connections, browser) through an in-process MCP server. Outside actions are recorded as durable approvals before anything runs.
 
-The default data directory is `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS and `$XDG_DATA_HOME/AgentWorkspace` (or `~/.local/share/AgentWorkspace`) on Linux. Installation code and user data are separate. Backups omit provider tokens; `scripts/restore.mjs` restores into a new directory and leaves schedules disabled until explicitly re-enabled.
+## Develop
 
-Codex and Claude employees require native subscription sign-in. OpenCode exposes native provider sign-in and an explicit API billing choice. Account owners can grant a trusted human access to an employee in employee settings; that human gets a separate DM and uses the owner's provider allowance. Membership in a workspace alone does not grant account use.
+Requirements: Node.js 24.16+ (24.x) and pnpm 10.33.4.
 
-Repository tasks use a dedicated Git worktree from HEAD. Uncommitted changes are not copied or overwritten. Working copies and branches remain available for inspection; this preview does not automatically merge or delete them. Ordinary folders are used directly. Run artifacts are downloaded through authenticated routes.
+```sh
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+pnpm build        # type check, web bundle and service
+pnpm test         # Vitest suite
+pnpm start        # serve the built app on http://127.0.0.1:4317
+```
 
-Connection setup happens in chat. Stripe and Railway use their official MCP endpoints. Gmail uses Google's OAuth library and API and requires a Google client configured for this self-hosted installation. Secrets go to dedicated forms and the encrypted vault, never ordinary chat. On Windows the vault key uses DPAPI; the other platforms' keyring integration remains a release gate.
+For development, run `pnpm dev` (service from source, restarts on change) and `pnpm web` (Vite on port 5178, proxying `/api`). Use `WORKSPACE_DATA_DIR` to keep development data separate from a real workspace.
 
-Notifications are on by default. The installed, single-user Windows host sends desktop alerts directly through Windows; a focused Abralo page handles alerts in-app. If browser notification permission has already been granted, Abralo repairs its push subscription automatically and uses it when native delivery fails. On other hosts, desktop alerts need browser permission, while in-app alerts and the unread inbox work immediately. An explicit turn-off is preserved. Windows notification settings and Do not disturb can suppress banners even when Abralo sends one. HTTPS is required for remote phone access; this installation defaults to loopback and does not expose a public listener. `WORKSPACE_PUBLIC_URL` and an authenticated HTTPS reverse proxy are required when setting a non-loopback `WORKSPACE_HOST`.
+Package for the current platform with `pnpm package release/abralo-<target>`, then check it with `node scripts/verify-package.mjs release/abralo-<target>`. End-to-end checks in `scripts/` cover onboarding recovery, the launcher lifecycle and installation. Scripts that make real provider calls (`workflow-smoke.ts`, `image-smoke.ts`, `live-smoke.ts`) use the signed-in account's allowance; run them only deliberately.
 
-## Packaging and development
+## Configuration
 
-All direct dependency versions and the lockfile are pinned. `pnpm build` emits the web bundle and service modules. No Docker, Redis, external vector database or Electron runtime is required. Desktop packages include Chromium for agent browser sessions. Native coding harnesses and Chromium dominate the installation's disk size; the service's measured memory is not a total-agent memory claim.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WORKSPACE_DATA_DIR` | see below | Where the workspace database, vault and files live |
+| `WORKSPACE_PORT` | `4317` | Local port |
+| `WORKSPACE_HOST` | `127.0.0.1` | Bind address. Anything else requires `WORKSPACE_PUBLIC_URL` |
+| `WORKSPACE_PUBLIC_URL` | unset | The `https://` address of an authenticated reverse proxy, for remote access |
 
-Set `WORKSPACE_PNPM_CLI` to pnpm's JavaScript entry point and run `node scripts/package.mjs NEW_OUTPUT_DIRECTORY`. Packaging uses a hoisted production dependency tree for portable Windows copies, includes the pinned Chromium browser, and removes redundant OpenCode binary copies. On Windows run `scripts/install-windows.ps1 -ReleaseDirectory OUTPUT`. On macOS/Linux run the packaged `runtime/node scripts/install-posix.mjs`; those installers still require platform acceptance testing.
+Default data directory: `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS, `$XDG_DATA_HOME/AgentWorkspace` (or `~/.local/share/AgentWorkspace`) on Linux. Program files and data are kept separate; reinstalling keeps your workspace. Never put a live database in a synced folder such as OneDrive or Dropbox.
 
-Agents on all three harnesses use Abralo's shared MCP browser tool with a separate browser context per run. Windows desktop control requires an explicit owner decision for a five-minute lease. The owner can stop it from the persistent banner; cancellation, expiry, restart, and run completion also end access. Desktop control requires an unlocked interactive Windows session.
+## Security and privacy
 
-Tests: `pnpm test`; `scripts/ui-smoke.ts` uses an isolated fixture through Playwright; `scripts/workflow-smoke.ts codex` (or `claude`, `opencode`) makes real provider calls, including native resume. `scripts/image-smoke.ts` checks native vision. Live tests use the user's account allowance and should not be run redundantly. `scripts/mixed-smoke.ts` is a short concurrency check, not the required two-hour soak.
+- **Local by default.** The service listens on loopback only and refuses requests whose `Host` is not the local machine (DNS-rebinding protection) or whose `Origin` is foreign. Every state-changing request needs a custom header, and the session cookie is `HttpOnly` and `SameSite=Strict`. Remote access requires HTTPS behind your own authenticated proxy.
+- **Your accounts stay yours.** Agents sign in through their own CLIs; credentials never pass through chat. Connection secrets go to an AES-256-GCM vault whose key is protected by DPAPI on Windows and kept in a user-only file on macOS and Linux.
+- **Approvals before action.** External changes wait for an explicit decision, and an approved action runs exactly the saved arguments once.
+- **No telemetry.** Abralo sends nothing to us. Model requests go to the agent provider you chose; spoken briefings go to OpenAI with your key; connections talk only to the services you connect.
+- **Dependencies** are pinned and audited in CI (`pnpm audit`).
 
-Third-party packages retain their own license files; native provider binaries remain subject to their vendors' terms.
+Agents act with the permissions you give them. Start new employees in **Ask** mode, and read [access and privacy](docs/preview/ACCESS-AND-PRIVACY.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first; for anything substantial, open an issue to discuss it.
+
+## License
+
+[Apache-2.0](LICENSE). Bundled third-party packages keep their own licenses, and the native agent CLIs remain subject to their vendors' terms.

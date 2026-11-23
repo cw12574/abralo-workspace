@@ -20,16 +20,7 @@ const agent = store.createEmployee(owner.id, {
   role: 'Fixture',
   instructions: '',
 });
-const room = uid();
-store.run(
-  'INSERT INTO conversations VALUES(?,?,?,?,?)',
-  room,
-  'Preview studio',
-  'channel',
-  null,
-  now(),
-);
-store.run('INSERT INTO members(conversation_id,user_id) VALUES(?,?)', room, owner.id);
+const conversationId = agent.dmId;
 const attachment = (name: string, mime: string, content: string | Buffer) => {
   const id = uid(),
     path = join(store.dir, 'artifacts', id),
@@ -40,7 +31,7 @@ const attachment = (name: string, mime: string, content: string | Buffer) => {
     'INSERT INTO attachments VALUES(?,?,?,?,?,?,?,?)',
     id,
     owner.id,
-    room,
+    conversationId,
     name,
     mime,
     bytes.length,
@@ -107,14 +98,14 @@ const files = [
 ];
 for (let i = 0; i < 16; i++)
   store.addMessage(
-    room,
+    conversationId,
     owner.id,
     owner.name,
     'human',
     `Reading anchor ${i}. ${'A meaningful conversation. '.repeat(8)}`,
   );
 const source = store.addMessage(
-  room,
+  conversationId,
   agent.id,
   agent.name,
   'agent',
@@ -126,7 +117,7 @@ store.run(
   'INSERT INTO plans VALUES(?,?,?,?,?,?)',
   uid(),
   source.id,
-  room,
+  conversationId,
   agent.id,
   JSON.stringify({
     title: 'A thoughtful release',
@@ -155,7 +146,7 @@ attachArchivedPlanDocuments(store);
 files.push(store.one("SELECT id,name,mime,size FROM attachments WHERE mime='text/markdown'"));
 for (let i = 0; i < 12; i++) {
   store.addMessage(
-    room,
+    conversationId,
     owner.id,
     owner.name,
     'human',
@@ -163,9 +154,15 @@ for (let i = 0; i < 12; i++) {
     source.id,
   );
   if (i === 5)
-    store.addMessage(room, owner.id, owner.name, 'human', 'A file inside the thread.', source.id, [
-      files[3].id,
-    ]);
+    store.addMessage(
+      conversationId,
+      owner.id,
+      owner.name,
+      'human',
+      'A file inside the thread.',
+      source.id,
+      [files[3].id],
+    );
 }
 const { app, supervisor } = await createApp(store);
 supervisor.dispatch = async () => {};
@@ -212,7 +209,7 @@ const open = async (index: number) => {
 try {
   mkdirSync('evidence', { recursive: true });
   await page.goto(origin + '/#setup=' + store.bootstrapToken);
-  await page.locator('.sidebar .nav-row').filter({ hasText: 'Preview studio' }).click();
+  await page.locator('.sidebar .nav-row').filter({ hasText: 'Atlas' }).click();
   await expect(page.locator(`[data-preview-id="${files[0].id}"]`)).toBeVisible();
   expect(requests.some((url) => /pdf-preview|pdf\.worker/.test(url))).toBe(false);
   const reading = await open(0);

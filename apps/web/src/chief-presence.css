@@ -1,0 +1,313 @@
+﻿/* Abralo's own paper, ink, employee pixels and restrained audio feedback. */
+.chief-call .briefing-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  scrollbar-gutter: stable both-edges;
+}
+.chief-call .briefing-stage {
+  width: min(100%, 42rem);
+  margin: auto;
+  padding: var(--space-6) 0;
+  gap: var(--space-4);
+}
+.chief-call .briefing-stage h1 {
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 450;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.chief-call .briefing-stage p {
+  margin: 0;
+}
+.chief-call .briefing-subtitle {
+  font-size: 1rem;
+}
+.chief-call.is-active .briefing-stage {
+  margin-block: 0;
+  padding-block: var(--space-2);
+}
+.chief-call.is-active .briefing-stage h1 {
+  font-size: 1.15rem;
+  letter-spacing: -0.015em;
+}
+.chief-presence {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  color: var(--accent);
+}
+.chief-portrait {
+  --voice-energy: 0;
+  position: relative;
+  width: 80px;
+  height: 80px;
+  isolation: isolate;
+}
+.is-active .chief-portrait {
+  width: 48px;
+  height: 48px;
+}
+.chief-illustration {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.chief-halo {
+  position: absolute;
+  inset: -6px;
+  border-radius: 20%;
+  border: 1px solid var(--accent);
+  opacity: 0.12;
+  transition: opacity 0.25s;
+}
+.chief-presence.speaking .chief-halo {
+  opacity: calc(0.18 + var(--voice-energy) * 0.5);
+  transform: scale(calc(1 + var(--voice-energy) * 0.12));
+}
+.chief-presence.connecting .chief-halo,
+.chief-presence.thinking .chief-halo {
+  animation: chief-consider 2.4s ease-in-out infinite;
+}
+@keyframes chief-consider {
+  50% {
+    opacity: 0.45;
+  }
+}
+.chief-wave {
+  width: 128px;
+  height: 32px;
+  opacity: 0.8;
+}
+.chief-presence.off .chief-wave,
+.chief-presence.connecting .chief-wave {
+  display: none;
+}
+.chief-presence.muted .chief-wave {
+  opacity: 0.25;
+}
+.chief-captions {
+  width: 100%;
+  gap: var(--space-2);
+  text-align: left;
+}
+.chief-current-thought {
+  min-height: 12rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding-block: var(--space-3);
+}
+.chief-call .briefing-stage .chief-caption.chief-caption-previous {
+  color: var(--muted);
+  font-size: clamp(1.1rem, 1.6vw, 1.3rem);
+}
+.chief-call .briefing-stage .chief-caption {
+  font-size: clamp(1.5rem, 2.2vw, 1.85rem);
+  line-height: 1.5;
+  letter-spacing: -0.015em;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chief-caption-placeholder {
+  color: var(--muted);
+  font-size: 1.3rem;
+}
+.chief-call .chief-controls {
+  align-items: center;
+  width: 100%;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+.chief-call .chief-controls > button {
+  align-self: center;
+}
+.chief-controls > .primary {
+  min-width: 208px;
+  max-width: 100%;
+  min-height: 48px;
+  padding: var(--space-3) var(--space-6);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+.chief-call-toolbar {
+  justify-content: center;
+}
+.chief-call-toolbar button,
+.chief-text-link {
+  background: transparent;
+  border: 0;
+  padding: var(--space-2) var(--space-3);
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-underline-offset: 4px;
+  min-height: 44px;
+}
+.chief-text-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.chief-call .briefing-stage > .ui-field {
+  width: 100%;
+  text-align: left;
+}
+.chief-call textarea {
+  width: 100%;
+  resize: vertical;
+}
+.chief-call .briefing-error {
+  width: min(100%, 42rem);
+  align-self: center;
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--raised);
+}
+.chief-call .briefing-details {
+  width: min(100%, 42rem);
+  color: var(--ink);
+}
+.chief-transcript {
+  width: 100%;
+}
+.chief-transcript-scroll {
+  max-height: min(22rem, 35vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+}
+.chief-transcript-turn {
+  gap: var(--space-2);
+  text-align: left;
+}
+.chief-transcript-turn strong {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.chief-transcript-turn p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: none;
+  overflow: visible;
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+.chief-transcript-turn details {
+  color: var(--muted);
+}
+.chief-eyebrow {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+.chief-mobile-navigation {
+  display: none;
+}
+@media (max-width: 720px) {
+  .chief-mobile-navigation {
+    display: flex;
+    position: absolute;
+    top: var(--space-3);
+    left: var(--space-3);
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+  }
+  .chief-call .briefing-scroll {
+    padding: 56px var(--space-4) var(--space-4);
+  }
+  .chief-call .briefing-stage {
+    padding-block: var(--space-4);
+  }
+  .chief-current-thought {
+    min-height: 12rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chief-halo {
+    animation: none !important;
+    transform: none !important;
+    transition: none;
+    opacity: 0.25 !important;
+  }
+  .chief-wave rect {
+    height: 3px;
+    y: 22.5px;
+  }
+}
+.chief-plan {
+  width: 100%;
+  text-align: left;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-block: 1px solid var(--line);
+}
+.chief-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.chief-plan-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.chief-plan-item > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--muted);
+}
+.chief-plan-item.state-working > svg,
+.chief-plan-item.state-checking > svg,
+.chief-plan-item.state-waiting > svg {
+  color: var(--accent);
+}
+.chief-plan-item.state-complete > svg,
+.chief-plan-item.state-sent > svg {
+  color: var(--good);
+}
+.chief-plan-item > div {
+  flex: 1;
+  min-width: 0;
+  gap: var(--space-1);
+}
+.chief-plan-item strong {
+  font-weight: 500;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.chief-plan-item span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.chief-plan-lead {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.chief-plan-item .chief-plan-lead > span:nth-of-type(1) {
+  color: var(--ink);
+}
+.chief-plan-mark {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}

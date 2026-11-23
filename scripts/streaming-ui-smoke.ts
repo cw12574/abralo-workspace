@@ -1,12 +1,15 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Store, now } from '../apps/service/src/store.js';
 import { createApp } from '../apps/service/src/app.js';
 
+process.env.WORKSPACE_HOST = '0.0.0.0'; // Disable native desktop registration in this fixture.
+delete process.env.WORKSPACE_MAINTENANCE_JOB;
 const store = new Store(mkdtempSync(join(tmpdir(), 'workspace-reveal-')));
 const owner = store.createOwner('Chris');
+store.set('notifications.' + owner.id, { enabled: false, sound: false, privatePreview: true });
 store.set('workspace.onboarded', true);
 const agent = store.createEmployee(owner.id, {
   name: 'Engineer',
@@ -33,7 +36,11 @@ const reply = store.addMessage(
   [],
   'reveal-smoke',
 );
-const { app } = await createApp(store);
+const { app } = await createApp(store, {
+  staticRoot: process.env.STREAMING_STATIC_ROOT
+    ? resolve(process.env.STREAMING_STATIC_ROOT)
+    : undefined,
+});
 const origin = await app.listen({ host: '127.0.0.1', port: 0 });
 store.run(
   'INSERT INTO runs(id,conversation_id,user_id,employee_id,message_id,response_id,state,created_at,updated_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,?)',
@@ -87,6 +94,7 @@ try {
         (window as any).revealSamples.push({
           text: prose.textContent,
           spans: prose.querySelectorAll('.text-reveal').length,
+          at: performance.now(),
         });
     });
     observer.observe(document.querySelector('.message-scroll')!, {
@@ -123,6 +131,36 @@ try {
   expect(Math.max(...samples.map((sample) => sample.spans))).toBeLessThan(12);
   await expect(prose.locator('strong')).toHaveText('Existing text stays still.');
 
+  // One provider burst is spread across multiple frames, with no long backlog.
+  await page.evaluate(() => {
+    (window as any).revealSamples = [];
+  });
+  const beforeBurst = (await prose.textContent())!.length;
+  const burst =
+    ' Steady words arrive in small groups so the reply feels calm and remains easy to follow while you read.';
+  text += burst;
+  await update(text);
+  await expect(prose).toContainText('while you read.');
+  await expect(prose.locator('.text-reveal')).toHaveCount(0);
+  const burstSamples = await page.evaluate(
+    () => (window as any).revealSamples as { text: string; spans: number; at: number }[],
+  );
+  const distinct = burstSamples.filter(
+    (sample, index) =>
+      sample.text.length > beforeBurst && (!index || sample.text !== burstSamples[index - 1].text),
+  );
+  expect(distinct.length).toBeGreaterThanOrEqual(2);
+  expect(distinct[0].text.length - beforeBurst).toBeLessThan(burst.length);
+  expect(distinct.at(-1)!.at - distinct[0].at).toBeLessThan(500);
+  expect(Math.max(...burstSamples.map((sample) => sample.spans))).toBeLessThan(12);
+
+  // A timer must not keep firing when there is no text/fade left to reveal.
+  await page.evaluate(() => {
+    (window as any).revealSamples = [];
+  });
+  await page.waitForTimeout(250);
+  expect(await page.evaluate(() => (window as any).revealSamples.length)).toBe(0);
+
   // Words without spaces must not stall, including CJK and a long URL.
   text += '\n\n静かな会話https://example.com/a/very/long/path';
   await update(text);
@@ -145,6 +183,21 @@ try {
   await expect(prose).toContainText('Reduced motion appears immediately.');
   await expect(prose.locator('.text-reveal')).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+
+  // Simulate a background tab; the visibility transition clears pending reveals.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  text += '\n\nBackground text stays current.';
+  await update(text);
+  await expect(prose).toContainText('Background text stays current.');
+  await expect(prose.locator('.text-reveal')).toHaveCount(0);
+  await page.evaluate(() => {
+    delete (document as any).hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(prose.locator('.text-reveal')).toHaveCount(0);
 
   // Terminal states flush pending text and remove transient elements.
   for (const state of ['completed', 'cancelled', 'failed']) {
@@ -202,14 +255,74 @@ try {
   await expect
     .poll(() => scroll.evaluate((el) => el.scrollHeight - el.scrollTop - el.clientHeight))
     .toBeLessThan(2);
+  // Feed updates faster than the display cadence while the composer stays usable.
+  await expect(prose.locator('.text-reveal')).toHaveCount(0);
+  const burstSuffix = ' Fresh evidence helps us choose the next useful step.';
+  await page.evaluate(
+    ({ base, suffix, conversationId, id }) => {
+      const w = window as any;
+      w.revealSamples = [];
+      w.pacingLongTasks = [];
+      w.pacingObserver = new PerformanceObserver((list) => {
+        w.pacingLongTasks.push(...list.getEntries().map((entry) => entry.duration));
+      });
+      w.pacingObserver.observe({ type: 'longtask' });
+      let count = 0;
+      w.pacingDone = false;
+      const timer = setInterval(() => {
+        count++;
+        window.dispatchEvent(
+          new CustomEvent('workspace-event', {
+            detail: {
+              conversationId,
+              type: 'message.updated',
+              payload: { id, text: base + suffix.repeat(count) },
+            },
+          }),
+        );
+        if (count === 40) {
+          clearInterval(timer);
+          w.pacingDone = true;
+        }
+      }, 15);
+    },
+    { base: text, suffix: burstSuffix, conversationId: agent.dmId, id: reply.id },
+  );
+  const composer = page.locator('.composer textarea');
+  await composer.fill('Typing stays responsive during a reply.');
+  await expect(composer).toHaveValue('Typing stays responsive during a reply.');
+  await expect.poll(() => page.evaluate(() => (window as any).pacingDone)).toBe(true);
+  text += burstSuffix.repeat(40);
+  store.run('UPDATE messages SET text=? WHERE id=?', text, reply.id);
+  await expect(prose).toContainText(burstSuffix.trim().repeat(1));
+  await expect.poll(() => prose.textContent()).toContain(burstSuffix.repeat(40));
+  await expect(prose.locator('.text-reveal')).toHaveCount(0);
+  const pacingMetrics = await page.evaluate(() => {
+    const w = window as any;
+    w.pacingObserver.disconnect();
+    const samples = w.revealSamples as { text: string; at: number }[];
+    return {
+      incomingUpdates: 40,
+      displayedUpdates: samples.filter(
+        (sample, index) => !index || sample.text !== samples[index - 1].text,
+      ).length,
+      maxLongTaskMs: Math.round(Math.max(0, ...w.pacingLongTasks)),
+    };
+  });
+  expect(pacingMetrics.displayedUpdates).toBeLessThan(30);
+  expect(pacingMetrics.maxLongTaskMs).toBeLessThan(250);
+  await composer.fill('');
   await run('completed');
   await expect(prose.locator('.text-reveal')).toHaveCount(0);
   expect(errors).toEqual([]);
   console.log(
     JSON.stringify({
       status: 'passed',
+      performance: pacingMetrics,
       checks: [
         'word groups and transient fades',
+        'burst pacing, bounded catch-up and idle rendering',
+        'background tab flush without replay',
         'Markdown and code',
         'CJK/long tokens',
         'reduced motion',

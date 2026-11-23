@@ -1,0 +1,35 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { build } from 'esbuild';
+import { Store } from '../apps/service/src/store.js';
+import { createApp } from '../apps/service/src/app.js';
+const store = new Store(mkdtempSync(join(tmpdir(), 'lightweight-preview-')));
+const owner = store.createOwner('Tester');
+store.set('workspace.onboarded', true);
+store.set('workspace.name', 'Conversation verification');
+const employee = store.createEmployee(owner.id, { name: 'Product Engineer', harness: 'codex', role: 'Product', model: '', cwd: '', instructions: '' });
+const second = store.createEmployee(owner.id, { name: 'Design Engineer', harness: 'codex', role: 'Design', model: '', cwd: '', instructions: '' });
+for (let i = 1; i <= 60; i++) store.addMessage(employee.dmId, i % 2 ? owner.id : employee.id, i % 2 ? owner.name : employee.name, i % 2 ? 'human' : 'agent', `Reading position ${i}. ` + 'This conversation remains available while new information is fetched quietly in the background. '.repeat(3));
+store.addMessage(second.dmId, second.id, second.name, 'agent', 'Second conversation for navigation checks.');
+await build({ entryPoints: ['scripts/conversation-storage-browser.ts'], bundle: true, preserveSymlinks: true, outfile: 'verification-browser.js', platform: 'browser', format: 'esm' });
+const { app, supervisor } = await createApp(store, { staticRoot: resolve('dist/web') });
+supervisor.infos = async () => [];
+supervisor.dispatch = async () => {};
+const token = store.newSession(owner.id);
+let delay = 0;
+app.addHook('onRequest', async req => {
+  if (delay && /\/api\/conversations\/[^/]+\/messages/.test(req.url)) await new Promise(r => setTimeout(r, delay));
+});
+app.get('/verification', async (_req, reply) => reply.type('text/html').send('<!doctype html><html><body><h1>Conversation storage checks</h1><pre>Running...</pre><script type="module" src="/verification-browser.js"></script></body></html>'));
+app.get('/verification-browser.js', async (_req, reply) => reply.type('text/javascript').send(readFileSync('verification-browser.js')));
+app.post('/verification-result', async req => { writeFileSync('browser-storage-result.json', JSON.stringify(req.body, null, 2)); return { ok: true }; });
+app.get('/preview', async (req: any, reply) => {
+  delay = req.query.slow === '1' ? 7000 : 0;
+  reply.setCookie('workspace', token, { httpOnly: true, sameSite: 'strict', path: '/' });
+  return reply.type('text/html').send(`<!doctype html><html><body><script>localStorage.setItem('active-view','chat');localStorage.setItem('theme','${req.query.theme === 'dark' ? 'dark' : 'light'}');location.replace('/?conversation=${employee.dmId}');</script></body></html>`);
+});
+await app.listen({ host: '127.0.0.1', port: 0 });
+supervisor.goals!.enabled = false;
+console.log(JSON.stringify({ origin: `http://127.0.0.1:${(app.server.address() as any).port}`, conversation: employee.dmId }));
+process.on('SIGINT', () => void app.close().then(() => { store.close(); process.exit(0); }));

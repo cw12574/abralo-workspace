@@ -1,10 +1,12 @@
+import type { Executable } from '../../../../packages/host/src/index.js';
 import { connectionTools } from '../connection-tools.js';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { launch, executable, killTree } from '../../../../packages/host/src/index.js';
+import { launch, executable, killTree, execFileAsync } from '../../../../packages/host/src/index.js';
 import type { Adapter, RunInput, ProviderInfo } from '../../../../packages/contracts/src/index.js';
 import { providerLimitFromError } from './provider-limit.js';
 export class OpenCodeAdapter implements Adapter {
+  constructor(public binary?: Executable) {}
   child: any;
   url = '';
   password = randomBytes(32).toString('hex');
@@ -12,26 +14,12 @@ export class OpenCodeAdapter implements Adapter {
   async start() {
     if (this.starting) return this.starting;
     this.starting = new Promise<void>((resolve, reject) => {
-      const child = launch('opencode', ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
+      this.child = launch('opencode', ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
         env: { ...process.env, OPENCODE_SERVER_PASSWORD: this.password },
-      });
-      this.child = child;
+      }, this.binary);
       let buffer = '';
-      const fail = (error: Error) => {
-        clearTimeout(timer);
-        if (this.child === child) {
-          this.starting = undefined;
-          this.child = undefined;
-          this.url = '';
-        }
-        child.kill();
-        reject(error);
-      };
-      const timer = setTimeout(() => {
-        fail(new Error('OpenCode did not start. Try connecting again.'));
-        child.kill();
-      }, 15000);
-      child.stdout.on('data', (d: Buffer) => {
+      const timer = setTimeout(() => reject(new Error('OpenCode did not start')), 30000);
+      this.child.stdout.on('data', (d: Buffer) => {
         buffer = (buffer + d.toString()).slice(-10000);
         const m = buffer.match(/https?:\/\/127\.0\.0\.1:\d+/);
         if (m) {
@@ -40,39 +28,44 @@ export class OpenCodeAdapter implements Adapter {
           resolve();
         }
       });
-      child.stderr.on('data', () => {});
-      child.stdin.on('error', fail);
-      child.on('error', fail);
-      child.on('exit', () => fail(new Error('OpenCode stopped. Try connecting again.')));
+      this.child.stderr.on('data', () => {});
+      this.child.on('error', (e: Error) => {
+        clearTimeout(timer);
+        this.starting = undefined;
+        reject(e);
+      });
+      this.child.on('exit', () => {
+        clearTimeout(timer);
+        this.starting = undefined;
+      });
     });
-    const attempt = this.starting;
-    try {
-      return await attempt;
-    } catch (error) {
-      if (this.starting === attempt) this.starting = undefined;
-      throw error;
-    }
+    return this.starting;
   }
   async api(path: string, method = 'GET', body?: any, directory?: string) {
     await this.start();
     const url = new URL(path, this.url);
     if (directory) url.searchParams.set('directory', directory);
     const r = await fetch(url, {
-      signal: AbortSignal.timeout(
-        path.startsWith('/provider') || path.startsWith('/auth') ? 20000 : 90000,
-      ),
       method,
       headers: {
         authorization: `Basic ${Buffer.from('opencode:' + this.password).toString('base64')}`,
         'content-type': 'application/json',
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
     });
     if (!r.ok) throw new Error(`OpenCode ${r.status}: ${(await r.text()).slice(0, 2000)}`);
     return r.status === 204 ? null : r.json();
   }
+  async refreshModels() {
+    const bin = this.binary || executable('opencode');
+    if (!bin) return;
+    await execFileAsync(bin.command, [...bin.args, 'models', '--refresh'], { windowsHide: true, timeout: 20000, maxBuffer: 4 * 1024 * 1024 });
+    await this.dispose();
+    this.child = undefined; this.starting = undefined; this.url = '';
+  }
   async info(): Promise<ProviderInfo> {
-    if (!executable('opencode'))
+    if (!this.binary && !executable('opencode'))
       return {
         harness: 'opencode',
         installed: false,
@@ -82,6 +75,8 @@ export class OpenCodeAdapter implements Adapter {
       };
     try {
       const p = await this.api('/provider');
+      const config = await this.api('/config');
+      const preferredProvider = config.model?.split('/')[0] || (p.connected?.length === 1 ? p.connected[0] : undefined);
       return {
         harness: 'opencode',
         installed: true,
@@ -90,6 +85,7 @@ export class OpenCodeAdapter implements Adapter {
         detail: p.connected?.length
           ? 'Connected providers: ' + p.connected.join(', ')
           : 'Choose a provider in OpenCode',
+        accountKey: [...(p.connected || [])].sort().join(','),
         models:
           p.all
             ?.filter((x: any) => p.connected.includes(x.id))
@@ -97,6 +93,7 @@ export class OpenCodeAdapter implements Adapter {
               Object.values(x.models).map((m: any) => ({
                 id: `${x.id}/${m.id}`,
                 name: m.name || m.id,
+                isDefault: x.id === preferredProvider && p.default?.[x.id] === m.id,
               })),
             ) || [],
       };
@@ -106,8 +103,7 @@ export class OpenCodeAdapter implements Adapter {
         installed: true,
         authenticated: null,
         version: '',
-        detail:
-          'OpenCode could not check its providers. Check your connection and try again, or restart Abralo.',
+        detail: String(e),
       };
     }
   }
@@ -330,7 +326,22 @@ export class OpenCodeAdapter implements Adapter {
         await this.api(`/mcp/${toolName}/disconnect`, 'POST', {}, directory).catch(() => {});
     }
   }
-  async dispose() {
-    if (this.child?.pid) await killTree(this.child.pid);
+  /**
+   * Stop this adapter's OpenCode server and wait until it has really gone.
+   * A server that ignores the polite signal is forced after a grace period:
+   * every model refresh replaces the server, so one that lingers keeps its
+   * memory (hundreds of MB) for good.
+   */
+  async dispose(graceMs = 5000) {
+    const child = this.child;
+    if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise<boolean>((resolve) => child.once('exit', () => resolve(true)));
+    const within = (ms: number) =>
+      Promise.race([exited, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms).unref())]);
+    await killTree(child.pid);
+    if (await within(graceMs)) return;
+    console.warn(`OpenCode server ${child.pid} did not stop after ${graceMs} ms; forcing it to quit.`);
+    try { child.kill('SIGKILL'); } catch { /* already gone */ }
+    if (!(await within(2000))) console.error(`OpenCode server ${child.pid} is still running after a forced stop.`);
   }
 }

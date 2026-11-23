@@ -49,6 +49,9 @@ it('keeps a conversational agent active through deactivation and deletion', asyn
       title: 'A lasting outcome',
       success: 'Reached target',
     });
+    expect((await request(`/api/employees/${first.id}/deactivate`, 'POST')).statusCode).toBe(409);
+    expect((await request(`/api/employees/${first.id}`, 'DELETE')).statusCode).toBe(409);
+    new Goals(store).change(goal.id, owner.id, { version: goal.version, leadAgentId: second.id });
     expect((await request(`/api/employees/${first.id}/deactivate`, 'POST')).statusCode).toBe(200);
     expect((await request(`/api/employees/${second.id}/deactivate`, 'POST')).statusCode).toBe(409);
     expect(store.employee(second.id)?.deactivatedAt).toBeUndefined();

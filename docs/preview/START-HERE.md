@@ -1,66 +1,71 @@
-# Abralo private preview
+# Getting started with Abralo
 
-This is an early local workspace for humans and AI agents. The application and shortcuts currently say **Agent Workspace**. Chris will supply a package for your computer after its release checks pass. A build existing does not mean it has passed those checks.
+Abralo runs on your own computer. Your conversations, goals and files stay on your machine; model requests go only to the AI provider you sign in with, using that account's allowance.
 
-## Before installing
+## What you need
 
-- Tell Chris your Windows version/CPU, Mac chip (Apple silicon or Intel), or Linux distribution/version/CPU, and which provider you can sign into.
-- Use your own provider account. Model requests use its allowance or the billing option you explicitly select. The application is local; model processing is performed by the selected provider.
-- Begin with disposable files containing no personal, customer or employer information. The preview has not had an independent security audit.
-- Use one agent in **Ask** mode. Check its settings before giving it work; the application currently defaults to Auto. Ask requests approval for restricted actions, not every read or every action. Permission behavior varies by provider. A project folder or Git worktree is not a universal security sandbox.
-- Leave external connections, remote access and schedules unused for this first trial. Do not run as administrator or use Bypass/Full access.
+- Windows 10 or 11 (x64), macOS on Apple silicon or Intel, or Linux (x64).
+- An account for at least one agent: **Codex** (a ChatGPT account), **Claude Code** (a Claude account) or **OpenCode** (works with a range of providers).
+- About 2 GB of free disk space.
 
-## Install the package supplied for your computer
+## Install
 
-Extract the archive into a local folder. If Chris supplies a SHA-256 checksum, compare it before installation. A checksum checks file integrity; it is not a publisher signature. Do not disable antivirus, Gatekeeper or other system protection. If the downloaded preview is blocked, record the exact message and contact Chris.
+Download the archive for your computer from the [latest release](https://github.com/cw12574/abralo-workspace/releases/latest). If you want to check the download, compare its SHA-256 with the `SHA256SUMS` file in the release.
+
+The builds are not yet code-signed, so your system will ask you to confirm before running them. The steps below say what to expect.
 
 ### Windows
 
-Open PowerShell in the extracted package folder and run:
+1. Extract the `.tar.gz` archive into a folder (right-click → **Extract All**).
+2. Open PowerShell in that folder and run:
 
-```powershell
-.\scripts\install-windows.ps1 -ReleaseDirectory .
-```
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\scripts\install-windows.ps1 -ReleaseDirectory .
+   ```
 
-Open **Agent Workspace** from the Start menu. New installations leave startup on login off. Existing startup preferences are preserved; Settings → General controls it. The installer needs no administrator rights. If PowerShell blocks the unsigned script, stop and ask Chris to help verify the package rather than changing machine-wide policy.
+   `-ExecutionPolicy Bypass` applies only to this one command; it does not change your computer's settings. No administrator rights are needed.
+3. Open **Abralo** from the Start menu or the desktop shortcut.
 
-### macOS — only once Chris confirms your build has passed
+### macOS
 
-Open Terminal in the extracted package folder and run:
+1. Double-click the archive to extract it, then open Terminal in the extracted folder.
+2. Because the build is not yet notarised by Apple, remove the download quarantine from this folder only, then install:
+
+   ```sh
+   xattr -dr com.apple.quarantine .
+   ./runtime/node scripts/install-posix.mjs
+   ```
+3. Open **Abralo** from the Applications folder in your home folder.
+
+Choose the archive that matches your Mac: `macos-arm64` for Apple silicon (M1 and later), `macos-x64` for Intel.
+
+### Linux
 
 ```sh
+mkdir abralo && tar -xzf abralo-linux-x64.tar.gz -C abralo && cd abralo
 ./runtime/node scripts/install-posix.mjs
 ```
 
-Open **Agent Workspace.app** from your home folder's Applications directory. The package must match your Mac's chip. macOS signing, downloaded-package trust behavior and native testing remain release gates until Chris confirms otherwise.
+Open **Abralo** from your application menu. Do not use `sudo`.
 
-### Linux — only once Chris confirms your build has passed
+## First run
 
-Open a terminal in the extracted package folder and run:
+1. Tell Abralo your name.
+2. Connect your Chief of Staff to Codex, Claude Code or OpenCode. Choose **Sign in** and finish in the browser tab that opens; for Codex, enter the code shown. Abralo notices when you're signed in. Never paste passwords or API keys into ordinary chat.
+3. Add one or two outcomes you'd like to work towards, then start the conversation.
 
-```sh
-./runtime/node scripts/install-posix.mjs
-```
+A good first request:
 
-Open **Agent Workspace** in your desktop application menu. The package must match your CPU and a verified distribution; a WSL test does not establish support for your desktop. Do not use sudo.
+> Help me plan something I'm working on this week. Ask me what you need, then write a one-page plan.
 
-## First useful result
+To make something lasting, ask your Chief of Staff to **make it a goal**. You'll see it on the Goals page with its lead, success check and next step.
 
-1. Open the app and complete onboarding using your own provider sign-in. Never paste passwords or API keys into ordinary chat.
-2. Check the selected agent's settings and choose **Ask**. Give it access only to your disposable test folder when prompted.
-3. Try your own small task, or use this example with a short fictional notes file:
+## Good to know
 
-   > Read notes.txt and draft a short README in this folder. Use only those notes, do not browse or install anything, and show me what you changed.
+- **Permissions.** Each employee has a permission mode in its settings. **Ask** requests your approval for restricted actions; start there if you're unsure.
+- **Your files.** Git projects are worked on in a separate worktree from your last commit, so uncommitted changes are never overwritten. Ordinary folders are edited directly.
+- **Stopping work.** Closing the browser tab does not stop agents. Use **Stop** in the conversation. Sleeping or shutting down the computer stops work; anything unfinished is marked interrupted when Abralo restarts, so nothing is repeated without you checking it first.
+- **Updates.** Download new Abralo releases from GitHub and install them over the old one; your workspace is kept.
+- **Your data** lives in `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS and `~/.local/share/AgentWorkspace` on Linux. See [recovery](RECOVERY.md) for backups.
 
-4. Review the permission request and actual result. Ask for one small revision.
-5. Close the tab, reopen the application, and check that you can find the conversation and result.
-
-Git projects start from committed HEAD in a separate worktree. Uncommitted changes are not copied. Ordinary folders are edited directly. Inspect the work location and changes before using any output.
-
-Closing the tab does not stop agents. Use **Stop** in the conversation and wait for completion; see [recovery](RECOVERY.md) if it remains on “Stopping.”
-
-## Feedback
-
-Use [the feedback sheet](FEEDBACK.md), then explore independently if you wish. You do not need to try every feature. The useful questions are: could you get started, did you get something useful, and would you choose to return?
-
-Read [access and privacy](ACCESS-AND-PRIVACY.md) and [recovery](RECOVERY.md) before adding anything you care about.
+Read [access and privacy](ACCESS-AND-PRIVACY.md) for what Abralo can reach and how approvals work. Problems or ideas: [open an issue](https://github.com/cw12574/abralo-workspace/issues).

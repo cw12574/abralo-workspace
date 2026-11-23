@@ -1,3 +1,5 @@
+import { ModelNotice, ModelSettings, ModelChoice } from './model-updates';
+import { providerFailureKind } from './provider-failure';
 import React, {
   lazy,
   Suspense,
@@ -7,6 +9,7 @@ import React, {
   useRef,
   useCallback,
   useMemo,
+  useId,
 } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
@@ -41,6 +44,7 @@ import {
   Pencil,
   FolderOpen,
   Target,
+  Mic,
 } from 'lucide-react';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -50,15 +54,19 @@ import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/ibm-plex-mono/400.css';
 import './style.css';
-import { RoomMark, AgentNavigationRow } from './collaboration-ui';
+import { WorkspaceMark, NavigationMark, AgentNavigationRow } from './employee-navigation';
+import { EmployeeList } from './employee-list';
 import { SidePanel } from './side-panel';
 import { PreviewContext, usePreview, type PreviewItem } from './preview-model';
 import './preview.css';
 const PreviewViewer = lazy(() => import('./preview-viewer'));
 import { api } from './api';
 import { ActivityStep } from './activity-step';
+import { CodeBlock } from './code-block';
 import { unlockSound, messageSound } from './sounds';
 import { rehypeTextReveal, useStreamingText } from './streaming-text';
+import { buildReplyTimeline } from './reply-timeline';
+import { actionTitle } from './action-title';
 import { useFollowConversation } from './follow-conversation';
 import {
   conversationCache,
@@ -69,8 +77,26 @@ import {
 } from './conversation-cache';
 import { useConversationViewport } from './conversation-viewport';
 import { GoalsView, ConversationGoals } from './goals-view';
-import { WorkCards } from './work-cards';
+import {
+  List,
+  Menu as RowMenu,
+  Meter,
+  Page,
+  Row,
+  Section,
+  Segmented,
+  ServiceMark,
+  Status,
+  Switch,
+  namesList,
+  type Tone,
+} from './surface';
+import { BriefingsView } from './chief-briefing-view';
+import { VoiceSettings } from './voice-settings';
+import { BriefingHistory } from './briefing-history';
+import { WorkCards, useConversationWork } from './work-cards';
 import type { Employee, Message, ProviderInfo } from '../../../packages/contracts/src/index';
+import { activityLabel, isQuietStep } from '../../../packages/contracts/src/activity-label';
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_ITEMS: any[] = [];
 async function ensureBrowserNotificationSubscription(publicKey: string) {
@@ -85,7 +111,8 @@ async function ensureBrowserNotificationSubscription(publicKey: string) {
   if (subscription) {
     const currentKey = subscription.options.applicationServerKey;
     const bytes = currentKey ? new Uint8Array(currentKey as ArrayBuffer) : null;
-    const sameKey = bytes?.length === expectedKey.length &&
+    const sameKey =
+      bytes?.length === expectedKey.length &&
       bytes.every((byte, index) => byte === expectedKey[index]);
     if (!sameKey) {
       await api('/notifications/subscribe', { endpoint: subscription.endpoint }, 'DELETE');
@@ -115,11 +142,10 @@ function activityTitle(value: string) {
   const titles: Record<string, string> = {
     workspace_read: 'Read conversation',
     workspace_team: 'Check team',
-    workspace_propose_team: 'Propose team',
+    workspace_propose_team: 'Propose employees',
     workspace_delegate: 'Brief employee',
     workspace_find_memory: 'Search memory',
     workspace_remember: 'Save memory',
-    workspace_create_channel: 'Create room',
     workspace_request_connection: 'Connect account',
   };
   return (
@@ -130,6 +156,10 @@ function activityTitle(value: string) {
       .replaceAll('_', ' ')
       .replace(/^./, (c) => c.toUpperCase())
   );
+}
+/** What a step did, in words: its derived label, else its tool name tidied up. */
+function stepTitle(step: { type: string; title: string; label?: string; detail?: string }) {
+  return step.label || activityLabel(step) || activityTitle(step.title);
 }
 function activityTimeLabel(value?: string) {
   if (!value) return '';
@@ -241,10 +271,7 @@ function NavigationActions({
 }) {
   if (!actions.length) return null;
   const icons: Record<string, typeof Archive> = {
-    'archive-channel': Archive,
-    'delete-channel': Trash2,
     'delete-agent': Trash2,
-    'restore-channel': RotateCcw,
     'reactivate-agent': RotateCcw,
   };
   const buttons = actions.map((action) => {
@@ -281,29 +308,16 @@ function ConfirmWorkspaceAction({ action, onClose, onConfirm }: any) {
     string,
     { title: string; description: string; button: string; permanent?: boolean }
   > = {
-    'archive-channel': {
-      title: `Archive #${action.name}?`,
-      description:
-        'The room will leave the active list. Its history stays available, and scheduled work in this room will pause.',
-      button: 'Archive room',
-    },
-    'delete-channel': {
-      title: `Delete #${action.name}?`,
-      description:
-        'This permanently deletes the room, its messages, files, and room history for everyone.',
-      button: 'Delete room',
-      permanent: true,
-    },
     'deactivate-agent': {
       title: `Deactivate ${action.name}?`,
       description:
-        'The agent will stop working, and its scheduled runs will pause. Its private conversation and shared room messages will remain. You can reactivate it later.',
+        'The agent will stop working, and its scheduled runs will pause. Its conversation will remain. You can reactivate it later.',
       button: 'Deactivate agent',
     },
     'delete-agent': {
       title: `Delete ${action.name}?`,
       description:
-        'This stops active work, removes scheduled runs, and permanently deletes the agent and its private conversation. Messages it sent in shared rooms will stay visible.',
+        'This stops active work, removes scheduled runs, and permanently deletes the agent and its private conversation.',
       button: 'Delete agent',
       permanent: true,
     },
@@ -420,13 +434,9 @@ function App() {
   const toastTimer = useRef<number | null>(null);
   const searchAnchor = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
-  const notificationAnchor = useRef<HTMLDivElement>(null);
-  const notificationTrigger = useRef<HTMLButtonElement>(null);
-  const notificationPanel = useRef<HTMLElement>(null);
-  const [inbox, setInbox] = useState<any>({ unread: 0, items: [] });
+  const [briefingId, setBriefingId] = useState<string>();
   const [jump, setJump] = useState<Message | null>(null);
   const [conversationVisit, setConversationVisit] = useState(0);
-  const loadInbox = useCallback(() => api('/notifications/inbox').then(setInbox), []);
   useEffect(() => {
     localStorage.setItem('thread-width', String(threadWidth));
   }, [threadWidth]);
@@ -455,13 +465,12 @@ function App() {
         '',
     ),
     [view, setView] = useState(
-      ['connections', 'goals'].includes(localStorage.getItem('active-view') || '')
+      ['connections', 'usage', 'goals', 'briefings'].includes(localStorage.getItem('active-view') || '')
         ? localStorage.getItem('active-view')!
         : 'chat',
     ),
     [thread, setThread] = useState<Message | null>(null),
     [modal, setModal] = useState(''),
-    [settingsTab, setSettingsTab] = useState('general'),
     [confirmAction, setConfirmAction] = useState<any>(null),
     [mobile, setMobile] = useState(false),
     [theme, setTheme] = useState(localStorage.getItem('theme') || 'light'),
@@ -476,26 +485,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('active-view', view);
   }, [view]);
-  useEffect(() => {
-    if (modal !== 'inbox') return;
-    notificationPanel.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setModal('');
-        notificationTrigger.current?.focus();
-      }
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (!notificationAnchor.current?.contains(event.target as Node)) setModal('');
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('pointerdown', onPointerDown);
-    };
-  }, [modal]);
   useEffect(() => {
     if (modal !== 'search') return;
     searchInput.current?.focus();
@@ -533,14 +522,12 @@ function App() {
       w.conversations.map((item: any) => item.id),
       [...w.employees, ...(w.inactiveEmployees || [])].map((item: any) => item.id),
     );
+    await conversationCache.ready();
     setWorkspace(w);
-    void loadInbox().catch(() => {});
     setSelected((v: string) =>
       w.conversations.some((conversation: any) => conversation.id === v)
         ? v
-        : w.conversations.find(
-            (conversation: any) => !conversation.archivedAt && !conversation.agentDeactivated,
-          )?.id || '',
+        : w.conversations.find((conversation: any) => !conversation.agentDeactivated)?.id || '',
     );
     return w;
   }, []);
@@ -591,7 +578,7 @@ function App() {
   }, [theme]);
   useEffect(() => {
     if (!workspace) {
-      document.title = 'Agent Workspace';
+      document.title = 'Abralo';
       return;
     }
     const conversation = workspace.conversations.find((item: any) => item.id === selected);
@@ -601,30 +588,46 @@ function App() {
     const location =
       view === 'connections'
         ? 'Connections'
+        : view === 'usage'
+          ? 'Usage'
+        : view === 'briefings'
+          ? 'Morning briefing'
         : view === 'goals'
           ? 'Goals'
-        : conversation?.kind === 'channel'
-          ? `#${conversation.name}`
           : employee?.name || conversation?.name || 'Workspace';
-    document.title = `${location} · ${workspace.name || 'Workspace'}`;
+    const unread = workspace.conversations.reduce(
+      (total: number, conversation: { unread: number }) => total + conversation.unread,
+      0,
+    );
+    document.title = `${unread > 0 ? `(${unread}) ` : ''}${location} · ${workspace.name || 'Abralo'}`;
   }, [workspace, selected, view]);
   const notificationView = useRef({ selected, thread });
   notificationView.current = { selected, thread };
   useEffect(() => {
     const listener = (event: Event) => conversationCache.event((event as CustomEvent).detail);
-    const reconnect = () => conversationCache.reconnect();
+    const flush = () => { if (document.visibilityState === 'hidden') conversationCache.flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', flush);
     window.addEventListener('workspace-event', listener);
-    window.addEventListener('workspace-reconnected', reconnect);
     return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', flush);
       window.removeEventListener('workspace-event', listener);
-      window.removeEventListener('workspace-reconnected', reconnect);
     };
   }, []);
   useEffect(() => {
     if (!workspace) return;
     if (workspace.user?.role === 'owner') {
-      void api('/desktop-control').then(setDesktopControl).catch(() => {});
-      const timer = window.setInterval(() => void api('/desktop-control').then(setDesktopControl).catch(() => {}), 5000);
+      void api('/desktop-control')
+        .then(setDesktopControl)
+        .catch(() => {});
+      const timer = window.setInterval(
+        () =>
+          void api('/desktop-control')
+            .then(setDesktopControl)
+            .catch(() => {}),
+        5000,
+      );
       return () => window.clearInterval(timer);
     }
   }, [workspace?.user?.id]);
@@ -633,35 +636,67 @@ function App() {
     void api('/notifications')
       .then((v) => {
         notificationPrefs.current = v.preferences;
-        if (v.preferences.enabled && 'Notification' in window &&
-            Notification.permission === 'granted' && 'serviceWorker' in navigator)
+        if (
+          v.preferences.enabled &&
+          'Notification' in window &&
+          Notification.permission === 'granted' &&
+          'serviceWorker' in navigator
+        )
           void ensureBrowserNotificationSubscription(v.publicKey).catch((error) =>
-            console.warn('Could not repair browser notifications:', error));
+            console.warn('Could not repair browser notifications:', error),
+          );
       })
       .catch(() => {});
     const es = new EventSource('/api/events?activity=summary&after=' + workspace.cursor);
+    let resyncTimer: ReturnType<typeof setTimeout> | undefined;
     es.onopen = () => {
-      window.dispatchEvent(new Event('workspace-reconnected'));
+      void refresh().catch(() => {});
+      conversationCache.reconnect(false);
     };
     es.onmessage = (e) => {
       const event = JSON.parse(e.data);
+      if (event.type === 'workspace.resync') {
+        conversationCache.reconnect();
+        if (!resyncTimer) resyncTimer = setTimeout(() => {
+          resyncTimer = undefined;
+          void refresh().catch(() => {});
+          setRevision((v) => v + 1);
+          void api('/providers').then(setProviders).catch(() => {});
+          window.dispatchEvent(new CustomEvent('workspace-event', { detail: { type: 'workspace.resync' } }));
+          void api('/notifications').then((v) => { notificationPrefs.current = v.preferences; }).catch(() => {});
+          const id = notificationView.current.thread?.id;
+          if (id) void api('/messages/' + encodeURIComponent(id) + '?activity=summary')
+            .then((message) => setThread((current: any) => current?.id === id ? message : current))
+            .catch(() => {});
+        }, 100);
+        return;
+      }
       if (event.type === 'desktop.control') setDesktopControl(event.payload);
       const { selected, thread } = notificationView.current;
-      if (['notification.message', 'inbox.changed'].includes(event.type))
-        void loadInbox().catch(() => {});
       if (['message.edited', 'message.deleted'].includes(event.type)) {
-        void loadInbox().catch(() => {});
         if (thread?.id === event.payload.id) setThread(event.payload);
       }
+      if (event.type === 'models.changed') void api('/providers').then(setProviders).catch(() => {});
       if (event.type === 'notifications.preferences') notificationPrefs.current = event.payload;
-      if (event.type === 'notification.message' && notificationPrefs.current.enabled &&
-          !document.hidden && document.hasFocus())
+      if (
+        event.type === 'notification.message' &&
+        notificationPrefs.current.enabled &&
+        !document.hidden &&
+        document.hasFocus()
+      )
         void api('/notifications/ack', { messageId: event.payload.id }).catch(() => {});
       window.dispatchEvent(new CustomEvent('workspace-event', { detail: event }));
       if (
-        ['workspace.changed', 'message.created', 'message.finished', 'run.changed'].includes(
-          event.type,
-        )
+        [
+          'workspace.changed',
+          'message.created',
+          'message.finished',
+          'message.edited',
+          'message.deleted',
+          'run.changed',
+          'inbox.changed',
+          'notification.message',
+        ].includes(event.type)
       )
         void refresh().catch(() => {});
       if (
@@ -692,6 +727,7 @@ function App() {
           'connection.requested',
           'connection.ready',
           'connection.action',
+          'connection.action.dismissed',
           'goal.changed',
           'work.changed',
           'decision.created',
@@ -700,12 +736,12 @@ function App() {
       )
         setRevision((v) => v + 1);
     };
-    return () => es.close();
+    return () => { clearTimeout(resyncTimer); es.close(); };
   }, [workspace?.user?.id]);
   useEffect(() => {
     if (workspace?.user.role === 'owner')
       api('/providers')
-        .then((next) => setProviders((previous) => (previous.length ? previous : next)))
+        .then(setProviders)
         .catch((e) => setError(e.message));
   }, [workspace?.user?.id]);
   useEffect(() => {
@@ -749,7 +785,6 @@ function App() {
       id,
       employeeId: workspace.employees.find((employee: Employee) => employee.id === item.employeeId)
         ?.id,
-      room: item.kind === 'channel',
     };
     prefetchTimer.current = setTimeout(
       () => void conversationCache.load(view).catch(() => {}),
@@ -837,11 +872,8 @@ function App() {
     setThread(message);
   };
   const requestNavigationAction = (kind: string, item: { id: string; name: string }) => {
-    if (kind === 'restore-channel' || kind === 'reactivate-agent') {
-      const endpoint =
-        kind === 'restore-channel'
-          ? `/channels/${encodeURIComponent(item.id)}/restore`
-          : `/employees/${encodeURIComponent(item.id)}/reactivate`;
+    if (kind === 'reactivate-agent') {
+      const endpoint = `/employees/${encodeURIComponent(item.id)}/reactivate`;
       void api(endpoint, {}, 'POST')
         .then(() => refresh())
         .catch((e: any) => setError(e.message));
@@ -851,11 +883,7 @@ function App() {
   };
   const confirmNavigationAction = async () => {
     const { kind, id } = confirmAction;
-    if (kind === 'archive-channel')
-      await api(`/channels/${encodeURIComponent(id)}/archive`, {}, 'POST');
-    else if (kind === 'delete-channel')
-      await api(`/channels/${encodeURIComponent(id)}`, {}, 'DELETE');
-    else if (kind === 'deactivate-agent')
+    if (kind === 'deactivate-agent')
       await api(`/employees/${encodeURIComponent(id)}/deactivate`, {}, 'POST');
     else if (kind === 'delete-agent')
       await api(`/employees/${encodeURIComponent(id)}`, {}, 'DELETE');
@@ -873,8 +901,6 @@ function App() {
       setJump(message);
       setModal('');
       dismissToast();
-      await api('/notifications/inbox/read', { messageId: message.id });
-      await loadInbox();
     } catch (e: any) {
       setError(e.message);
     }
@@ -890,21 +916,11 @@ function App() {
   if (!workspace.onboarded && workspace.user.role === 'owner')
     return (
       <Onboarding
-        draftKey={'abralo.onboarding.' + workspace.user.id}
         providers={providers}
-        refreshProviders={async (harness?: string) => {
-          const next = await api('/providers' + (harness ? '?check=' + harness : ''));
-          setProviders((previous) =>
-            harness
-              ? [
-                  ...previous.filter((p) => p.harness !== harness),
-                  ...next.filter((p: ProviderInfo) => p.harness === harness),
-                ]
-              : next,
-          );
-          setError('');
-        }}
         userName={workspace.user.name === 'You' ? '' : workspace.user.name}
+        refreshProviders={(harness?: string) =>
+          api('/providers' + (harness ? '?check=' + harness : '')).then(setProviders)
+        }
         onDone={async (id: string) => {
           await refresh();
           choose(id);
@@ -927,7 +943,7 @@ function App() {
           size={34}
         />
       ) : (
-        <RoomMark size={24} />
+        <WorkspaceMark size={24} />
       )}
       <div>
         <h1>{conversation?.name}</h1>
@@ -949,75 +965,45 @@ function App() {
           className="workspace-name"
           aria-label="Workspace settings"
           title="Workspace settings"
-          onClick={() => {
-            setSettingsTab('general');
-            setModal('settings');
-          }}
+          onClick={() => setModal('settings')}
         >
           <span className="brand-mark">▦</span>
           <strong>{workspace.name}</strong>
           <ChevronDown size={15} />
         </button>
         <nav>
-          <button className={`nav-row goals-nav${view === 'goals' ? ' selected' : ''}`} onClick={() => { setView('goals'); setMobile(false); }}>
-            <Target size={18} aria-hidden="true" /><span>Goals</span>
-          </button>
-          <div className="nav-title">
-            <span>Rooms</span>
-            <button className="icon" aria-label="Add room" onClick={() => setModal('channel')}>
-              <Plus size={15} />
+          <div className="workspace-destinations">
+            <button
+              aria-current={view === 'goals' ? 'page' : undefined}
+              className={`nav-row goals-nav${view === 'goals' ? ' selected' : ''}`}
+              onClick={() => {
+                setView('goals');
+                setMobile(false);
+              }}
+            >
+              <NavigationMark kind="goals" />
+              <span>Goals</span>
             </button>
+            {workspace.user.role === 'owner' && (
+              <button className={`nav-row${view === 'briefings' ? ' selected' : ''}`}
+                aria-current={view === 'briefings' ? 'page' : undefined}
+                onClick={() => { setBriefingId(undefined); setView('briefings'); setMobile(false); }}>
+                <NavigationMark kind="briefing" /><span>Morning briefing</span>
+              </button>
+            )}
           </div>
-          {workspace.conversations
-            .filter((c: any) => c.kind === 'channel' && !c.archivedAt)
-            .map((c: any) => (
-              <div className="nav-item" key={c.id}>
-                <button
-                  className={`nav-row ${selected === c.id && view === 'chat' ? 'selected' : ''}`}
-                  onMouseEnter={() => prefetchConversation(c.id)}
-                  onFocus={() => prefetchConversation(c.id)}
-                  onMouseLeave={cancelPrefetch}
-                  onBlur={cancelPrefetch}
-                  onClick={() => choose(c.id)}
-                >
-                  <RoomMark size={18} name={c.name} />
-                  <span>#{c.name}</span>
-                  {c.unread > 0 && <b className="badge">{c.unread}</b>}
-                </button>
-                {workspace.user.role === 'owner' && (
-                  <NavigationActions
-                    label={`#${c.name}`}
-                    actions={
-                      c.isTeamChannel
-                        ? []
-                        : [
-                            { id: 'archive-channel', label: 'Archive room' },
-                            { id: 'delete-channel', label: 'Delete room…', danger: true },
-                          ]
-                    }
-                    onAction={(id) => requestNavigationAction(id, { id: c.id, name: c.name })}
-                  />
-                )}
-              </div>
-            ))}
           <div className="nav-title">
             <span>Employees</span>
             <button className="icon" aria-label="Add employee" onClick={() => setModal('employee')}>
               <Plus size={15} />
             </button>
           </div>
-          {workspace.user.role === 'owner' &&
-            !workspace.employees.some((e: any) => e.isChiefOfStaff) &&
-            !workspace.inactiveEmployees?.some((e: any) => e.isChiefOfStaff) && (
-              <button className="nav-row" onClick={() => setModal('chief-of-staff')}>
-                <Plus size={16} />
-                <span>Create Chief of Staff</span>
-              </button>
-            )}
-          {workspace.employees.map((e: Employee) => (
+          <EmployeeList key={workspace.user.id} employees={workspace.employees} userId={workspace.user.id}>
+          {(e, reorderDescriptionId) => (
             <AgentNavigationRow
               key={e.id}
               employee={e}
+              reorderDescriptionId={reorderDescriptionId}
               selected={selected === e.dmId && view === 'chat'}
               unread={Boolean(
                 e.attentionUnread ||
@@ -1028,39 +1014,15 @@ function App() {
               onIntentEnd={cancelPrefetch}
               avatar={<Avatar id={e.id} name={e.name} size={26} />}
             />
-          ))}
-          {((workspace.archivedChannels?.length ?? 0) > 0 ||
-            (workspace.inactiveEmployees?.length ?? 0) > 0) && (
+          )}
+          </EmployeeList>
+          {(workspace.inactiveEmployees?.length ?? 0) > 0 && (
             <>
-              <div className="nav-title archived-nav-title">
-                <span>Archived</span>
+              <div className="nav-title inactive-nav-title">
+                <span>Inactive</span>
               </div>
-              {(workspace.archivedChannels ?? []).map((channel: any) => (
-                <div className="nav-item archived-nav-item" key={channel.id}>
-                  <button
-                    className={`nav-row ${selected === channel.id && view === 'chat' ? 'selected' : ''}`}
-                    onClick={() => choose(channel.id)}
-                    title={`Archived room #${channel.name}`}
-                  >
-                    <RoomMark size={16} />
-                    <span>#{channel.name}</span>
-                  </button>
-                  {workspace.user.role === 'owner' && (
-                    <NavigationActions
-                      label={`#${channel.name}`}
-                      actions={[
-                        { id: 'restore-channel', label: 'Restore room' },
-                        { id: 'delete-channel', label: 'Delete room…', danger: true },
-                      ]}
-                      onAction={(id) =>
-                        requestNavigationAction(id, { id: channel.id, name: channel.name })
-                      }
-                    />
-                  )}
-                </div>
-              ))}
               {(workspace.inactiveEmployees ?? []).map((e: Employee) => (
-                <div className="nav-item archived-nav-item employee-row" key={e.id}>
+                <div className="nav-item inactive-nav-item employee-row" key={e.id}>
                   <Avatar id={e.id} name={e.name} size={26} />
                   <span className="employee-name" title={e.name}>
                     {e.name}
@@ -1105,6 +1067,7 @@ function App() {
               </button>
             ))}
         </nav>
+        {workspace.user.role === 'owner' && <ModelNotice onOpen={() => { setModal('model-settings'); setMobile(false); }} />}
         <footer>
           <button
             className={`icon${view === 'connections' ? ' selected' : ''}`}
@@ -1118,10 +1081,13 @@ function App() {
             <Plug size={17} />
           </button>
           <button
-            className="icon"
+            className={`icon${view === 'usage' ? ' selected' : ''}`}
             aria-label="Usage"
             title="Usage"
-            onClick={() => setModal('usage')}
+            onClick={() => {
+              setView('usage');
+              setMobile(false);
+            }}
           >
             <Activity size={16} />
           </button>
@@ -1185,11 +1151,27 @@ function App() {
       <main className="main">
         {desktopControl.active && (
           <div className="desktop-control-banner" role="status">
-            <span><strong>Desktop control active</strong> · {desktopControl.employeeName} · until {new Date(desktopControl.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button className="secondary" onClick={() => void api('/desktop-control/revoke', {}, 'POST').then(setDesktopControl).catch((e) => setError(e.message))}>Stop control</button>
+            <span>
+              <strong>Desktop control active</strong> · {desktopControl.employeeName} · until{' '}
+              {new Date(desktopControl.expiresAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            <button
+              className="secondary"
+              onClick={() =>
+                void api('/desktop-control/revoke', {}, 'POST')
+                  .then(setDesktopControl)
+                  .catch((e) => setError(e.message))
+              }
+            >
+              Stop control
+            </button>
           </div>
         )}
-        <header className="conversation-header">
+        {view === 'briefings' && <button className="icon chief-mobile-navigation" aria-label="Open workspace navigation" onClick={() => setMobile(true)}><Menu size={18} /></button>}
+        {view !== 'briefings' && <header className="conversation-header">
           <button
             className="icon mobile-menu"
             aria-label="Open navigation"
@@ -1205,15 +1187,31 @@ function App() {
                 <p>Accounts your team can use.</p>
               </div>
             </>
+          ) : view === 'usage' ? (
+            <>
+              <Activity size={20} />
+              <div>
+                <h1>Usage</h1>
+                <p>How much room your team has.</p>
+              </div>
+            </>
+          ) : view === 'briefings' ? (
+            <><Mic size={20} /><div><h1>Morning briefing</h1><p>A conversation with your Chief of Staff.</p></div></>
           ) : view === 'goals' ? (
-            <><Target size={20} /><div><h1>Goals</h1><p>What you want to achieve.</p></div></>
+            <>
+              <Target size={20} />
+              <div>
+                <h1>Goals</h1>
+                <p>What you want to achieve.</p>
+              </div>
+            </>
           ) : conversation ? (
-            employee || conversation.kind === 'channel' ? (
+            employee ? (
               <button
                 className="conversation-identity"
                 aria-label={`${employee?.name || conversation.name} settings`}
-                title={`Open ${employee ? 'employee' : 'room'} settings`}
-                onClick={() => setModal(employee ? 'edit-employee' : 'channel-info')}
+                title="Open employee settings"
+                onClick={() => setModal('edit-employee')}
               >
                 {conversationIdentity}
               </button>
@@ -1223,6 +1221,8 @@ function App() {
           ) : (
             <h1>Workspace</h1>
           )}
+          {workspace.user.role === 'owner' && view === 'chat' && employee && (workspace.chiefOfStaffId === employee.id || /\bchief of staff\b/i.test(employee.name + ' ' + employee.role)) &&
+            <button className="quiet-button" onClick={() => setModal('briefing-history')}>Morning briefings</button>}
           <div className={`search-anchor${modal === 'search' ? ' open' : ''}`} ref={searchAnchor}>
             <button
               className="icon workspace-search-icon"
@@ -1284,10 +1284,6 @@ function App() {
                     >
                       <strong>{m.authorName}</strong>
                       <small>
-                        {workspace.conversations.find((c: any) => c.id === m.conversationId)
-                          ?.kind === 'channel'
-                          ? '#'
-                          : ''}
                         {workspace.conversations.find((c: any) => c.id === m.conversationId)?.name}
                       </small>
                       <p>{m.text.slice(0, 240)}</p>
@@ -1298,125 +1294,47 @@ function App() {
               </section>
             )}
           </div>
-          <div className="notification-anchor" ref={notificationAnchor}>
-            <button
-              ref={notificationTrigger}
-              className="icon notification-button"
-              aria-label={`Notifications${inbox.unread ? `, ${inbox.unread} unread` : ''}`}
-              aria-haspopup="dialog"
-              aria-expanded={modal === 'inbox'}
-              aria-controls="notification-popover"
-              title="Notifications"
-              onClick={() => {
-                setModal(modal === 'inbox' ? '' : 'inbox');
-                void loadInbox().catch((e) => setError(e.message));
-              }}
-            >
-              <Bell size={19} />
-              {inbox.unread > 0 && (
-                <span className="notification-badge">
-                  {inbox.unread > 99 ? '99+' : inbox.unread}
-                </span>
-              )}
-            </button>
-            {modal === 'inbox' && (
-              <section
-                id="notification-popover"
-                ref={notificationPanel}
-                className="notification-popover"
-                role="dialog"
-                aria-label="Notifications"
-                aria-modal="false"
-                tabIndex={-1}
-              >
-                <header>
-                  <h2>Notifications</h2>
-                  <button
-                    className="icon"
-                    aria-label="Close notifications"
-                    onClick={() => {
-                      setModal('');
-                      notificationTrigger.current?.focus();
-                    }}
-                  >
-                    <X size={18} />
-                  </button>
-                </header>
-                <div className="inbox-toolbar">
-                  <span>{inbox.unread ? `${inbox.unread} unread` : 'You’re caught up.'}</span>
-                  {inbox.unread > 0 && (
-                    <button
-                      className="quiet-button"
-                      onClick={async () => {
-                        try {
-                          await api('/notifications/inbox/read', { all: true });
-                          await loadInbox();
-                        } catch (e: any) {
-                          setError(e.message);
-                        }
-                      }}
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                {!inbox.items.length && (
-                  <p className="muted">
-                    Direct messages, mentions and replies to your threads will appear here.
-                  </p>
-                )}
-                <div className="notification-list">
-                  {inbox.items.map((item: any) => (
-                    <button
-                      key={item.id}
-                      className={`notification-item ${item.seen ? '' : 'unread'}`}
-                      onClick={() => void openNotification(item)}
-                    >
-                      <Avatar id={item.authorId} name={item.authorName} />
-                      <span>
-                        <strong>{item.authorName}</strong>
-                        <small>
-                          {item.conversationKind === 'channel' ? '#' : ''}
-                          {item.conversationName}
-                          {item.threadId ? ' · Thread reply' : ' · Message'} ·{' '}
-                          {new Date(item.createdAt).toLocaleString()}
-                        </small>
-                        <span>{item.text.slice(0, 200)}</span>
-                      </span>
-                      {!item.seen && <i className="unread-dot" />}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        </header>
+        </header>}
         {error && (
-          <div className="error-bar" role="alert">
-            {error}
+          <div className="error-bar" role="alert" title={readableError(error) === error ? undefined : error}>
+            {readableError(error)}
             <button className="icon" aria-label="Dismiss error" onClick={() => setError('')}>
               <X size={16} />
             </button>
           </div>
         )}
         {view === 'connections' ? (
-          <Connections revision={revision} fail={setError} />
+          <ConnectionsView revision={revision} fail={setError} employees={workspace.employees} />
+        ) : view === 'usage' ? (
+          <UsageView
+            employees={workspace.employees}
+            avatar={(id: string, name: string) => <Avatar id={id} name={name} size={24} />}
+            onOpenConnections={() => setView('connections')}
+          />
+        ) : view === 'briefings' ? (
+          <BriefingsView conversationId={selected || undefined} initialBriefingId={briefingId} onOpenVoiceSettings={() => setModal('voice-settings')} />
         ) : view === 'goals' ? (
-          <GoalsView conversationId={selected} conversations={workspace.conversations} employees={workspace.employees} revision={revision} onOpenConversation={choose} fail={setError} />
+          <GoalsView
+            conversationId={selected}
+            conversations={workspace.conversations}
+            employees={workspace.employees}
+            revision={revision}
+            onOpenConversation={choose}
+            avatar={(id, name) => <Avatar id={id} name={name} size={20} />}
+            fail={setError}
+          />
         ) : conversation ? (
           <PreviewContext.Provider value={openPreview}>
             <div className="conversation-columns">
               <Chat
                 key={`${selected}:${conversationVisit}`}
                 focusMessage={!jump?.threadId ? jump : null}
+                restoreViewport={!jump}
                 id={selected}
                 employee={employee}
                 employees={workspace.employees}
                 conversations={workspace.conversations}
                 providers={providers}
-                refreshProviders={(harness?: string) =>
-                  api('/providers' + (harness ? '?check=' + harness : '')).then(setProviders)
-                }
                 user={workspace.user}
                 onOpenConversation={choose}
                 onOpenMessage={openMessage}
@@ -1426,7 +1344,7 @@ function App() {
                 onRead={refresh}
                 onOpenGoals={() => setView('goals')}
                 revision={revision}
-                readOnly={!!conversation.archivedAt || !!conversation.agentDeactivated}
+                readOnly={!!conversation.agentDeactivated}
               />
               {(thread || preview) && (
                 <SidePanel
@@ -1506,18 +1424,13 @@ function App() {
                           employees={workspace.employees}
                           conversations={workspace.conversations}
                           providers={providers}
-                          refreshProviders={(harness?: string) =>
-                            api('/providers' + (harness ? '?check=' + harness : '')).then(
-                              setProviders,
-                            )
-                          }
                           user={workspace.user}
                           onOpenConversation={choose}
                           onOpenMessage={openMessage}
                           onMessageChange={updateMessage}
                           fail={setError}
                           revision={revision}
-                          readOnly={!!conversation?.archivedAt || !!conversation?.agentDeactivated}
+                          readOnly={!!conversation?.agentDeactivated}
                         />
                       </>
                     )
@@ -1530,14 +1443,7 @@ function App() {
           <div className="empty">
             <Users size={32} />
             <h2>Your workspace is ready</h2>
-            <p>Create a Chief of Staff to coordinate your workspace, or add another employee.</p>
-            {workspace.user.role === 'owner' &&
-              !workspace.employees.some((e: any) => e.isChiefOfStaff) &&
-              !workspace.inactiveEmployees?.some((e: any) => e.isChiefOfStaff) && (
-                <button className="secondary" onClick={() => setModal('chief-of-staff')}>
-                  Create Chief of Staff
-                </button>
-              )}
+            <p>Add an employee to begin.</p>
             <button className="primary" onClick={() => setModal('employee')}>
               Add employee
             </button>
@@ -1578,6 +1484,7 @@ function App() {
       {modal === 'edit-employee' && employee && (
         <EditEmployee
           humans={workspace.humans}
+          providers={providers}
           employee={employee}
           onClose={() => setModal('')}
           done={refresh}
@@ -1591,53 +1498,13 @@ function App() {
           }
         />
       )}
-      {modal === 'channel' && (
-        <CreateChannel
-          workspace={workspace}
-          onClose={() => setModal('')}
-          onCreated={async (id: string) => {
-            await refresh();
-            choose(id);
-            setModal('');
-          }}
-        />
-      )}
-      {modal === 'channel-info' && conversation?.kind === 'channel' && (
-        <ChannelSettings
-          conversation={conversation}
-          workspace={workspace}
-          onClose={() => setModal('')}
-          refresh={refresh}
-        />
-      )}
-      {modal === 'usage' && (
-        <Usage
-          providers={providers}
-          onClose={() => setModal('')}
-          onConnect={() => {
-            setSettingsTab('accounts');
-            setModal('settings');
-          }}
-        />
-      )}
-      {modal === 'chief-of-staff' && (
-        <CreateChiefOfStaff
-          providers={providers}
-          onClose={() => setModal('')}
-          onCreated={async (id: string) => {
-            await refresh();
-            setModal('');
-            choose(id);
-          }}
-          fail={setError}
-        />
-      )}
-      {modal === 'settings' && (
+      {modal === 'briefing-history' && <Modal title="Morning briefings" onClose={() => setModal('')}><BriefingHistory onOpen={(id) => { setBriefingId(id); setView('briefings'); setModal(''); }} /></Modal>}
+      {['settings', 'voice-settings', 'model-settings'].includes(modal) && (
         <SettingsPanel
           workspace={workspace}
+          initialTab={modal === 'voice-settings' ? 'voice' : modal === 'model-settings' ? 'accounts' : 'general'}
           onClose={() => setModal('')}
           refresh={refresh}
-          initialTab={settingsTab}
           onMemorySource={async (sourceId: string) => {
             try {
               const message = await api(
@@ -1676,7 +1543,7 @@ function Login({ onDone, error }: { onDone: () => Promise<any>; error: string })
     <main className="launch login-page">
       <div className="login-card">
         <div className="login-signature" aria-hidden="true">
-          <RoomMark size={42} name={invite ? 'Join' : 'Welcome'} />
+          <WorkspaceMark size={42} name={invite ? 'Join' : 'Welcome'} />
           <span />
           <span className="brand-mark">▦</span>
         </div>
@@ -1726,8 +1593,8 @@ function Login({ onDone, error }: { onDone: () => Promise<any>; error: string })
     </main>
   );
 }
+const ONBOARDING_DRAFT = 'abralo.onboarding.draft';
 function Onboarding({
-  draftKey,
   providers,
   refreshProviders,
   onDone,
@@ -1735,46 +1602,38 @@ function Onboarding({
   error,
   userName: initialUserName,
 }: any) {
-  const [draft] = useState(() => {
-    try {
-      const value = JSON.parse(sessionStorage.getItem(draftKey) || '{}');
-      return {
-        userName: typeof value.userName === 'string' ? value.userName.slice(0, 80) : '',
-        harness: ['codex', 'claude', 'opencode'].includes(value.harness) ? value.harness : 'codex',
-        objectives:
-          Array.isArray(value.objectives) &&
-          value.objectives.every((v: unknown) => typeof v === 'string')
-            ? value.objectives
-            : [''],
-      };
-    } catch {
-      return { userName: '', harness: 'codex', objectives: [''] };
-    }
-  });
   const [checking, setChecking] = useState(false),
     [checked, setChecked] = useState(false);
-  const [step, setStep] = useState(draft.userName ? 1 : 0),
+  // Keep the setup draft in this tab, so a reload (often while signing in) resumes it.
+  const [draft] = useState<any>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(ONBOARDING_DRAFT) || '{}') || {};
+    } catch {
+      return {};
+    }
+  });
+  const [step, setStep] = useState<number>(draft.step ?? 0),
     [name] = useState('Chief of Staff'),
-    [harness, setHarness] = useState<string>(draft.harness),
-    [model, setModel] = useState(''),
-    [objectives, setObjectives] = useState<string[]>(
-      draft.objectives.length ? draft.objectives : [''],
-    ),
+    [harness, setHarness] = useState<string>(draft.harness ?? 'codex'),
+    [model, setModel] = useState<string>(draft.model ?? ''),
+    [objectives, setObjectives] = useState<string[]>(draft.objectives ?? ['']),
     [objectiveError, setObjectiveError] = useState(''),
-    [userName, setUserName] = useState(
-      draft.userName || (initialUserName && initialUserName !== 'You' ? initialUserName : ''),
+    [userName, setUserName] = useState<string>(
+      draft.userName ?? (initialUserName && initialUserName !== 'You' ? initialUserName : ''),
     ),
     [busy, setBusy] = useState(false),
     [login, setLogin] = useState<any>(null);
-  const provider = providers.find((p: ProviderInfo) => p.harness === harness);
   useEffect(() => {
     try {
-      sessionStorage.setItem(draftKey, JSON.stringify({ userName, harness, objectives }));
-    } catch {}
-  }, [draftKey, userName, harness, objectives]);
-  useEffect(() => {
-    if (step === 1) void refreshProviders(harness).catch((e: Error) => fail(e.message));
-  }, [step, harness]);
+      sessionStorage.setItem(
+        ONBOARDING_DRAFT,
+        JSON.stringify({ step, harness, model, objectives, userName }),
+      );
+    } catch {
+      /* storage unavailable: setup still works, it just won't survive a reload */
+    }
+  }, [step, harness, model, objectives, userName]);
+  const provider = providers.find((p: ProviderInfo) => p.harness === harness);
   return (
     <main className={`onboarding step-${step}`}>
       <header>
@@ -1786,7 +1645,7 @@ function Onboarding({
         <div className="setup-copy">
           <div className="eyebrow">{step === 0 ? 'A PLACE TO BEGIN' : 'YOUR FIRST EMPLOYEE'}</div>
           <div className="onboarding-signature" aria-hidden="true">
-            <RoomMark size={40} name="Welcome" />
+            <WorkspaceMark size={40} name="Welcome" />
             <span />
             <Avatar id={name} name={name} size={40} />
           </div>
@@ -1795,14 +1654,14 @@ function Onboarding({
               ? 'What should I call you?'
               : step === 1
                 ? `Connect ${name}.`
-                : 'What should your team work towards?'}
+                : 'What would you like to achieve?'}
           </h1>
           <p>
             {step === 0
               ? 'Your Chief of Staff is your first employee. Share what matters, and build the right workforce as you go.'
               : step === 1
                 ? 'Use your existing agent account. Your provider’s usage limits apply.'
-                : 'You can set workspace outcomes before choosing a project. Describe the results you want; your Chief of Staff can help turn them into projects and next steps.'}
+                : 'Give your team a few outcomes to work towards. Clear targets help the Chief of Staff spot useful next steps.'}
           </p>
           {error && <p className="error">{error}</p>}
           {step === 0 ? (
@@ -1841,8 +1700,7 @@ function Onboarding({
                     className={`provider-option ${harness === p ? 'active' : ''}`}
                     onClick={() => {
                       setHarness(p);
-                      setChecked(false);
-                      fail('');
+                      void refreshProviders(p);
                       setModel('');
                       setLogin(null);
                     }}
@@ -1865,12 +1723,17 @@ function Onboarding({
                 {provider?.detail || 'Checking this host…'}
               </p>
               {(!provider?.authenticated || harness === 'opencode') && (
+                // Share onboarding's provider status, so finishing sign-in unlocks Continue.
                 <ProviderLogin
-                  key={harness}
                   harness={harness}
-                  provider={provider}
                   fail={fail}
-                  refresh={(check?: string) => refreshProviders(check)}
+                  provider={provider}
+                  checking={checking}
+                  refresh={refreshProviders}
+                  onConnected={() => {
+                    fail('');
+                    setChecked(false);
+                  }}
                 />
               )}
               <button
@@ -1881,6 +1744,8 @@ function Onboarding({
                   setChecked(false);
                   try {
                     await refreshProviders(harness);
+                    // The check reached Abralo, so an earlier "cannot reach" error no longer applies.
+                    fail('');
                     setChecked(true);
                   } catch (e: any) {
                     fail(e.message);
@@ -1899,32 +1764,13 @@ function Onboarding({
                     : 'Not connected yet. Complete sign-in, then check again.'}
                 </p>
               )}
-              {harness === 'opencode' && provider?.authenticated && (
-                <label>
-                  OpenCode model
-                  <select value={model} onChange={(e) => setModel(e.target.value)}>
-                    <option value="">Choose a model from your connected provider</option>
-                    {provider.models?.map((m: { id: string; name: string }) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                  {!provider.models?.length && (
-                    <span>
-                      No models are available yet. Check the provider connection or choose another
-                      provider.
-                    </span>
-                  )}
-                </label>
-              )}
               <div className="form-actions">
                 <button className="quiet-button" onClick={() => setStep(0)}>
                   Back
                 </button>
                 <button
                   className="primary"
-                  disabled={!provider?.authenticated || (harness === 'opencode' && !model)}
+                  disabled={!provider?.authenticated}
                   onClick={() => setStep(2)}
                 >
                   Continue
@@ -1953,10 +1799,8 @@ function Onboarding({
                       role: 'Organizes the team and keeps work moving',
                     },
                   });
+                  sessionStorage.removeItem(ONBOARDING_DRAFT);
                   await onDone(employee.dmId);
-                  try {
-                    sessionStorage.removeItem(draftKey);
-                  } catch {}
                 } catch (e: any) {
                   fail(e.message);
                 } finally {
@@ -2037,8 +1881,8 @@ function Onboarding({
           )}
         </div>
         <div className="onboarding-art" aria-hidden="true">
-          <div className="onboarding-room-sketch">
-            <RoomMark size={144} name="Welcome" />
+          <div className="onboarding-workspace-sketch">
+            <WorkspaceMark size={144} name="Welcome" />
           </div>
           <div className="pixel-field">
             {Array.from({ length: 49 }, (_, i) => (
@@ -2054,39 +1898,10 @@ function Onboarding({
               />
             ))}
           </div>
-          <span className="caption">Room for a little ambition.</span>
+          <span className="caption">Start with a little ambition.</span>
         </div>
       </div>
     </main>
-  );
-}
-function ChannelStart({ conversation }: { conversation: { id: string; name: string } }) {
-  const [purpose, setPurpose] = useState('');
-  useEffect(() => {
-    let live = true;
-    void api('/channels/' + encodeURIComponent(conversation.id))
-      .then((channel) => {
-        if (live) setPurpose(channel.purpose || '');
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [conversation]);
-  return (
-    <div className="conversation-start ui-stack">
-      <span className="channel-start-icon" aria-hidden="true">
-        <RoomMark size={28} />
-      </span>
-      <div className="ui-field">
-        <h2>{conversation.name}</h2>
-        <p>{purpose || 'A shared space for your team to plan, discuss and work together.'}</p>
-      </div>
-      <p className="channel-start-hint">
-        Write the first message, or use <span className="entity-mention">@</span> to bring an agent
-        into the conversation.
-      </p>
-    </div>
   );
 }
 function Chat({
@@ -2096,7 +1911,6 @@ function Chat({
   employees,
   conversations,
   providers,
-  refreshProviders,
   user,
   onOpenConversation,
   onOpenMessage,
@@ -2112,20 +1926,14 @@ function Chat({
 }: any) {
   const openPreview = usePreview();
   const composerInput = useRef<HTMLTextAreaElement>(null);
-  const channel = !threadId && conversations.find((c: any) => c.id === id && c.kind === 'channel');
   const messagePeople = useMemo(
     () => [...employees.map((e: any) => e.name), user.name],
     [employees, user.name],
-  );
-  const messageChannels = useMemo(
-    () => conversations.filter((c: any) => c.kind === 'channel'),
-    [conversations],
   );
   const baseView: ConversationView = {
     id,
     threadId,
     employeeId: !threadId ? employee?.id : undefined,
-    room: !!channel,
   };
   const [historyBefore, updateHistoryBefore] = useState<number | null>(() =>
     focusMessage && !restoreViewport
@@ -2141,7 +1949,7 @@ function Chat({
   };
   const pageView = useMemo(
     () => ({ ...baseView, before: historyBefore }),
-    [id, threadId, employee?.id, !!channel, historyBefore],
+    [id, threadId, employee?.id, historyBefore],
   );
   const history = useConversationPage(pageView);
   const { value: composer, set: setComposer } = useConversationComposer(baseView);
@@ -2164,16 +1972,13 @@ function Chat({
   const historyStatus = history.status;
   const historyError = history.error;
   const [showLoading, setShowLoading] = useState(false);
-  const [mention, setMention] = useState<{
-    start: number;
-    end: number;
-    query: string;
-    kind: 'employee' | 'room';
-  } | null>(null);
-  const [mentionIndex, setMentionIndex] = useState(0);
+  const [modelOptionIndex, setModelOptionIndex] = useState(0);
   const [proposals, setProposals] = useState<any[]>([]);
   const [connections, setConnections] = useState<any[]>([]);
   const [connectionActions, setConnectionActions] = useState<any[]>([]);
+  // Dismissed cards fold to a one-line note where they were; each can be reopened in place.
+  const [shownDismissed, setShownDismissed] = useState<Set<string>>(() => new Set());
+  useEffect(() => setShownDismissed(new Set()), [id]);
   const [workingFolder, setWorkingFolder] = useState<{ path: string; name: string } | null>(null);
   const [choosingFolder, setChoosingFolder] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
@@ -2313,6 +2118,53 @@ function Chat({
   const confirmedKeys = new Set(messages.map((m) => m.clientKey));
   const pending = outgoing.filter((item) => !confirmedKeys.has(item.message.clientKey));
   const visibleMessages = [...messages, ...pending.map((item) => item.message)];
+  const workItems = useConversationWork(id, messages.map((m) => m.id), revision, fail);
+  const { inlineActions, pinnedActions } = useMemo(
+    () => placeConnectionActions(connectionActions, messages),
+    [connectionActions, messages],
+  );
+  const updateAction = (actionId: string, change: any) =>
+    setConnectionActions((items) =>
+      items.map((item) => (item.actionId === actionId ? { ...item, ...change } : item)),
+    );
+  const renderAction = (action: any) => (
+    <ConnectionAction key={action.actionId} action={action}
+      onDismiss={(dismissed: boolean) => {
+        updateAction(action.actionId, { dismissed });
+      }}
+      onReceipt={(receipt: any) => updateAction(action.actionId, receipt)} />
+  );
+  // Dismissed cards in one place fold into a single quiet note that reopens them together.
+  const renderPlacedActions = (actions: any[], slot: string) => {
+    const dismissed = actions.filter((action) => action.dismissed);
+    const shown = shownDismissed.has(slot);
+    const services = [...new Set(dismissed.map((a) => serviceNames[a.service] || a.service))];
+    const noun = `${dismissed.length > 1 ? dismissed.length + ' ' : ''}dismissed ${
+      services.length === 1 ? services[0] + ' ' : ''
+    }action${dismissed.length > 1 ? 's' : ''}`;
+    return (
+      <>
+        {actions.filter((action) => !action.dismissed).map(renderAction)}
+        {dismissed.length > 0 && (
+          <button
+            className="quiet-button dismissed-action-note"
+            aria-expanded={shown}
+            onClick={() =>
+              setShownDismissed((current) => {
+                const next = new Set(current);
+                if (shown) next.delete(slot);
+                else next.add(slot);
+                return next;
+              })
+            }
+          >
+            {shown ? 'Hide' : 'Show'} {noun}
+          </button>
+        )}
+        {shown && dismissed.map(renderAction)}
+      </>
+    );
+  };
   const visibleAttachments = [...attachments, ...pending.flatMap((item) => item.files)];
   const savedViewport = useMemo(() => conversationCache.viewport(pageView), [pageView]);
   const virtual = useVirtualizer({
@@ -2361,53 +2213,59 @@ function Chat({
     setHistoryBefore(null);
     jumpToLatest();
   };
+  const latestReadSequence = messages.at(-1)?.seq;
   useEffect(() => {
-    if (!messages.length || document.hidden || !following.current) return;
-    const last = messages.at(-1)!;
-    void api(`/conversations/${id}/read`, { seq: last.seq, agentView: !!employee })
-      .then(() => onRead?.())
-      .catch(() => {});
-  }, [messages.length, id]);
+    const markVisibleRead = () => {
+      if (
+        latestReadSequence === undefined ||
+        document.hidden ||
+        !document.hasFocus() ||
+        !following.current ||
+        historyBefore !== null
+      )
+        return;
+      void api(`/conversations/${id}/read`, { seq: latestReadSequence })
+        .then(() => onRead?.())
+        .catch(() => {});
+    };
+    markVisibleRead();
+    window.addEventListener('focus', markVisibleRead);
+    document.addEventListener('visibilitychange', markVisibleRead);
+    return () => {
+      window.removeEventListener('focus', markVisibleRead);
+      document.removeEventListener('visibilitychange', markVisibleRead);
+    };
+  }, [latestReadSequence, id, atLatest, historyBefore, onRead]);
+  const latestRun = runs.reduce<any>(
+    (latest, run) =>
+      !latest ||
+      String(run.created_at || run.createdAt || '') >=
+        String(latest.created_at || latest.createdAt || '')
+        ? run
+        : latest,
+    null,
+  );
+  const providerFailure = latestRun?.state === 'failed' ? providerFailureKind(latestRun.error) : null;
+  async function resumeAfterProvider(text: string) {
+    try {
+      await api(`/conversations/${id}/messages`, {
+        text,
+        key: crypto.randomUUID(),
+        threadId: threadId || null,
+        attachments: [],
+        recipients: [],
+      });
+      void load(null).catch((e) => fail(e.message));
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
   const active = runs.filter(
     (r) => !['completed', 'failed', 'cancelled', 'interrupted'].includes(r.state),
   );
   const activeWork =
     employee && active.find((r) => r.user_id === user.id && r.conversation_id !== id);
   const replyWork = draftWork || (!draft && !files.length ? activeWork : null);
-  const mentionCandidates: { kind: 'employee' | 'room'; item: any }[] =
-    mention?.kind === 'employee'
-      ? employee
-        ? []
-        : employees.map((item: Employee) => ({ kind: 'employee', item }))
-      : mention?.kind === 'room'
-        ? conversations
-            .filter((item: any) => item.kind === 'channel' && !item.archivedAt)
-            .map((item: any) => ({ kind: 'room', item }))
-        : [];
-  const mentionMatches = mention
-    ? mentionCandidates
-        .filter(({ item }) => item.name.toLocaleLowerCase().includes(mention.query))
-        .sort((a, b) => {
-          const aStarts = a.item.name.toLocaleLowerCase().startsWith(mention.query);
-          const bStarts = b.item.name.toLocaleLowerCase().startsWith(mention.query);
-          return Number(bStarts) - Number(aStarts) || a.item.name.localeCompare(b.item.name);
-        })
-        .slice(0, 8)
-    : [];
-  function chooseMention(kind: 'employee' | 'room', name: string) {
-    if (!mention) return;
-    const input = composerInput.current;
-    const inserted = `${kind === 'employee' ? '@' : '#'}${name} `;
-    const next = draft.slice(0, mention.start) + inserted + draft.slice(mention.end);
-    const caret = mention.start + inserted.length;
-    setDraft(next);
-    setMention(null);
-    setMentionIndex(0);
-    requestAnimationFrame(() => {
-      input?.focus();
-      input?.setSelectionRange(caret, caret);
-    });
-  }
   function chooseModel(harness: string | null, model: string | null) {
     if (harness && model) setModelOverride({ harness, model });
     else setModelOverride(null);
@@ -2522,7 +2380,7 @@ function Chat({
     setOutgoing((items) => [...items, item]);
     setDraftWork(null);
     setDraft('');
-    setMention(null);
+
     setFiles([]);
     void submitOutgoing(item);
   }
@@ -2550,13 +2408,18 @@ function Chat({
   }
   return (
     <section className="chat">
-      {!threadId && <ConversationGoals conversationId={id} revision={revision} onOpen={onOpenGoals} fail={fail} />}
+      {!threadId && (
+        <ConversationGoals
+          conversationId={id}
+          revision={revision}
+          onOpen={onOpenGoals}
+          fail={fail}
+        />
+      )}
       <div className="message-scroll" ref={scroll} onScroll={handleConversationScroll}>
         {readOnly && (
-          <div className="conversation-archived-notice">
-            {channel?.archivedAt
-              ? 'Archived room · restore it from the sidebar to resume conversation.'
-              : 'This agent is deactivated. Reactivate it from the sidebar to continue.'}
+          <div className="conversation-inactive-notice">
+            This agent is deactivated. Reactivate it from the sidebar to continue.
           </div>
         )}
         <div className="history-controls">
@@ -2608,35 +2471,22 @@ function Chat({
             </button>
           </div>
         )}
-        {!visibleMessages.length &&
-          !!history.data &&
-          (channel ? (
-            <ChannelStart conversation={channel} />
-          ) : (
-            <div className="conversation-start ui-stack">
-              {employee && <Avatar id={employee.id} name={employee.name} size={48} />}
-              <h2>{employee ? employee.name : 'Start a conversation'}</h2>
-              <p>
-                {employee
-                  ? 'Ask a question or give them something to work on.'
-                  : 'Mention an employee by name to bring them into the work.'}
-              </p>
-            </div>
-          ))}
+        {!visibleMessages.length && !!history.data && (
+          <div className="conversation-start ui-stack">
+            {employee && <Avatar id={employee.id} name={employee.name} size={48} />}
+            <h2>{employee ? employee.name : 'Start a conversation'}</h2>
+            <p>
+              {employee
+                ? 'Ask a question or give them something to work on.'
+                : 'Send a message to start the conversation.'}
+            </p>
+          </div>
+        )}
         <div style={{ height: virtual.getTotalSize(), position: 'relative', width: '100%' }}>
           {virtual.getVirtualItems().map((item) => {
             const m = visibleMessages[item.index],
               run = runs.find((r) => r.id === m.runId);
-            const originConversation = conversations.find(
-              (entry: any) => entry.id === m.conversationId,
-            );
-            const originLabel =
-              employee &&
-              m.kind === 'agent' &&
-              m.conversationId !== id &&
-              originConversation?.kind === 'channel'
-                ? `#${originConversation.name}`
-                : undefined;
+            const originLabel = undefined;
             const local = pending.find((entry) => entry.message.id === m.id);
             return (
               <div
@@ -2675,36 +2525,37 @@ function Chat({
                         : onThread
                   }
                   people={messagePeople}
-                  channels={messageChannels}
                   onOpenConversation={onOpenConversation}
                 />
+                <WorkCards items={workItems.filter((work) => work.requestMessageId === m.id)} />
+                {inlineActions.has(m.id) && (
+                  <div className="conversation-actions inline-actions">
+                    {renderPlacedActions(inlineActions.get(m.id)!, m.id)}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
         <div className="conversation-actions">
-          {employee &&
-            runs.some((r) => r.error && /auth|sign.in|login|credential/i.test(r.error)) && (
-              <ProviderLogin
-                harness={employee.harness}
-                provider={providers.find((p: any) => p.harness === employee.harness)}
-                fail={fail}
-                refresh={(check?: string) => refreshProviders(check)}
-              />
-            )}
+          {employee && !!providerFailure && (
+            <ProviderRecoveryCard
+              key={employee.harness + ':' + latestRun?.id}
+              harness={employee.harness}
+              failure={providerFailure}
+              fail={fail}
+              onResume={resumeAfterProvider}
+            />
+          )}
           {proposals.map((p) => (
             <div className="proposal inline-card" key={p.id}>
               <div className="proposal-heading">
                 <div>
-                  <div className="eyebrow">TEAM & PROJECT ROOMS</div>
-                  <p>
-                    {p.rooms?.length
-                      ? `Shared team room plus ${p.rooms.length} project ${p.rooms.length === 1 ? 'room' : 'rooms'}, with agents assigned to each.`
-                      : 'A small team, shaped around the work you described.'}
-                  </p>
+                  <div className="eyebrow">{p.employees.length === 1 ? 'PROPOSED EMPLOYEE' : 'PROPOSED EMPLOYEES'}</div>
+                  <p>Suggested for the work you described.</p>
                 </div>
                 <span className="proposal-count">
-                  {p.employees.length} {p.employees.length === 1 ? 'agent' : 'agents'}
+                  {p.employees.length} {p.employees.length === 1 ? 'employee' : 'employees'}
                 </span>
               </div>
               {p.employees.map((e: any, i: number) => (
@@ -2716,32 +2567,6 @@ function Chat({
                   </span>
                 </div>
               ))}
-              {!!p.rooms?.length && (
-                <section className="proposal-rooms" aria-label="Project rooms">
-                  <span className="proposal-section-label">PROJECT ROOMS</span>
-                  {p.rooms.map((room: any, roomIndex: number) => (
-                    <div className="proposal-room" key={roomIndex}>
-                      <RoomMark name={room.name} size={18} />
-                      <span>
-                        <strong>{room.name}</strong>
-                        <small>
-                          {room.employeeIndexes
-                            .map((index: number) => p.employees[index]?.name)
-                            .filter(Boolean)
-                            .join(' · ')
-                            ? [
-                                employee?.name || 'Chief of Staff',
-                                ...room.employeeIndexes
-                                  .map((index: number) => p.employees[index]?.name)
-                                  .filter(Boolean),
-                              ].join(' · ')
-                            : employee?.name || 'Chief of Staff'}
-                        </small>
-                      </span>
-                    </div>
-                  ))}
-                </section>
-              )}
               <button
                 className="primary"
                 onClick={async () => {
@@ -2753,20 +2578,15 @@ function Chat({
                   }
                 }}
               >
-                {p.rooms?.length
-                  ? `Create team · ${p.rooms.length} project ${p.rooms.length === 1 ? 'room' : 'rooms'}`
-                  : 'Create this team'}
+                {p.employees.length === 1 ? 'Create this employee' : 'Create these employees'}
               </button>
-              <small>Want to adjust it? Reply to your Chief of Staff.</small>
+              <small>Want to make changes? Reply in this conversation.</small>
             </div>
           ))}
           {decisions.map((d) => (
             <Decision key={d.id} decision={d} fail={fail} />
           ))}
-          {!threadId && <WorkCards conversationId={id} revision={revision} fail={fail} />}
-          {connectionActions.map((action) => (
-            <ConnectionAction key={action.actionId} action={action} fail={fail} />
-          ))}
+          {renderPlacedActions(pinnedActions, 'pinned')}
           {connections.map((c) => (
             <ConnectionRow key={c.id} connection={c} fail={fail} />
           ))}
@@ -2797,7 +2617,7 @@ function Chat({
                 <button
                   type="button"
                   role="option"
-                  aria-selected={mentionIndex === 0}
+                  aria-selected={modelOptionIndex === 0}
                   className="composer-model-option"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => chooseModel(null, null)}
@@ -2818,7 +2638,7 @@ function Chat({
                     key={`${provider.harness}:${model.id}`}
                     type="button"
                     role="option"
-                    aria-selected={optionIndex === mentionIndex}
+                    aria-selected={optionIndex === modelOptionIndex}
                     className="composer-model-option"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => chooseModel(provider.harness, model.id)}
@@ -2836,39 +2656,6 @@ function Chat({
               {matchingModelChoices.length === 0 && modelQuery.query && (
                 <p className="composer-model-empty">No matching models.</p>
               )}
-            </div>
-          )}
-          {mentionMatches.length > 0 && (
-            <div
-              className="mention-menu"
-              role="listbox"
-              aria-label={mention?.kind === 'room' ? 'Choose a room' : 'Choose an agent'}
-            >
-              {mentionMatches.map(({ kind, item }, index) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={index === mentionIndex}
-                  id={`mention-option-${index}`}
-                  className="mention-option"
-                  key={item.id}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => chooseMention(kind, item.name)}
-                >
-                  {kind === 'room' ? (
-                    <RoomMark size={28} name={item.name} />
-                  ) : (
-                    <Avatar id={item.id} name={item.name} human={item.kind === 'human'} size={28} />
-                  )}
-                  <span className="mention-option-copy">
-                    <strong>{kind === 'room' ? `#${item.name}` : item.name}</strong>
-                    {kind === 'employee' && item.role && <small>{item.role}</small>}
-                  </span>
-                  <span className="mention-suggestion-kind">
-                    {kind === 'room' ? 'Room' : 'Agent'}
-                  </span>
-                </button>
-              ))}
             </div>
           )}
           <div
@@ -2940,15 +2727,12 @@ function Chat({
                   ? 'This conversation is read-only'
                   : employee
                     ? `Message ${employee.name}…`
-                    : 'Message this room…'
+                    : 'Write a message…'
               }
               onChange={(e) => {
                 const value = e.target.value;
                 const beforeCaret = value.slice(0, e.target.selectionStart);
                 const slashMatch = beforeCaret.match(/(?:^|\s)\/([^\s/]*)$/);
-                const match = value
-                  .slice(0, e.target.selectionStart)
-                  .match(/(?:^|\s)([@#])([^\s@#]*)$/);
                 if (!draft && !files.length) setDraftWork(activeWork || null);
                 setDraft(value);
                 setModelQuery(
@@ -2961,24 +2745,14 @@ function Chat({
                     : null,
                 );
                 setModelMenuOpen(!!slashMatch);
-                setMention(
-                  match
-                    ? {
-                        start: e.target.selectionStart - match[2].length - 1,
-                        end: e.target.selectionStart,
-                        query: match[2].toLocaleLowerCase(),
-                        kind: match[1] === '@' ? 'employee' : 'room',
-                      }
-                    : null,
-                );
-                setMentionIndex(0);
+                setModelOptionIndex(0);
               }}
               onKeyDown={(e) => {
                 if (modelMenuOpen && modelQuery) {
                   const optionCount = matchingModelChoices.length + (modelQuery.query ? 0 : 1);
                   if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && optionCount > 0) {
                     e.preventDefault();
-                    setMentionIndex(
+                    setModelOptionIndex(
                       (i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + optionCount) % optionCount,
                     );
                     return;
@@ -2990,13 +2764,13 @@ function Chat({
                   ) {
                     e.preventDefault();
                     const defaultCount = modelQuery.query ? 0 : 1;
-                    if (!defaultCount && mentionIndex === 0) {
+                    if (!defaultCount && modelOptionIndex === 0) {
                       const first = matchingModelChoices[0];
                       chooseModel(first.provider.harness, first.model.id);
-                    } else if (defaultCount && mentionIndex === 0) chooseModel(null, null);
+                    } else if (defaultCount && modelOptionIndex === 0) chooseModel(null, null);
                     else {
                       const choice =
-                        matchingModelChoices[mentionIndex - defaultCount] ||
+                        matchingModelChoices[modelOptionIndex - defaultCount] ||
                         matchingModelChoices[0];
                       chooseModel(choice.provider.harness, choice.model.id);
                     }
@@ -3021,30 +2795,6 @@ function Chat({
                       input?.focus();
                       input?.setSelectionRange(caret, caret);
                     });
-                    return;
-                  }
-                }
-                if (mentionMatches.length > 0 && mention) {
-                  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setMentionIndex(
-                      (i) =>
-                        (i + (e.key === 'ArrowDown' ? 1 : -1) + mentionMatches.length) %
-                        mentionMatches.length,
-                    );
-                    return;
-                  }
-                  if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
-                    if (!e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      const selected = mentionMatches[mentionIndex] || mentionMatches[0];
-                      chooseMention(selected.kind, selected.item.name);
-                      return;
-                    }
-                  }
-                  if (e.key === 'Escape') {
-                    e.preventDefault();
-                    setMention(null);
                     return;
                   }
                 }
@@ -3133,7 +2883,7 @@ function Chat({
                           <strong>{employee ? 'Agent default' : 'Each agent’s default'}</strong>
                           <small>
                             {employee
-                              ? employee.model || 'Use the provider default'
+                              ? employee.model === '@recommended' ? 'Follow provider recommendation' : employee.model || 'Use the configured provider default'
                               : 'Keep each harness on its configured model'}
                           </small>
                         </span>
@@ -3269,19 +3019,12 @@ function Chat({
     </section>
   );
 }
-function remarkWorkspaceEntities(options: { people: string[]; channels: any[] }) {
-  type Entity = { label: string; type: 'person' | 'channel'; id?: string };
+function remarkWorkspaceEntities(options: { people: string[] }) {
+  type Entity = { label: string; type: 'person' };
   const entities: Entity[] = [
     ...options.people
       .filter(Boolean)
       .map((name): Entity => ({ label: '@' + name, type: 'person' })),
-    ...options.channels.map(
-      (channel): Entity => ({
-        label: '#' + channel.name,
-        type: 'channel',
-        id: channel.id,
-      }),
-    ),
   ].sort((a, b) => b.label.length - a.label.length);
   if (!entities.length) return () => {};
   const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -3330,10 +3073,7 @@ function remarkWorkspaceEntities(options: { people: string[]; channels: any[] })
           const entity = byLabel.get(label.toLowerCase())!;
           children.push({
             type: 'link',
-            url:
-              entity.type === 'person'
-                ? 'workspace-person:' + encodeURIComponent(label)
-                : 'workspace-channel:' + entity.id,
+            url: 'workspace-person:' + encodeURIComponent(label),
             children: [sliceText(start, start + label.length)],
           });
           last = start + label.length;
@@ -3360,6 +3100,52 @@ const runStatusLabels: Record<string, string> = {
   failed: 'Stopped with an error',
 };
 
+const NO_TEXT_REVEALS: { start: number; end: number; at: number }[] = [];
+// One stretch of reply text. Memoised so earlier stretches do not reparse while the
+// latest one streams in.
+const MarkdownSegment = React.memo(function MarkdownSegment({
+  source,
+  reveals,
+  plugins,
+  attachments,
+  openPreview,
+}: any) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={plugins}
+      rehypePlugins={[[rehypeTextReveal, { source, reveals }]]}
+      urlTransform={(url) => (url.startsWith('workspace-person:') ? url : defaultUrlTransform(url))}
+      components={{
+        pre: ({ node }) => <CodeBlock node={node} />,
+        a: ({ children, href, ...p }) => {
+          if (href?.startsWith('workspace-person:'))
+            return <span className="entity-mention">{children}</span>;
+          return (
+            <a
+              href={href}
+              {...p}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => {
+                const id = href?.match(/^\/api\/attachments\/([^/?#]+)(?:\?.*)?$/)?.[1];
+                const file = attachments.find((entry: any) => entry.id === id);
+                if (!file || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+                  return;
+                event.preventDefault();
+                openPreview({ kind: 'files', files: [file], index: 0 });
+              }}
+            >
+              {children}
+            </a>
+          );
+        },
+      }}
+    >
+      {source}
+    </ReactMarkdown>
+  );
+});
+
 function MessageView({
   message: m,
   originLabel,
@@ -3373,11 +3159,10 @@ function MessageView({
   onMutated,
   onThread,
   people = [],
-  channels = [],
   onOpenConversation,
 }: any) {
   const openPreview = usePreview();
-  const [expanded, setExpanded] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState('');
   const [editBusy, setEditBusy] = useState(false);
@@ -3390,34 +3175,41 @@ function MessageView({
       requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: 'nearest' }));
   }, [editing]);
   const markdownPlugins = useMemo(
-    () => [remarkGfm, [remarkWorkspaceEntities, { people, channels }]],
-    [people, channels],
+    () => [remarkGfm, [remarkWorkspaceEntities, { people }]],
+    [people],
   );
   const activities = m.activity || [];
-  const orderedActivities = useMemo(
-    () =>
-      [...activities].sort(
-        (a: any, b: any) => Date.parse(a.time) - Date.parse(b.time) || a.id.localeCompare(b.id),
-      ),
-    [activities],
-  );
-  const lastActivity = orderedActivities.at(-1);
-  const textTime = Date.parse(m.textUpdatedAt || m.createdAt);
-  const activitiesBeforeText = orderedActivities.filter((activity: any) => {
-    const time = Date.parse(activity.time);
-    return m.text && Number.isFinite(textTime) && Number.isFinite(time) && time < textTime;
-  });
-  const activitiesAfterText = orderedActivities.filter(
-    (activity: any) => !activitiesBeforeText.includes(activity),
-  );
   const working =
     m.kind === 'agent' && run && ['accepted', 'dispatching', 'running'].includes(run.state);
   const streaming = m.kind === 'agent' && run && ['dispatching', 'running'].includes(run.state);
   const revealed = useStreamingText(m.text || '', !!streaming);
+  const timeline = useMemo(
+    () => buildReplyTimeline(revealed.text, activities),
+    [revealed.text, activities],
+  );
+  const renderLinkedMarkdown = (start: number, end: number) => {
+    const source = revealed.text.slice(start, end);
+    const reveals = revealed.reveals
+      .filter((reveal) => reveal.end > start && reveal.start < end)
+      .map((reveal) => ({
+        ...reveal,
+        start: Math.max(0, reveal.start - start),
+        end: Math.min(source.length, reveal.end - start),
+      }));
+    return (
+      <MarkdownSegment
+        source={source}
+        reveals={reveals.length ? reveals : NO_TEXT_REVEALS}
+        plugins={markdownPlugins}
+        attachments={attachments}
+        openPreview={openPreview}
+      />
+    );
+  };
   const showRunStatus =
     run &&
     run.state !== 'completed' &&
-    (!orderedActivities.length || !['accepted', 'dispatching', 'running'].includes(run.state));
+    (!activities.length || !['accepted', 'dispatching', 'running'].includes(run.state));
   const saveEdit = async () => {
     setEditBusy(true);
     setEditError('');
@@ -3440,38 +3232,54 @@ function MessageView({
     await onMutated?.(updated);
     setConfirmDelete(false);
   };
-  const renderActivityTrail = (items: any[]) => {
-    if (!items.length) return null;
-    const latest = items.at(-1);
+  const renderStepGroup = (steps: any[], live: boolean) => {
+    const key = steps[0].id;
+    const open = expandedGroups.has(key);
+    const list = (
+      <ol className="toolchain-list">
+        {steps.map((a: any) => (
+          <ActivityStep
+            key={a.id}
+            activity={a}
+            messageId={m.id}
+            title={stepTitle(a)}
+            time={activityTimeLabel(a.updatedAt || a.time)}
+          />
+        ))}
+      </ol>
+    );
+    // A single step needs no summary row; it is its own row.
+    if (steps.length === 1)
+      return (
+        <section className="tool-group" aria-label="Agent step" key={key}>
+          {list}
+        </section>
+      );
+    // Name the group by the latest step that did something, not by "Thinking".
+    const latest = steps.findLast((s: any) => !isQuietStep(s)) || steps.at(-1);
     return (
-      <section className="tool-group" aria-label="Agent activity">
+      <section className="tool-group" aria-label="Agent steps" key={key}>
         <button
           className="tool-summary"
-          aria-expanded={expanded}
-          aria-label={`${expanded ? 'Hide' : 'Show'} activity timeline${working ? ', agent is working' : ', latest update'}`}
-          onClick={() => setExpanded(!expanded)}
+          aria-expanded={open}
+          aria-label={`${open ? 'Hide' : 'Show'} ${steps.length} steps${live ? ', agent is working' : ''}`}
+          onClick={() =>
+            setExpandedGroups((groups) => {
+              const next = new Set(groups);
+              if (!next.delete(key)) next.add(key);
+              return next;
+            })
+          }
         >
-          <span className={`toolchain-mark ${working ? 'is-live' : ''}`} aria-hidden="true" />
-          <span className={`tool-summary-state ${working ? 'is-live' : ''}`}>
-            {working ? 'Working' : 'Done'}
+          <span className={`toolchain-mark ${live ? 'is-live' : ''}`} aria-hidden="true" />
+          <span className={`tool-summary-state ${live ? 'is-live' : ''}`}>
+            {live ? 'Working' : `${steps.length} steps`}
           </span>
-          <span className="tool-summary-latest">{activityTitle(latest.title)}</span>
+          <span className="tool-summary-latest">{stepTitle(latest)}</span>
           <time>{activityTimeLabel(latest.updatedAt || latest.time)}</time>
-          <ChevronRight size={13} className={expanded ? 'rotated' : ''} aria-hidden="true" />
+          <ChevronRight size={13} className={open ? 'rotated' : ''} aria-hidden="true" />
         </button>
-        {expanded && (
-          <ol className="toolchain-list">
-            {items.map((a: any) => (
-              <ActivityStep
-                key={a.id}
-                activity={a}
-                messageId={m.id}
-                title={activityTitle(a.title)}
-                time={activityTimeLabel(a.updatedAt || a.time)}
-              />
-            ))}
-          </ol>
-        )}
+        {open && list}
       </section>
     );
   };
@@ -3592,67 +3400,18 @@ function MessageView({
           </div>
         ) : (
           <>
-            {renderActivityTrail(activitiesBeforeText)}
-            {m.text && (
-              <div className={'prose' + (streaming ? ' prose-streaming' : '')}>
-                <ReactMarkdown
-                  remarkPlugins={markdownPlugins as any}
-                  rehypePlugins={[
-                    [rehypeTextReveal, { source: revealed.text, reveals: revealed.reveals }],
-                  ]}
-                  urlTransform={(url) =>
-                    url.startsWith('workspace-person:') || url.startsWith('workspace-channel:')
-                      ? url
-                      : defaultUrlTransform(url)
-                  }
-                  components={{
-                    a: ({ children, href, ...p }) => {
-                      if (href?.startsWith('workspace-person:'))
-                        return <span className="entity-mention">{children}</span>;
-                      if (href?.startsWith('workspace-channel:')) {
-                        const channelId = href.slice('workspace-channel:'.length);
-                        return (
-                          <button
-                            type="button"
-                            className="entity-channel"
-                            onClick={() => onOpenConversation?.(channelId)}
-                          >
-                            {children}
-                          </button>
-                        );
-                      }
-                      return (
-                        <a
-                          href={href}
-                          {...p}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(event) => {
-                            const id = href?.match(/^\/api\/attachments\/([^/?#]+)(?:\?.*)?$/)?.[1];
-                            const file = attachments.find((entry: any) => entry.id === id);
-                            if (
-                              !file ||
-                              event.ctrlKey ||
-                              event.metaKey ||
-                              event.shiftKey ||
-                              event.altKey
-                            )
-                              return;
-                            event.preventDefault();
-                            openPreview({ kind: 'files', files: [file], index: 0 });
-                          }}
-                        >
-                          {children}
-                        </a>
-                      );
-                    },
-                  }}
+            {timeline.map((item, index) =>
+              item.kind === 'steps' ? (
+                renderStepGroup(item.steps, !!working && index === timeline.length - 1)
+              ) : (
+                <div
+                  key={`text-${item.start}`}
+                  className={'prose' + (streaming && index === timeline.length - 1 ? ' prose-streaming' : '')}
                 >
-                  {revealed.text}
-                </ReactMarkdown>
-              </div>
+                  {renderLinkedMarkdown(item.start, item.end)}
+                </div>
+              ),
             )}
-            {renderActivityTrail(activitiesAfterText)}
             {m.attachments?.map((id: string) => {
               const a = attachments.find((a: any) => a.id === id);
               return (
@@ -3798,7 +3557,10 @@ function Decision({ decision: d, fail }: any) {
       ) : d.kind === 'desktop_control' ? (
         <div className="ui-stack">
           <p>{d.detail?.reason}</p>
-          <p className="caption">The agent can see the Windows desktop and use the mouse and keyboard for five minutes. Stop control at any time from the visible banner.</p>
+          <p className="caption">
+            The agent can see the Windows desktop and use the mouse and keyboard for five minutes.
+            Stop control at any time from the visible banner.
+          </p>
         </div>
       ) : d.kind === 'workspace_access' ? (
         <div className="workspace-access-fields">
@@ -3860,58 +3622,24 @@ function Decision({ decision: d, fail }: any) {
                 : 'Clone and grant access'
               : d.kind === 'desktop_control'
                 ? 'Allow for 5 minutes'
-              : 'Allow this action'}
+                : 'Allow this action'}
         </button>
       </div>
     </div>
   );
 }
-function CreateChiefOfStaff({ providers, onClose, onCreated, fail }: any) {
-  const [harness, setHarness] = useState(
-    providers.find((provider: any) => provider.authenticated)?.harness || 'codex',
-  );
-  const [busy, setBusy] = useState(false);
+function DelegationField({ enabled = false }: { enabled?: boolean }) {
+  const hintId = useId();
   return (
-    <Modal title="Create Chief of Staff" onClose={onClose} busy={busy}>
-      <form
-        className="ui-stack"
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setBusy(true);
-          try {
-            const employee = await api('/chief-of-staff', { harness });
-            await onCreated(employee.dmId);
-          } catch (error: any) {
-            fail(error.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <p>Your saved workspace objectives will be available to the new Chief of Staff.</p>
-        <label>
-          Provider
-          <select value={harness} onChange={(event) => setHarness(event.target.value)}>
-            {(['codex', 'claude', 'opencode'] as const).map((provider) => (
-              <option key={provider} value={provider}>
-                {names[provider]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <footer>
-          <button type="button" className="secondary" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button className="primary" disabled={busy}>
-            {busy ? 'Creating…' : 'Create Chief of Staff'}
-          </button>
-        </footer>
-      </form>
-    </Modal>
+    <div className="ui-field">
+      <label className="check-label">
+        <input type="checkbox" name="canDelegate" defaultChecked={enabled} aria-describedby={hintId} />
+        Delegate work and create employees
+      </label>
+      <p className="caption" id={hintId}>Allow this agent to assign work to other employees and request new employees. Creating employees from a proposal still needs your approval.</p>
+    </div>
   );
 }
-
 function AddEmployee({ providers, onClose, onCreated }: any) {
   const pending = useRef(false);
   const created = useRef<{ id: string; dmId: string } | null>(null);
@@ -3929,7 +3657,9 @@ function AddEmployee({ providers, onClose, onCreated }: any) {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [kind, setKind] = useState('agent'),
-    [harness, setHarness] = useState('codex'),
+    [harness, setHarness] = useState(
+      providers?.find((p: ProviderInfo & { isDefault?: boolean }) => p.isDefault)?.harness || 'codex',
+    ),
     [invite, setInvite] = useState('');
   return (
     <Modal title="Add employee" onClose={onClose} busy={creating} className="add-employee-dialog">
@@ -4030,6 +3760,7 @@ function AddEmployee({ providers, onClose, onCreated }: any) {
                     harness,
                     model: f.get('model'),
                     instructions: f.get('instructions'),
+                    canDelegate: f.has('canDelegate'),
                   });
                 setCreationStage('opening');
                 await onCreated(created.current!.dmId);
@@ -4056,31 +3787,27 @@ function AddEmployee({ providers, onClose, onCreated }: any) {
             <label>
               Harness
               <select value={harness} onChange={(e) => setHarness(e.target.value)}>
-                {Object.entries(names).map(([id, label]) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(names).map(([id, label]) => {
+                  const info = providers?.find((p: ProviderInfo) => p.harness === id);
+                  return (
+                    <option key={id} value={id}>
+                      {label}
+                      {(info as any)?.isDefault ? ' (default)' : ''}
+                      {info?.authenticated === false ? ' — not connected' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <label>
               Model
-              <select name="model">
-                <option value="">Provider default</option>
-                {providers
-                  .find((p: any) => p.harness === harness)
-                  ?.models?.filter((m: any) => m.id)
-                  .map((m: any) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-              </select>
+              <ModelChoice key={harness} provider={providers.find((p: ProviderInfo) => p.harness === harness)} />
             </label>
             <label>
               Instructions
               <textarea name="instructions" rows={3} placeholder="How should this employee work?" />
             </label>
+            <DelegationField />
           </form>
         )}
         {(creating || created.current) && (
@@ -4144,402 +3871,11 @@ function AddEmployee({ providers, onClose, onCreated }: any) {
     </Modal>
   );
 }
-function ChannelSettings({ conversation, workspace: w, onClose, refresh }: any) {
-  const [channel, setChannel] = useState<any>(null);
-  const [name, setName] = useState(conversation.name);
-  const [purpose, setPurpose] = useState('');
-  const [adding, setAdding] = useState(false);
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [status, setStatus] = useState('');
-  const [confirmClose, setConfirmClose] = useState(false);
-  const loadChannel = async () => {
-    const result = await api('/channels/' + encodeURIComponent(conversation.id));
-    setChannel(result);
-    setName(result.name);
-    setPurpose(result.purpose || '');
-  };
-  useEffect(() => {
-    void loadChannel().catch((e: any) => setError(e.message));
-  }, [conversation.id]);
-  const currentIds = new Set([
-    ...(channel?.humans || []).map((h: any) => h.id),
-    ...(channel?.employees || []).map((e: any) => e.id),
-  ]);
-  const candidates = [
-    ...w.employees
-      .filter((e: any) => !currentIds.has(e.id))
-      .map((e: any) => ({ ...e, type: 'agent', detail: e.role || names[e.harness] })),
-    ...w.humans
-      .filter((h: any) => !currentIds.has(h.id))
-      .map((h: any) => ({ ...h, type: 'human', detail: 'Person' })),
-  ].filter((person: any) =>
-    (person.name + ' ' + person.detail).toLowerCase().includes(query.trim().toLowerCase()),
-  );
-  const members = [
-    ...(channel?.humans || []).map((h: any) => ({ ...h, type: 'human', detail: 'Person' })),
-    ...(channel?.employees || []).map((e: any) => ({
-      ...e,
-      type: 'agent',
-      detail: e.role || names[e.harness],
-    })),
-  ].sort((a: any, b: any) => a.name.localeCompare(b.name));
-  const dirty =
-    !!channel &&
-    (name.trim().replace(/^#/, '') !== channel.name || purpose.trim() !== (channel.purpose || ''));
-  const close = () => {
-    if (busy) return;
-    if (dirty) setConfirmClose(true);
-    else onClose();
-  };
-  async function saveDetails() {
-    setBusy(true);
-    setError('');
-    setStatus('');
-    try {
-      await api(
-        '/channels/' + encodeURIComponent(conversation.id),
-        {
-          name: name.trim().replace(/^#/, ''),
-          purpose: purpose.trim(),
-        },
-        'PATCH',
-      );
-      await Promise.all([loadChannel(), refresh()]);
-      setConfirmClose(false);
-      setStatus('Room details saved.');
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function updateMembers(change: any) {
-    setBusy(true);
-    setError('');
-    setStatus('');
-    try {
-      await api('/channels/' + encodeURIComponent(conversation.id), change, 'PATCH');
-      setSelected([]);
-      setQuery('');
-      setAdding(false);
-      await Promise.all([loadChannel(), refresh()]);
-      setStatus('Room members updated.');
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Modal title="Room settings" onClose={close} className="channel-settings-dialog">
-      <div className="channel-settings-body">
-        {!channel ? (
-          <p className="muted">Loading room…</p>
-        ) : (
-          <>
-            <section className="channel-settings-section">
-              <div className="channel-settings-heading member-settings-heading">
-                <div>
-                  <h3>People</h3>
-                  <p>
-                    {members.length} {members.length === 1 ? 'member' : 'members'} in #
-                    {channel.name}
-                  </p>
-                </div>
-                <button className="secondary" disabled={busy} onClick={() => setAdding(!adding)}>
-                  <Plus size={15} />
-                  {adding ? 'Done' : 'Add people'}
-                </button>
-              </div>
-              {adding && (
-                <div className="channel-add-members">
-                  <input
-                    type="search"
-                    aria-label="Find people to add"
-                    placeholder="Search people or agents…"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
-                  <div className="channel-member-list">
-                    {candidates.map((person: any) => (
-                      <label className="channel-member" key={person.id}>
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(person.id)}
-                          onChange={(e) =>
-                            setSelected((ids) =>
-                              e.target.checked
-                                ? [...ids, person.id]
-                                : ids.filter((id) => id !== person.id),
-                            )
-                          }
-                        />
-                        <Avatar id={person.id} name={person.name} human={person.type === 'human'} />
-                        <span>
-                          <strong>{person.name}</strong>
-                          <small>{person.detail}</small>
-                        </span>
-                        <span className="member-kind">
-                          {person.type === 'agent' ? 'Agent' : 'Person'}
-                        </span>
-                      </label>
-                    ))}
-                    {!candidates.length && <p className="caption">No one else to add.</p>}
-                  </div>
-                  {selected.length > 0 && (
-                    <button
-                      className="primary"
-                      disabled={busy}
-                      onClick={() =>
-                        void updateMembers({
-                          addHumans: selected.filter((id) =>
-                            w.humans.some((h: any) => h.id === id),
-                          ),
-                          addEmployees: selected.filter((id) =>
-                            w.employees.some((e: any) => e.id === id),
-                          ),
-                        })
-                      }
-                    >
-                      Add {selected.length} {selected.length === 1 ? 'person' : 'people'}
-                    </button>
-                  )}
-                </div>
-              )}
-              <div className="channel-roster">
-                {members.map((member: any) => (
-                  <div className="channel-roster-row" key={member.id}>
-                    <Avatar
-                      id={member.id}
-                      name={member.name}
-                      human={member.type === 'human'}
-                      size={34}
-                    />
-                    <span className="channel-roster-name">
-                      <strong>{member.name}</strong>
-                      <small>{member.id === w.user.id ? 'You' : member.detail}</small>
-                    </span>
-                    <span className="member-kind">
-                      {member.type === 'agent' ? 'Agent' : 'Person'}
-                    </span>
-                    {member.id !== w.user.id && (
-                      <button
-                        className="quiet-button channel-remove-member"
-                        aria-label={`Remove ${member.name} from room`}
-                        disabled={busy || (member.type === 'human' && channel.humans.length <= 1)}
-                        onClick={() =>
-                          void updateMembers(
-                            member.type === 'human'
-                              ? { removeHumans: [member.id] }
-                              : { removeEmployees: [member.id] },
-                          )
-                        }
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-            <section className="channel-settings-section channel-details-section">
-              <div className="channel-settings-heading">
-                <div className="channel-mark">
-                  <RoomMark size={17} />
-                </div>
-                <div>
-                  <h3>Room details</h3>
-                </div>
-              </div>
-              <label>
-                Room name
-                <div className="channel-name-input">
-                  <RoomMark size={17} />
-                  <input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
-                </div>
-              </label>
-              <label>
-                Purpose <span className="optional-label">Optional</span>
-                <textarea
-                  rows={2}
-                  maxLength={500}
-                  placeholder="What belongs in this room?"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                />
-              </label>
-              <div className="channel-detail-actions">
-                <button
-                  className="primary"
-                  disabled={!dirty || busy}
-                  onClick={() => void saveDetails()}
-                >
-                  {busy && dirty ? 'Saving…' : 'Save details'}
-                </button>
-              </div>
-            </section>
-          </>
-        )}
-      </div>
-      <footer className="channel-settings-footer">
-        <span className={error ? 'settings-error' : 'quiet'} role={error ? 'alert' : 'status'}>
-          {error || (confirmClose ? 'Unsaved room details' : status)}
-        </span>
-        {confirmClose ? (
-          <>
-            <button className="quiet-button" onClick={() => setConfirmClose(false)}>
-              Keep editing
-            </button>
-            <button className="secondary" onClick={onClose}>
-              Discard
-            </button>
-          </>
-        ) : (
-          <button className="secondary" onClick={close}>
-            Done
-          </button>
-        )}
-      </footer>
-    </Modal>
-  );
-}
-
-function CreateChannel({ workspace: w, onClose, onCreated }: any) {
-  const [name, setName] = useState('');
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const people = [
-    ...w.employees.map((e: any) => ({ ...e, type: 'agent', detail: e.role || names[e.harness] })),
-    ...w.humans
-      .filter((h: any) => h.id !== w.user.id)
-      .map((h: any) => ({ ...h, type: 'human', detail: 'Person' })),
-  ];
-  const filtered = people.filter((p: any) =>
-    (p.name + ' ' + p.detail).toLowerCase().includes(query.toLowerCase()),
-  );
-  return (
-    <Modal
-      title="Create a room"
-      onClose={() => {
-        if (!busy) onClose();
-      }}
-      className="create-channel-dialog"
-    >
-      <form
-        id="create-channel"
-        className="channel-create-body"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (busy) return;
-          setBusy(true);
-          setError('');
-          try {
-            const result = await api('/channels', {
-              name: name.trim().replace(/^#/, ''),
-              members: selected.filter((id) => w.humans.some((h: any) => h.id === id)),
-              employees: selected.filter((id) => w.employees.some((a: any) => a.id === id)),
-            });
-            await onCreated(result.id);
-          } catch (e: any) {
-            setError(e.message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label className="channel-name-label">
-          Room name
-          <div className="channel-name-input">
-            <RoomMark size={17} />
-            <input
-              autoFocus
-              name="name"
-              required
-              maxLength={80}
-              placeholder="project-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-        </label>
-        <div className="channel-member-heading">
-          <h3>Members</h3>
-          <span>{selected.length + 1} selected</span>
-        </div>
-        <div className="channel-self">
-          <Avatar id={w.user.id} name={w.user.name} />
-          <span>
-            {w.user.name}
-            <small>You · included</small>
-          </span>
-          <Check size={16} />
-        </div>
-        {people.length > 0 && (
-          <input
-            type="search"
-            aria-label="Find members"
-            placeholder="Find agents or people…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        )}
-        <div className="channel-member-list">
-          {filtered.map((p: any) => (
-            <label key={p.id} className="channel-member">
-              <input
-                type="checkbox"
-                checked={selected.includes(p.id)}
-                onChange={(e) =>
-                  setSelected((ids) =>
-                    e.target.checked ? [...ids, p.id] : ids.filter((id) => id !== p.id),
-                  )
-                }
-              />
-              <Avatar id={p.id} name={p.name} />
-              <span>
-                <strong>{p.name}</strong>
-                <small>{p.detail}</small>
-              </span>
-              <span className="member-kind">{p.type === 'agent' ? 'Agent' : 'Person'}</span>
-            </label>
-          ))}
-          {!filtered.length && (
-            <p className="caption">
-              {people.length
-                ? 'No matching members.'
-                : 'No other members yet. You can create the room now.'}
-            </p>
-          )}
-        </div>
-      </form>
-      <footer className="channel-create-footer">
-        <span role="alert" className="settings-error">
-          {error}
-        </span>
-        <button type="button" className="secondary" disabled={busy} onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          type="submit"
-          form="create-channel"
-          className="primary"
-          disabled={busy || !name.trim().replace(/^#/, '').trim()}
-        >
-          {busy ? 'Creating…' : 'Create room'}
-        </button>
-      </footer>
-    </Modal>
-  );
-}
-function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
+function EditEmployee({ employee: e, providers, humans, onClose, done, onManage }: any) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [grants, setGrants] = useState<string[]>([]);
+  const [harness, setHarness] = useState<string>(e.harness);
   useEffect(() => {
     api('/employees/' + e.id + '/grants')
       .then(setGrants)
@@ -4552,7 +3888,8 @@ function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
         className="employee-settings-scroll"
         onSubmit={async (event) => {
           event.preventDefault();
-          const data = Object.fromEntries(new FormData(event.currentTarget));
+          const form = new FormData(event.currentTarget);
+          const data = { ...Object.fromEntries(form), canDelegate: form.has('canDelegate') };
           setSaving(true);
           setError('');
           try {
@@ -4577,22 +3914,43 @@ function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
         </label>
         <label>
           Provider
-          <select name="harness" defaultValue={e.harness}>
-            {(['codex', 'claude', 'opencode'] as const).map((harness) => (
-              <option key={harness} value={harness}>
-                {names[harness]}
-              </option>
-            ))}
+          <select name="harness" value={harness} onChange={(event) => setHarness(event.target.value)}>
+            {Object.entries(names)
+              .filter(
+                ([id]) =>
+                  id === e.harness ||
+                  providers?.find((p: ProviderInfo) => p.harness === id)?.authenticated === true,
+              )
+              .map(([id, label]) => {
+                const info = providers?.find((p: ProviderInfo) => p.harness === id);
+                return (
+                  <option key={id} value={id}>
+                    {label}
+                    {info?.authenticated !== true ? ' — not connected' : ''}
+                  </option>
+                );
+              })}
           </select>
         </label>
+        {harness !== e.harness && (
+          <p className="caption">
+            Changing provider starts a fresh session. Earlier conversation carries over as a brief,
+            and the model resets to the new provider’s default.
+          </p>
+        )}
         <label>
           Model
-          <input name="model" defaultValue={e.model} placeholder="Provider default" />
+          <ModelChoice
+            key={harness}
+            initialValue={harness === e.harness ? e.model : ''}
+            provider={providers?.find((p: ProviderInfo) => p.harness === harness)}
+          />
         </label>
         <label>
           Instructions
           <textarea name="instructions" defaultValue={e.instructions} rows={5} />
         </label>
+        <DelegationField enabled={e.canDelegate} />
         <fieldset>
           <legend>Who can work with this employee</legend>
           <p className="caption">
@@ -4657,122 +4015,229 @@ function EditEmployee({ employee: e, humans, onClose, done, onManage }: any) {
     </Modal>
   );
 }
+function ProviderRecoveryCard({ harness, failure, fail, onResume }: any) {
+  const [provider, setProvider] = useState<any>(null);
+  const [checking, setChecking] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [denied, setDenied] = useState(false);
+  async function load(check?: string) {
+    setChecking(true);
+    try {
+      const list = await api('/providers' + (check ? '?check=' + check : ''));
+      setProvider(list.find((p: any) => p.harness === harness) || null);
+      return list;
+    } catch (e: any) {
+      setDenied(true);
+      throw e;
+    } finally {
+      setChecking(false);
+    }
+  }
+  useEffect(() => {
+    void load(harness).catch(() => {});
+  }, [harness]);
+  const label = names[harness] || 'The provider';
+  const resume = (text: string) => {
+    if (resumed) return;
+    setResumed(true);
+    onResume(text);
+  };
+  if (resumed)
+    return (
+      <div className="inline-card account-card" role="status">
+        <strong>{label} is ready.</strong>
+        <p className="quiet account-detail">Picking up where you left off…</p>
+      </div>
+    );
+  const signedIn = provider?.authenticated === true;
+  // Signed in, yet the last request failed: nothing to fix on the account.
+  if (signedIn || failure === 'blocked')
+    return (
+      <div className="inline-card ui-stack account-card" role="status">
+        <strong>
+          {failure === 'blocked'
+            ? `${label} couldn’t be reached`
+            : `${label} is signed in, but the last request didn’t go through`}
+        </strong>
+        <p className="quiet account-detail">
+          {failure === 'blocked'
+            ? 'The request was blocked on the way (for example by Cloudflare or your network). Your account is fine, so there is nothing to sign in to.'
+            : 'Your account is connected. This is usually temporary.'}
+        </p>
+        <div className="account-card-actions">
+          <button className="secondary" onClick={() => resume('Please try that again.')}>
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  if (denied)
+    return (
+      <div className="inline-card account-card" role="status">
+        <strong>{label} needs to be signed in again</strong>
+        <p className="quiet account-detail">Ask the workspace owner to reconnect it.</p>
+      </div>
+    );
+  return (
+    <ProviderLogin
+      harness={harness}
+      provider={provider}
+      checking={checking}
+      refresh={load}
+      fail={fail}
+      onConnected={() => resume('You’re signed in again. Please continue.')}
+    />
+  );
+}
+function ProviderSection({ fail }: any) {
+  const [providers, setProviders] = useState<any[]>([]);
+  const [checking, setChecking] = useState(false);
+  async function load(check?: string) {
+    setChecking(true);
+    try {
+      const result = await api('/providers' + (check ? '?check=' + check : ''));
+      setProviders(result);
+      return result;
+    } finally {
+      setChecking(false);
+    }
+  }
+  useEffect(() => {
+    load().catch((e: any) => fail(e.message));
+    const changed = (event: Event) => {
+      if ((event as CustomEvent).detail?.type === 'models.changed')
+        void api('/providers').then(setProviders).catch(() => {});
+    };
+    window.addEventListener('workspace-event', changed);
+    return () => window.removeEventListener('workspace-event', changed);
+  }, []);
+  async function makeDefault(harness: string) {
+    try {
+      await api('/providers/default', { harness }, 'PUT');
+      setProviders(await api('/providers'));
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
+  return (
+    <div className="ui-stack provider-section">
+      {['codex', 'claude', 'opencode'].map((h) => (
+        <ProviderLogin
+          key={h}
+          harness={h}
+          provider={providers.find((p) => p.harness === h)}
+          isDefault={providers.find((p) => p.harness === h)?.isDefault === true}
+          onMakeDefault={makeDefault}
+          checking={checking}
+          refresh={load}
+          fail={fail}
+        />
+      ))}
+    </div>
+  );
+}
 function ProviderLogin({
   harness,
-  fail: reportFailure,
-  provider,
-  checking,
-  refresh,
-}: {
-  harness: string;
-  fail: (message: string) => void;
-  provider?: ProviderInfo;
-  checking?: boolean;
-  refresh: (harness?: string) => Promise<unknown>;
-}) {
-  const mounted = useRef(true);
+  fail,
+  provider: suppliedProvider,
+  checking: suppliedChecking,
+  refresh: suppliedRefresh,
+  isDefault,
+  onMakeDefault,
+  onConnected,
+  bare = false,
+}: any) {
+  // Some screens show this card without managing provider status. Keep it
+  // self-sufficient so Check status and sign-in polling always work.
+  const [ownProvider, setOwnProvider] = useState<any>(null),
+    [ownChecking, setOwnChecking] = useState(false);
+  const managed = typeof suppliedRefresh === 'function';
+  const provider = managed ? suppliedProvider : suppliedProvider || ownProvider;
+  const checking = managed ? suppliedChecking : ownChecking;
+  async function ownRefresh(check?: string) {
+    setOwnChecking(true);
+    try {
+      const list = await api('/providers' + (check ? '?check=' + check : ''));
+      setOwnProvider(list.find((p: any) => p.harness === harness) || null);
+      return list;
+    } finally {
+      setOwnChecking(false);
+    }
+  }
+  const refresh = managed ? suppliedRefresh : ownRefresh;
   useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const fail = (message: string) => {
-    if (mounted.current) reportFailure(message);
-  };
+    if (!managed && !suppliedProvider) void ownRefresh().catch(() => {});
+  }, [harness, managed]);
   const [info, setInfo] = useState<any>(null),
     [method, setMethod] = useState<any>(null),
-    [authorization, setAuthorization] = useState<any>(null);
-  const [working, setWorking] = useState(false);
-  const statusInFlight = useRef(false);
-  const loginInFlight = useRef(false);
-  const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+    [authorization, setAuthorization] = useState<any>(null),
+    [waiting, setWaiting] = useState(false),
+    [showCode, setShowCode] = useState(false),
+    [stalled, setStalled] = useState(false);
   const connected = provider?.authenticated === true;
   const unknown = provider?.authenticated == null;
   const unavailable = provider?.installed === false;
   async function refreshStatus() {
-    if (statusInFlight.current) return;
-    statusInFlight.current = true;
-    setWorking(true);
     try {
-      await refreshRef.current(harness);
-      fail('');
-      if (harness === 'claude' && info && !connected) {
-        try {
-          const current = await api('/providers/claude/login');
-          if (current.authUrl && current.authUrl !== info.authUrl) setInfo(current);
-        } catch (error: any) {
-          if (error.status === 409) setInfo(null);
-          else throw error;
-        }
-      }
+      await refresh(harness);
     } catch (e: any) {
       fail(e.message);
-    } finally {
-      statusInFlight.current = false;
-      setWorking(false);
     }
   }
-  async function startSignIn(type?: string) {
-    if (loginInFlight.current) return;
-    loginInFlight.current = true;
-    setWorking(true);
-    fail('');
+  async function startSignIn() {
+    setShowCode(false);
+    setStalled(false);
     try {
-      setInfo(await api(`/providers/${harness}/login`, type ? { type } : {}));
+      const result = await api(`/providers/${harness}/login`, {});
+      setInfo(result);
+      if (harness !== 'opencode') setWaiting(true);
+      const url = result?.authUrl || result?.verificationUrl;
+      if (url) window.open(url, '_blank', 'noopener');
     } catch (e: any) {
       fail(e.message);
-    } finally {
-      loginInFlight.current = false;
-      setWorking(false);
     }
   }
+  // While a sign-in is in progress, notice completion without a manual check.
   useEffect(() => {
-    if (connected && info) {
-      setInfo(null);
-      setAuthorization(null);
-      setMethod(null);
-    }
-  }, [connected, info]);
-  useEffect(() => {
-    if (!info || connected || harness === 'opencode') return;
-    let stopped = false;
-    let timer: number;
-    const deadline = Date.now() + 10 * 60000;
-    const poll = async () => {
-      if (stopped) return;
-      if (Date.now() >= deadline) {
-        setInfo(null);
-        fail('Sign-in has not completed. Start sign-in again when you are ready.');
+    if (!waiting || connected) return;
+    const startedAt = Date.now();
+    const poll = setInterval(() => {
+      if (Date.now() - startedAt > 5 * 60 * 1000) {
+        clearInterval(poll);
+        setWaiting(false);
+        setStalled(true);
         return;
       }
-      await refreshStatus();
-      if (!stopped) timer = window.setTimeout(poll, 5000);
-    };
-    timer = window.setTimeout(poll, 1500);
-    const focused = () => {
-      void refreshStatus();
-    };
-    window.addEventListener('focus', focused);
+      void refresh(harness).catch(() => {});
+    }, 3000);
+    const reveal = setTimeout(() => setShowCode(true), 20000);
     return () => {
-      stopped = true;
-      window.clearTimeout(timer);
-      window.removeEventListener('focus', focused);
+      clearInterval(poll);
+      clearTimeout(reveal);
     };
-  }, [info, connected, harness]);
+  }, [waiting, connected, harness]);
+  useEffect(() => {
+    if (!connected || !waiting) return;
+    setWaiting(false);
+    setShowCode(false);
+    setInfo(null);
+    onConnected?.();
+  }, [connected, waiting]);
   return (
-    <div className="inline-card ui-stack account-card">
+    <div className={bare ? 'provider-login-bare ui-stack' : 'inline-card ui-stack account-card'}>
+      {/* Bare: the surrounding row already names the account and its state. */}
+      {!bare && (
       <div className="account-card-heading">
-        <strong>{names[harness]} account</strong>
+        <strong>
+          {names[harness]} account
+          {isDefault && <span className="account-default"> · Default for new employees</span>}
+        </strong>
         <span className={'account-state' + (connected ? ' connected' : '')}>
           <span aria-hidden="true" />
           {checking
             ? 'Checking…'
             : connected
-              ? harness === 'claude' && provider?.detail?.startsWith('Sign-in detected:')
-                ? 'Sign-in found; access checked on first task'
-                : 'Connected'
+              ? 'Connected'
               : unavailable
                 ? 'Not installed'
                 : unknown
@@ -4780,99 +4245,61 @@ function ProviderLogin({
                   : 'Not signed in'}
         </span>
       </div>
+      )}
+      {!bare && (
       <p className="quiet account-detail">
         {provider?.detail ||
           (unknown
             ? 'Check this account to see whether it is signed in.'
             : 'Sign in with the provider on this host. Credentials stay out of the conversation.')}
       </p>
+      )}
       <div className="account-card-actions">
         {!connected && !unavailable && (
-          <button
-            className="secondary"
-            disabled={
-              checking ||
-              working ||
-              (!!info && !!(info.userCode || info.authUrl || info.verificationUrl))
-            }
-            onClick={() => void startSignIn()}
-          >
-            {working ? 'Connecting…' : info ? 'Sign-in started' : 'Start provider sign-in'}
+          <button className={bare ? 'primary' : 'secondary'} onClick={startSignIn}>
+            {waiting || stalled ? 'Start again' : 'Sign in'}
           </button>
         )}
-        <button className="quiet-button" disabled={checking || working} onClick={refreshStatus}>
-          {checking || working ? 'Checking…' : unknown ? 'Check status' : 'Refresh'}
+        {connected && !isDefault && onMakeDefault && (
+          <button className="secondary" disabled={checking} onClick={() => onMakeDefault(harness)}>
+            Make default
+          </button>
+        )}
+        <button className="quiet-button" disabled={checking} onClick={refreshStatus}>
+          {checking ? 'Checking…' : unknown ? 'Check status' : 'Refresh'}
         </button>
       </div>
-      {harness === 'codex' && !connected && (
-        <div className="account-card-actions">
-          <button
-            className="quiet-button"
-            disabled={working}
-            onClick={() => void startSignIn('chatgptDeviceCode')}
-          >
-            Use a device code instead
-          </button>
-          {info && (
-            <button
-              className="quiet-button"
-              disabled={working}
-              onClick={async () => {
-                setWorking(true);
-                try {
-                  await api('/providers/codex/cancel', {});
-                  setInfo(null);
-                  fail('');
-                } catch (e: any) {
-                  fail(e.message);
-                } finally {
-                  setWorking(false);
-                }
-              }}
-            >
-              Cancel sign-in
-            </button>
-          )}
-        </div>
-      )}
-      {harness === 'claude' && info && !connected && (
-        <button
-          className="quiet-button"
-          disabled={working}
-          onClick={async () => {
-            setWorking(true);
-            try {
-              await api('/providers/claude/cancel', {});
-              setInfo(null);
-              fail('');
-            } catch (e: any) {
-              fail(e.message);
-            } finally {
-              setWorking(false);
-            }
-          }}
-        >
-          Cancel sign-in
-        </button>
-      )}
       {info?.message && <p>{info.message}</p>}
       {info?.userCode && <code>{info.userCode}</code>}
       {(info?.authUrl || info?.verificationUrl) && (
-        <a target="_blank" rel="noreferrer" href={info.authUrl || info.verificationUrl}>
-          {harness === 'codex'
-            ? info.userCode
-              ? 'Continue to Codex device sign-in'
-              : 'Continue with ChatGPT'
-            : 'Open provider sign-in'}
+        <a
+          className="primary account-sign-in-link"
+          target="_blank"
+          rel="noreferrer"
+          href={info.authUrl || info.verificationUrl}
+        >
+          Open {names[harness]} sign-in
         </a>
       )}
-      {info?.userCode && harness === 'codex' && (
-        <p className="caption">
-          This device code is started by Abralo’s bundled Codex CLI. Approve it only if you just
-          started this sign-in here.
+      {waiting && (
+        <p role="status" className="quiet account-waiting">
+          Waiting for you to finish in the browser. This updates by itself.
+          {!showCode && harness === 'claude' && (
+            <>
+              {' '}
+              <button type="button" className="quiet-button" onClick={() => setShowCode(true)}>
+                Page showing a code?
+              </button>
+            </>
+          )}
         </p>
       )}
-      {harness === 'claude' && info && (
+      {stalled && (
+        <p role="status" className="quiet">
+          Sign-in didn’t finish. Choose Start again for a fresh link.
+        </p>
+      )}
+      {harness === 'claude' && info && showCode && (
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -4890,7 +4317,7 @@ function ProviderLogin({
           }}
         >
           <label>
-            If the provider gives you a code
+            Paste the code from the Claude page
             <input name="code" type="password" autoComplete="off" required />
           </label>
           <button className="secondary">Submit code securely</button>
@@ -4982,15 +4409,14 @@ function ProviderLogin({
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            const form = e.currentTarget;
-            const f = new FormData(form);
+            const f = new FormData(e.currentTarget);
             try {
               await api('/providers/opencode/key', {
                 provider: method.provider,
                 key: f.get('key'),
                 billingConsent: true,
               });
-              form.reset();
+              e.currentTarget.reset();
               setInfo({ message: 'API account connected.' });
               await refreshStatus();
             } catch (e: any) {
@@ -5012,13 +4438,35 @@ function ProviderLogin({
     </div>
   );
 }
-function ConnectionAction({ action, fail }: any) {
+// Actions that still need attention stay pinned above the composer. Finished actions
+// settle into the timeline after the last message sent before they started, so they
+// scroll away with the conversation instead of following it.
+const pinnedActionStates = new Set(['awaiting_approval', 'running', 'unknown']);
+function placeConnectionActions(actions: any[], messages: Message[]) {
+  const inlineActions = new Map<string, any[]>();
+  const pinnedActions: any[] = [];
+  for (const action of actions) {
+    // A dismissed card no longer needs attention, even while it awaits approval.
+    const pinned = pinnedActionStates.has(action.status) && !action.dismissed;
+    let anchor: Message | undefined;
+    if (!pinned && action.createdAt)
+      for (const m of messages) {
+        if (m.createdAt > action.createdAt) break;
+        anchor = m;
+      }
+    if (anchor) inlineActions.set(anchor.id, [...(inlineActions.get(anchor.id) || []), action]);
+    // Settled actions older than the loaded history belong to an earlier page.
+    else if (pinned || !action.createdAt || !messages.length) pinnedActions.push(action);
+  }
+  return { inlineActions, pinnedActions };
+}
+function ConnectionAction({ action, onDismiss, onReceipt }: any) {
   const [receipt, setReceipt] = useState(action);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => setReceipt(action), [action]);
   const labels: Record<string, string> = {
-    awaiting_approval: 'Ready for your approval',
+    awaiting_approval: 'Needs your approval',
     running: 'Working on it',
     succeeded: 'Completed',
     declined: 'Declined',
@@ -5030,31 +4478,72 @@ function ConnectionAction({ action, fail }: any) {
     setBusy(true);
     setError('');
     try {
-      setReceipt(await api(`/connection-actions/${action.actionId}/decision`, { allow }));
+      const next = await api(`/connection-actions/${action.actionId}/decision`, { allow });
+      setReceipt(next);
+      onReceipt?.(next);
     } catch (e: any) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
   }
+  async function dismiss() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api(`/connection-actions/${action.actionId}/dismissal`,
+        { dismissed: !action.dismissed }, 'PUT');
+      onDismiss(result.dismissed);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const service = serviceNames[action.service] || action.service;
+  const title = actionTitle(action.tool);
+  const details = (
+    <details className="connection-action-details">
+      <summary>Details</summary>
+      {action.account && <p className="quiet connection-account">Account: {action.account}</p>}
+      <pre>{JSON.stringify(action.arguments, null, 2)}</pre>
+    </details>
+  );
+  // Once settled, the card has done its job: it becomes a one-line receipt.
+  if (['succeeded', 'declined', 'failed'].includes(receipt.status))
+    return (
+      <div className={`connection-receipt is-${receipt.status}`}>
+        {receipt.status === 'succeeded' ? (
+          <Check size={14} aria-hidden="true" />
+        ) : (
+          <X size={14} aria-hidden="true" />
+        )}
+        <span>
+          <strong>{title}</strong> · {service}
+        </span>
+        <span className="quiet" role="status">
+          {receiptLabels[receipt.status]}
+        </span>
+        {details}
+      </div>
+    );
   return (
     <div className="inline-card connection-action ui-stack" aria-busy={busy}>
       <div className="connection-heading">
-        <Plug size={18} />
-        <strong>{serviceNames[action.service] || action.service}</strong>
+        <Plug size={18} aria-hidden="true" />
+        <strong>{title}</strong>
+        <span className="connection-service">{service}</span>
         <span className="quiet" role="status">
           {labels[receipt.status] || receipt.status}
         </span>
+        <button className="icon connection-dismiss" disabled={busy}
+          aria-label={`${action.dismissed ? 'Restore' : 'Dismiss'} ${service} action`}
+          title={action.dismissed ? 'Restore this card' : 'Dismiss this card. This does not cancel the action.'}
+          onClick={() => void dismiss()}>
+          {action.dismissed ? <RotateCcw size={16} aria-hidden="true" /> : <X size={16} aria-hidden="true" />}
+        </button>
       </div>
-      <p>
-        <strong>{action.tool.replaceAll('_', ' ')}</strong>
-      </p>
-      {receipt.status === 'awaiting_approval' && (
-        <p className="quiet">
-          Your account is connected. Approve this action once and Abralo will continue
-          automatically.
-        </p>
-      )}
       {receipt.status === 'unknown' && (
         <p role="status">
           The connection stopped before the result was confirmed. Your agent needs to check what
@@ -5066,48 +4555,293 @@ function ConnectionAction({ action, fail }: any) {
           {error}
         </p>
       )}
-      <details>
-        <summary>Action details · {action.label}</summary>
-        <pre>{JSON.stringify(action.arguments, null, 2)}</pre>
-      </details>
+      {details}
       {receipt.status === 'awaiting_approval' && (
         <div className="form-actions">
           <button className="secondary" disabled={busy} onClick={() => void decide(false)}>
             Decline
           </button>
           <button className="primary" disabled={busy} onClick={() => void decide(true)}>
-            {busy ? 'Saving…' : 'Approve action'}
+            {busy ? 'Saving…' : 'Approve'}
           </button>
         </div>
       )}
     </div>
   );
 }
-function ConnectionRow({ connection: c, fail }: any) {
+const receiptLabels: Record<string, string> = {
+  succeeded: 'Done',
+  declined: 'Declined',
+  failed: 'Couldn’t complete',
+};
+/** Who runs a server matters more than its name: a relay sees everything sent through it. */
+function ServerOrigin({ server }: { server: any }) {
+  return (
+    <p className={`server-origin ${server.official ? 'is-official' : 'is-third-party'}`}>
+      {server.official
+        ? `Official server, run by ${server.publisher}`
+        : `Third-party server, run by ${server.publisher}. It can see what agents send through it.`}
+    </p>
+  );
+}
+function ConnectionRow({ connection: c, fail, variant }: any) {
+  const page = variant === 'page';
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  // idle → open (provider window showing) → settled by the callback; or blocked/closed.
+  const [signIn, setSignIn] = useState<'idle' | 'open' | 'blocked' | 'closed'>('idle');
+  const popup = useRef<Window | null>(null);
   const card = useRef<HTMLDivElement>(null);
+  const name = c.label && c.label !== c.service ? c.label : serviceNames[c.service] || c.service;
+  // A request card names the service; a connected account names itself.
+  const serviceName = c.data?.anotherAccount ? serviceNames[c.service] || c.data?.server?.label || name : name;
+  const accountName = c.state === 'ready' ? c.account || name : serviceName;
+  const choosing = !!c.data?.anotherAccount && c.state !== 'ready';
+  const otherAccounts: any[] = choosing ? c.accounts || [] : [];
+  const [renaming, setRenaming] = useState(false);
+  const server = c.data?.server;
+  const [keyForm, setKeyForm] = useState(false);
+  const needsKey =
+    c.state !== 'ready' && !c.data?.reuseId && (detail?.requiresApiKey || keyForm || server?.auth === 'api_key');
   useEffect(() => {
     if (detail) card.current?.scrollIntoView({ block: 'nearest' });
   }, [detail]);
+  // The provider redirects to Abralo, which updates this connection durably and
+  // notifies the page. No "check" step: the card settles on its own.
+  useEffect(() => {
+    if (!['ready', 'granted', 'failed'].includes(c.state) || signIn === 'idle') return;
+    popup.current = null;
+    setSignIn('idle');
+    setDetail(
+      c.state === 'failed'
+        ? { error: c.data?.lastError || `Sign-in to ${serviceName} was cancelled. Connect again when you’re ready.` }
+        : { message: `${c.account || name} is connected.` },
+    );
+  }, [c.state]);
+  // Notice a sign-in window closed before finishing, after giving the callback time to land.
+  useEffect(() => {
+    if (signIn !== 'open') return;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(() => {
+      if (!popup.current?.closed) return;
+      clearInterval(timer);
+      settle = setTimeout(() => setSignIn((s) => (s === 'open' ? 'closed' : s)), 2500);
+    }, 500);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(settle);
+    };
+  }, [signIn]);
+  /**
+   * Opens the sign-in window inside the click, so the browser allows it, then
+   * points it at the provider once Abralo has prepared the request.
+   */
+  async function startSignIn(request: () => Promise<any>, needsWindow: boolean) {
+    let win: Window | null = null;
+    if (needsWindow) {
+      win = window.open('', 'abralo-signin-' + c.id, 'popup,width=520,height=720');
+      try {
+        if (win) {
+          win.opener = null; // The provider page gets no handle on Abralo.
+          win.document.title = `Signing in to ${name}`;
+          win.document.body.style.cssText =
+            'font:16px system-ui;padding:48px;background:#fcfbf8;color:#252a30';
+          win.document.body.textContent = `Opening ${name} sign-in…`;
+        }
+      } catch {
+        // A reused window may already be on the provider's page.
+      }
+    }
+    setBusy(true);
+    setDetail(null);
+    try {
+      const result = await request();
+      if (result?.url) {
+        if (win && !win.closed) {
+          win.location.href = result.url;
+          win.focus();
+          popup.current = win;
+          setSignIn('open');
+        } else {
+          setSignIn('blocked');
+          setDetail(result);
+        }
+      } else {
+        win?.close();
+        setSignIn('idle');
+        setDetail(result);
+      }
+    } catch (e: any) {
+      win?.close();
+      setSignIn('idle');
+      setDetail({ error: e.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function disconnect() {
+    try {
+      const result = await api(`/connections/${c.id}`, undefined, 'DELETE');
+      setConfirmDisconnect(false);
+      setDetail({ message: result?.message || 'Disconnected. Employee grants have been removed.' });
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
+  const usedBy: string[] = (c.usedBy || []).map((e: any) => e.name);
+  const pageStatus: [Tone, string] =
+    c.state === 'ready'
+      ? ['ok', 'Connected']
+      : c.state === 'failed'
+        ? ['problem', 'Sign-in failed']
+        : c.state === 'disconnected'
+          ? ['idle', 'Disconnected']
+          : c.data?.reuseId
+            ? ['attention', 'Needs your OK']
+            : ['attention', 'Needs sign-in'];
+  const pageSubtitle =
+    c.state === 'ready'
+      ? [
+          c.account && c.account.toLowerCase() !== name.toLowerCase() ? c.account : '',
+          usedBy.length ? 'Used by ' + namesList(usedBy) : 'Not used by an employee yet',
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : c.data?.reuseId
+        ? `${c.data.employeeName || 'An employee'} would like to use your ${c.data.accountLabel || name} account.`
+        : choosing
+          ? `${c.data.employeeName || 'Your employee'} needs a different ${serviceName} account${c.data?.reason ? ' to ' + c.data.reason.replace(/\.$/, '') : ''}.`
+          : c.data?.reason
+            ? `${c.data.employeeName || 'Your employee'} needs ${name} to ${c.data.reason.replace(/\.$/, '')}.`
+            : c.data?.employeeName
+              ? `${c.data.employeeName} is waiting for ${name}.`
+              : `Sign in to finish connecting ${name}.`;
+  const Wrapper: any = page ? 'li' : 'div';
   return (
-    <div ref={card} className="inline-card connection-row">
+    <Wrapper
+      ref={card}
+      data-connection-id={c.id}
+      className={
+        page
+          ? 'surface-row connection-page-row' +
+            (pageStatus[0] === 'attention' ? ' attention' : pageStatus[0] === 'problem' ? ' problem' : '')
+          : 'inline-card connection-row'
+      }
+    >
+      {page ? (
+        <div className="surface-row-head">
+          <span className="surface-row-mark">
+            <ServiceMark service={c.service} name={serviceName} />
+          </span>
+          <div className="surface-row-text">
+            <div className="surface-row-title">
+              <strong>{serviceName}</strong>
+              {c.state === 'ready' && c.isDefault && c.accountCount > 1 && (
+                <span className="surface-tag">Default</span>
+              )}
+            </div>
+            <div className="surface-row-subtitle">{pageSubtitle}</div>
+          </div>
+          <Status tone={pageStatus[0]}>{pageStatus[1]}</Status>
+          {c.state === 'ready' && (
+            <RowMenu label={`Manage ${accountName}`}>
+              <button
+                disabled={busy}
+                onClick={() => void startSignIn(() => api(`/connections/${c.id}/connect`, {}), false)}
+              >
+                Check connection
+              </button>
+              {c.accountCount > 1 && !c.isDefault && (
+                <button
+                  disabled={busy}
+                  onClick={async () => {
+                    try {
+                      await api(`/connections/${c.id}`, { isDefault: true }, 'PATCH');
+                      setDetail({ message: `Agents now use ${accountName} unless a task names another account.` });
+                    } catch (e: any) {
+                      setDetail({ error: e.message });
+                    }
+                  }}
+                >
+                  Make default
+                </button>
+              )}
+              <button disabled={busy} onClick={() => setRenaming(true)}>
+                Rename
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void startSignIn(() => api(`/connections/${c.id}/reconnect`, {}), true)}
+              >
+                Reconnect
+              </button>
+              <button className="danger" onClick={() => setConfirmDisconnect(true)}>
+                Disconnect…
+              </button>
+            </RowMenu>
+          )}
+        </div>
+      ) : (
       <div className="connection-heading">
         {c.service === 'railway' ? (
           <img className="service-logo" src="/brands/railway.svg" alt="" />
         ) : (
           <Plug size={18} />
         )}
-        <strong>
-          {c.label && c.label !== c.service ? c.label : serviceNames[c.service] || c.service}
-        </strong>
+        <strong>{accountName}</strong>
+        {c.state === 'ready' && c.isDefault && c.accountCount > 1 && (
+          <span className="badge connection-default">Default</span>
+        )}
         <span className="quiet">
           {c.state === 'ready'
             ? 'Connected'
-            : c.state.replaceAll('_', ' ').replace(/^./, (v: string) => v.toUpperCase())}
+            : c.state === 'awaiting_authorization'
+              ? 'Needs sign-in'
+              : choosing && c.data?.lastError
+                ? 'Same account'
+                : c.state.replaceAll('_', ' ').replace(/^./, (v: string) => v.toUpperCase())}
         </span>
       </div>
-      {detail && <p role="status">{detail.message || detail.error}</p>}
+      )}
+      <div className={page ? 'surface-row-body' : 'connection-row-body'}>
+      {page && confirmDisconnect && (
+        <div className="surface-confirm" role="alertdialog" aria-label={`Disconnect ${accountName}?`}>
+          <p>
+            <strong>Disconnect {accountName}?</strong> Employees lose access until you connect it
+            again.
+          </p>
+          <div className="ui-actions">
+            <button className="danger-button" autoFocus onClick={() => void disconnect()}>
+              Disconnect
+            </button>
+            <button type="button" onClick={() => setConfirmDisconnect(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {!page && c.state !== 'ready' && (c.data?.reason || choosing) && (
+        <p className="connection-reason">
+          {c.data.employeeName || 'Your employee'} needs{' '}
+          {choosing ? `a different ${serviceName} account` : name}
+          {c.data?.reason ? ` to ${c.data.reason.replace(/\.$/, '')}` : ''}.
+        </p>
+      )}
+      {choosing && c.state === 'failed' && c.data?.lastError && !detail && signIn === 'idle' && (
+        <p role="status">{c.data.lastError}</p>
+      )}
+      {/* On the page, a connected official server needs no explanation. */}
+      {server && (!page || c.state !== 'ready' || !server.official) && <ServerOrigin server={server} />}
+      {signIn === 'open' ? (
+        <p role="status">
+          Finish signing in to {name} in the window that opened. This updates on its own.
+        </p>
+      ) : signIn === 'closed' ? (
+        <p role="status">The sign-in window closed before {name} was connected.</p>
+      ) : (
+        detail && <p role="status">{detail.message || detail.error}</p>
+      )}
       {c.data?.reuseId && c.state !== 'granted' && detail?.state !== 'granted' && (
         <button
           className="primary"
@@ -5125,26 +4859,67 @@ function ConnectionRow({ connection: c, fail }: any) {
             }
           }}
         >
-          Use existing connection · {c.data.accountLabel} ·{' '}
-          {c.data.requestedWrite ? 'allow reads and writes' : 'read only'}
+          Share your {c.data.accountLabel || name} account with {c.data.employeeName || 'this employee'}
         </button>
+      )}
+      {c.data?.reuseId && c.state !== 'granted' && detail?.state !== 'granted' && (
+        <button
+          className="quiet-button"
+          disabled={busy}
+          onClick={() => void startSignIn(() => api(`/connections/${c.id}/use-another`, {}), true)}
+        >
+          Use another account
+        </button>
+      )}
+      {choosing && detail?.state !== 'granted' && !['open', 'blocked'].includes(signIn) && (
+        <>
+          {otherAccounts.map((a) => (
+            <button
+              key={a.connectionId}
+              className="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  setDetail(
+                    await api(`/connections/${c.id}/reuse`, {
+                      write: !!c.data.requestedWrite,
+                      accountId: a.connectionId,
+                    }),
+                  );
+                } catch (e: any) {
+                  setDetail({ error: e.message });
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Use {a.account}
+            </button>
+          ))}
+          {/* After a same-account sign-in, the error above already says what to do. */}
+          {!(c.state === 'failed' && c.data?.lastError) && (
+            <p className="quiet">
+              {serviceName} will ask which account to use. If it signs you straight in, sign out of{' '}
+              {serviceName} in that window, then sign in with the other account.
+            </p>
+          )}
+        </>
       )}
       {detail?.requiresConfiguration === 'google-oauth' && (
         <form
           onSubmit={async (e) => {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
-            try {
-              setDetail(
-                await api(`/connections/${c.id}/google-client`, {
+            void startSignIn(
+              () =>
+                api(`/connections/${c.id}/google-client`, {
                   id: f.get('client'),
                   secret: f.get('secret'),
                   write: f.get('write') === 'on',
                 }),
-              );
-            } catch (e: any) {
-              fail(e.message);
-            }
+              true,
+            );
           }}
         >
           <a href="https://console.cloud.google.com/auth/clients" target="_blank" rel="noreferrer">
@@ -5169,296 +4944,740 @@ function ConnectionRow({ connection: c, fail }: any) {
           <button className="primary">Continue with Google</button>
         </form>
       )}
-      {detail?.url && (
-        <a className="connection-signin" href={detail.url} target="_blank" rel="noreferrer">
-          Continue sign-in <ExternalLink size={14} />
+      {signIn === 'open' && (
+        <button className="quiet-button" onClick={() => popup.current?.focus()}>
+          Show sign-in window
+        </button>
+      )}
+      {signIn === 'blocked' && detail?.url && (
+        // Only when the browser blocked the window: one link, which opens it directly.
+        <a
+          className="connection-signin"
+          href={detail.url}
+          target={'abralo-signin-' + c.id}
+          rel="noreferrer"
+          onClick={() => setSignIn('open')}
+        >
+          Sign in to {name} <ExternalLink size={14} />
         </a>
       )}
-      {!c.data?.reuseId && (
-        <button
-          className="secondary"
-          disabled={busy}
-          onClick={async () => {
+      {needsKey && (
+        <form
+          className="connection-key ui-stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const input = e.currentTarget.elements.namedItem('key') as HTMLInputElement;
             setBusy(true);
             try {
-              setDetail(
-                await api(
-                  `/connections/${c.id}/connect`,
-                  c.state === 'ready' ? {} : { grantWrite: !!c.data?.requestedWrite },
-                ),
-              );
-            } catch (e: any) {
-              setDetail({ error: e.message });
+              setDetail(await api(`/connections/${c.id}/api-key`, { key: input.value }));
+              input.value = '';
+            } catch (error: any) {
+              setDetail({ error: error.message, requiresApiKey: true });
             } finally {
               setBusy(false);
             }
           }}
         >
+          <label className="ui-field">
+            {name} API key
+            <input name="key" type="password" autoComplete="off" required minLength={8} />
+          </label>
+          <small className="quiet">
+            {detail?.apiKeyHelp || server?.apiKeyHelp || `Create a key in your ${name} account settings.`}{' '}
+            It goes straight to Abralo’s encrypted store and is never shown to agents.
+          </small>
+          <button className="primary" disabled={busy}>
+            {busy ? 'Connecting…' : `Connect ${name}`}
+          </button>
+        </form>
+      )}
+      {/* A fallback only once sign-in has not worked: one choice at a time. */}
+      {!c.data?.reuseId &&
+        !needsKey &&
+        server?.apiKeyHelp &&
+        c.state !== 'ready' &&
+        // Sign-in worked but chose the same account: a key would not help.
+        !(choosing && c.data?.lastError) &&
+        (signIn === 'closed' || detail?.error || c.state === 'failed') && (
+        <button className="quiet-button" onClick={() => setKeyForm(true)}>
+          Use an API key instead
+        </button>
+      )}
+      {!c.data?.reuseId && !needsKey && !['open', 'blocked'].includes(signIn) && detail?.state !== 'granted' && !(page && c.state === 'ready') && (
+        <button
+          className={c.state === 'ready' ? 'secondary' : 'primary'}
+          disabled={busy}
+          onClick={() =>
+            void startSignIn(
+              () =>
+                api(`/connections/${c.id}/connect`, {}),
+              c.state !== 'ready',
+            )
+          }
+        >
           {busy
             ? 'Connecting…'
             : c.state === 'ready'
               ? 'Check connection'
-              : detail?.url
-                ? 'Check sign-in'
-                : c.data?.requestedWrite
-                  ? 'Connect · allow reads and writes'
-                  : 'Connect · read only'}
+              : signIn === 'closed'
+                ? 'Try again'
+                : choosing
+                  ? `Sign in to another ${serviceName} account`
+                  : `Sign in to ${name}`}
         </button>
       )}
-      {c.state === 'ready' && (
-        <button
-          className="quiet-button"
-          onClick={async () => {
+      {c.state === 'ready' && renaming && (
+        <form
+          className="connection-rename ui-stack"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const input = e.currentTarget.elements.namedItem('name') as HTMLInputElement;
+            setBusy(true);
             try {
-              await api(`/connections/${c.id}`, undefined, 'DELETE');
-              setDetail({ message: 'Disconnected. Employee grants have been removed.' });
-            } catch (e: any) {
-              fail(e.message);
+              const saved = await api(`/connections/${c.id}`, { name: input.value }, 'PATCH');
+              setRenaming(false);
+              setDetail({ message: `Renamed to ${saved.account}.` });
+            } catch (error: any) {
+              setDetail({ error: error.message });
+            } finally {
+              setBusy(false);
             }
           }}
         >
-          Disconnect
-        </button>
+          <label className="ui-field">
+            Account name
+            <input name="name" defaultValue={c.data?.customName || ''} placeholder={accountName} maxLength={80} autoFocus />
+          </label>
+          <small className="quiet">Agents can ask for this account by this name. Leave it empty to use the provider’s name.</small>
+          <div className="form-actions">
+            <button type="button" className="secondary" onClick={() => setRenaming(false)}>
+              Cancel
+            </button>
+            <button className="primary" disabled={busy}>
+              Save name
+            </button>
+          </div>
+        </form>
       )}
-    </div>
+      {!page && c.state === 'ready' && !renaming && (
+        <>
+          {c.accountCount > 1 && !c.isDefault && (
+            <button
+              className="quiet-button"
+              disabled={busy}
+              onClick={async () => {
+                try {
+                  await api(`/connections/${c.id}`, { isDefault: true }, 'PATCH');
+                  setDetail({ message: `Agents now use ${accountName} unless a task names another account.` });
+                } catch (e: any) {
+                  setDetail({ error: e.message });
+                }
+              }}
+            >
+              Make default
+            </button>
+          )}
+          <button className="quiet-button" disabled={busy} onClick={() => setRenaming(true)}>
+            Rename
+          </button>
+          <button
+            className="quiet-button"
+            disabled={busy}
+            onClick={() => void startSignIn(() => api(`/connections/${c.id}/reconnect`, {}), true)}
+          >
+            Reconnect
+          </button>
+          <button
+            className="quiet-button"
+            disabled={busy}
+            onClick={() => void disconnect()}
+          >
+            Disconnect
+          </button>
+        </>
+      )}
+      </div>
+    </Wrapper>
   );
 }
-function Connections({ revision, fail }: any) {
+/** "chatgpt · plus" → "ChatGPT Plus"; "claude.ai · max" → "Claude Max". */
+function providerPlan(provider: any) {
+  const detail = String(provider?.detail || '');
+  if (provider?.authenticated !== true) return '';
+  const [kind = '', plan = ''] = detail.split(' · ').map((part) => part.trim());
+  const brand =
+    ({ chatgpt: 'ChatGPT', 'claude.ai': 'Claude', apikey: 'API key', console: 'Anthropic Console' } as Record<string, string>)[
+      kind.toLowerCase()
+    ] || kind;
+  const tier = plan && /^[a-z0-9_-]+$/i.test(plan) ? plan.replace(/[_-]/g, ' ').replace(/^./, (c) => c.toUpperCase()) : plan;
+  return [brand, tier].filter(Boolean).join(' ');
+}
+const providerMarks: Record<string, string> = { codex: 'codex', claude: 'claude', opencode: 'opencode' };
+function ProviderAccountRow({
+  harness,
+  provider,
+  checking,
+  refresh,
+  makeDefault,
+  fail,
+  tone,
+}: any) {
+  const connected = provider?.authenticated === true;
+  const missing = provider?.installed === false;
+  const unknown = !provider || provider.authenticated == null;
+  const status: [Tone, string] = connected
+    ? ['ok', 'Connected']
+    : checking
+      ? ['idle', 'Checking…']
+      : missing
+        ? ['idle', 'Not installed']
+        : unknown
+          ? ['idle', 'Not checked']
+          : ['attention', 'Not signed in'];
+  const subtitle = connected
+    ? providerPlan(provider) || 'Connected on this computer'
+    : missing
+      ? `Install ${names[harness]} on this computer to use it.`
+      : unknown
+        ? 'Checking this account in the background.'
+        : tone === 'attention'
+          ? `Employees using ${names[harness]} are waiting for you to sign in.`
+          : 'Sign in with your existing account. Credentials stay on this computer.';
+  return (
+    <Row
+      className="provider-account-row"
+      tone={tone}
+      mark={<ServiceMark service={providerMarks[harness]} name={names[harness]} />}
+      title={names[harness]}
+      tag={provider?.isDefault ? 'Default' : undefined}
+      subtitle={subtitle}
+      status={<Status tone={status[0]}>{status[1]}</Status>}
+      menu={
+        <RowMenu label={`Manage ${names[harness]}`}>
+          {connected && !provider?.isDefault && (
+            <button onClick={() => makeDefault(harness)}>Use for new employees</button>
+          )}
+          <button disabled={checking} onClick={() => void refresh(harness).catch((e: any) => fail(e.message))}>
+            Check now
+          </button>
+        </RowMenu>
+      }
+    >
+      {provider?.authenticated === false && !missing && (
+        <ProviderLogin
+          bare
+          harness={harness}
+          provider={provider}
+          checking={checking}
+          refresh={refresh}
+          fail={fail}
+        />
+      )}
+    </Row>
+  );
+}
+const suggestedServices = ['Stripe', 'Railway', 'Resend', 'Gmail', 'GitHub', 'Linear', 'Notion'];
+function ConnectionsView({ revision, fail, employees = [] }: any) {
   const [items, setItems] = useState<any[]>([]);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [checking, setChecking] = useState('');
+  const [askBeforeSharing, setAskBeforeSharing] = useState<boolean | null>(null);
   const [nativeMcp, setNativeMcp] = useState<boolean | null>(null);
-  const [savingMcp, setSavingMcp] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+  const [addNote, setAddNote] = useState<{ error?: string; message?: string } | null>(null);
+  const loadItems = () => api('/connections').then(setItems);
+  async function loadProviders(check?: string) {
+    setChecking(check || 'all');
+    try {
+      const result = await api('/providers' + (check ? '?check=' + check : ''));
+      setProviders(result);
+      return result;
+    } finally {
+      setChecking('');
+    }
+  }
   useEffect(() => {
-    api('/connections')
-      .then(setItems)
-      .catch((e: any) => fail(e.message));
+    void loadItems().catch((e: any) => fail(e.message));
     api('/connections/native-mcp')
       .then((value) => setNativeMcp(value.enabled))
       .catch((e: any) => fail(e.message));
+    api('/connections/sharing')
+      .then((value) => setAskBeforeSharing(value.askBeforeSharing))
+      .catch((e: any) => fail(e.message));
   }, [revision]);
-  return (
-    <section className="settings-content">
-      <h2>Connected accounts</h2>
-      <p className="quiet">
-        Ask an agent to connect an account. You choose which agent can use it, and Abralo keeps a record of actions that need your decision.
-      </p>
-      <p className="quiet">Agents can also use command line tools and provider APIs in their working folder, subject to their permissions.</p>
-      {items.length ? (
-        items.map((c) => <ConnectionRow key={c.id} connection={c} fail={fail} />)
-      ) : (
-        <div className="empty-card">
-          <Plug size={24} />
-          <p>“Connect Railway, Stripe and Gmail.”</p>
-          <span className="quiet">Start with a message. Setup stays in the conversation.</span>
-        </div>
-      )}
-      <div className="inline-card ui-stack">
-        <div><h3>Tools configured in Claude Code</h3><p className="quiet">Claude Code can use MCP servers from your user and project settings. A project server may start when an agent opens that project, so enable this for projects you trust.</p></div>
-        <label className="check-label"><input type="checkbox" checked={!!nativeMcp} disabled={nativeMcp === null || savingMcp} onChange={async (event) => {
-          const enabled = event.target.checked;
-          setSavingMcp(true);
-          try { const saved = await api('/connections/native-mcp', { enabled }, 'PUT'); setNativeMcp(saved.enabled); }
-          catch (error: any) { fail(error.message); }
-          finally { setSavingMcp(false); }
-        }} /> Allow configured Claude Code MCP servers</label>
-        <p className="quiet">Codex and OpenCode continue to use their own configured tools. Abralo account connections above have separate access and action checks.</p>
-      </div>
-    </section>
-  );
-}
-const usageChartColors = [
-  '#8c9eff',
-  '#56b6a8',
-  '#e6a45e',
-  '#d9829a',
-  '#b7a0e8',
-  '#83b7dc',
-  '#d2c66d',
-  '#a5b887',
-];
-
-function UsageSparkline({ samples }: { samples: { at: number; used: number }[] }) {
-  if (!samples || samples.length < 2) return null;
-  const values = samples.slice(-60);
-  const points = values
-    .map((sample, i) => `${(i / (values.length - 1)) * 114 + 3},${3 + sample.used * 0.22}`)
-    .join(' ');
-  return (
-    <div className="usage-trend">
-      <svg viewBox="0 0 120 28" role="img" aria-label="Allowance remaining over the past hour">
-        <line x1="3" y1="25" x2="117" y2="25" />
-        <polyline points={points} />
-      </svg>
-      <span>Allowance · 1h</span>
-    </div>
-  );
-}
-
-function EmployeeUsageChart({ totals }: { totals: Record<string, number> }) {
-  const employees = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  const total = employees.reduce((sum, [, count]) => sum + count, 0);
-  const radius = 40;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-  return (
-    <div className="employee-usage-chart">
-      <svg
-        className="employee-usage-donut"
-        viewBox="0 0 100 100"
-        role="img"
-        aria-label={`Employee token usage shares, ${total.toLocaleString()} tokens total`}
-      >
-        <circle className="employee-usage-track" cx="50" cy="50" r={radius} />
-        {employees.map(([name, count], i) => {
-          const length = total ? (count / total) * circumference : 0;
-          const segment = (
-            <circle
-              key={name}
-              className="employee-usage-segment"
-              cx="50"
-              cy="50"
-              r={radius}
-              stroke={usageChartColors[i % usageChartColors.length]}
-              strokeDasharray={`${length} ${circumference - length}`}
-              strokeDashoffset={-offset}
-            />
-          );
-          offset += length;
-          return segment;
-        })}
-        <text className="employee-usage-total" x="50" y="48">
-          {total >= 1_000_000
-            ? `${(total / 1_000_000).toFixed(1)}m`
-            : `${Math.round(total / 1000)}k`}
-        </text>
-        <text className="employee-usage-unit" x="50" y="59">
-          tokens
-        </text>
-      </svg>
-      <div className="employee-usage-legend">
-        {employees.map(([name, count], i) => (
-          <div className="employee-usage-row" key={name}>
-            <span
-              className="employee-usage-swatch"
-              style={{ backgroundColor: usageChartColors[i % usageChartColors.length] }}
-              aria-hidden="true"
-            />
-            <span className="employee-usage-name" title={name}>
-              {name}
-            </span>
-            <span className="employee-usage-share">
-              {total && count > 0 && count / total < 0.005
-                ? '<1%'
-                : `${total ? Math.round((count / total) * 100) : 0}%`}
-            </span>
-            <code>{count.toLocaleString()}</code>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Usage({ providers, onClose, onConnect }: any) {
-  const [data, setData] = useState<any>({ runs: [] });
-  const [accounts, setAccounts] = useState<any>({ providers, forecasts: {}, trends: {} });
   useEffect(() => {
-    api('/usage').then(setData);
-    const refresh = () => {
-      void api('/usage/accounts')
-        .then(setAccounts)
-        .catch(() => {});
+    void loadProviders().catch((e: any) => fail(e.message));
+    const changed = (event: Event) => {
+      if ((event as CustomEvent).detail?.type === 'models.changed')
+        void api('/providers').then(setProviders).catch(() => {});
     };
+    window.addEventListener('workspace-event', changed);
+    return () => window.removeEventListener('workspace-event', changed);
+  }, []);
+  async function makeDefault(harness: string) {
+    try {
+      await api('/providers/default', { harness }, 'PUT');
+      setProviders(await api('/providers'));
+    } catch (e: any) {
+      fail(e.message);
+    }
+  }
+  async function addService(event: React.FormEvent) {
+    event.preventDefault();
+    const name = addName.trim();
+    if (!name) return;
+    setAddBusy(true);
+    setAddNote(null);
+    try {
+      const result = await api('/connections', { service: name });
+      await loadItems();
+      if (result.status === 'already_connected') {
+        setAddNote({ message: `${name.replace(/^./, (c) => c.toUpperCase())} is already connected.` });
+        return;
+      }
+      setAdding(false);
+      setAddName('');
+      // Take the person straight to the one thing left to do: sign in.
+      requestAnimationFrame(() => {
+        const row = document.querySelector(`[data-connection-id="${result.id}"]`);
+        row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        (row?.querySelector('button.primary') as HTMLButtonElement | null)?.focus();
+      });
+    } catch (e: any) {
+      setAddNote({ error: e.message });
+    } finally {
+      setAddBusy(false);
+    }
+  }
+  async function saveSetting(path: string, body: object, apply: (value: any) => void) {
+    setSaving(true);
+    try {
+      apply(await api(path, body, 'PUT'));
+    } catch (e: any) {
+      fail(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+  const visible = items.filter((c) => c.state !== 'granted');
+  const waitingServices = visible.filter((c) => c.state !== 'ready');
+  const services = visible
+    .filter((c) => c.state === 'ready')
+    .sort((a, b) =>
+      String(serviceNames[a.service] || a.label || a.service).localeCompare(
+        String(serviceNames[b.service] || b.label || b.service),
+      ),
+    );
+  const harnesses = ['codex', 'claude', 'opencode'];
+  const info = (h: string) => providers.find((p) => p.harness === h);
+  const inUse = (h: string) => employees.some((e: any) => e.harness === h);
+  const providerWaiting = harnesses.filter(
+    (h) => info(h) && info(h).installed !== false && info(h).authenticated === false && inUse(h),
+  );
+  // OpenCode stays out of the way until it is installed or someone uses it.
+  const accountRows = harnesses.filter(
+    (h) =>
+      !providerWaiting.includes(h) &&
+      (h !== 'opencode' || inUse(h) || (info(h) && info(h).installed !== false)),
+  );
+  const providerRow = (h: string, tone?: 'attention') => (
+    <ProviderAccountRow
+      key={h}
+      harness={h}
+      tone={tone}
+      provider={info(h)}
+      checking={checking === h || (checking === 'all' && !info(h))}
+      refresh={loadProviders}
+      makeDefault={makeDefault}
+      fail={fail}
+    />
+  );
+  const attentionCount = providerWaiting.length + waitingServices.length;
+  return (
+    <Page
+      label="Connections"
+      actions={
+        !adding && (
+          <button
+            className="primary"
+            onClick={() => {
+              setAdding(true);
+              setAddNote(null);
+            }}
+          >
+            <Plus size={16} /> Add service
+          </button>
+        )
+      }
+    >
+      {adding && (
+        <form className="surface-add" onSubmit={addService} aria-label="Add a service">
+          <div className="surface-add-row">
+            <input
+              autoFocus
+              list="connection-suggestions"
+              aria-label="Which service?"
+              placeholder="Which service? For example Stripe, Gmail or Linear"
+              value={addName}
+              maxLength={120}
+              disabled={addBusy}
+              onChange={(event) => setAddName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !addBusy) setAdding(false);
+              }}
+            />
+            <datalist id="connection-suggestions">
+              {suggestedServices.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+            <button className="primary" disabled={addBusy || addName.trim().length < 2}>
+              {addBusy ? 'Finding…' : 'Continue'}
+            </button>
+            <button type="button" disabled={addBusy} onClick={() => setAdding(false)}>
+              Cancel
+            </button>
+          </div>
+          {addNote && (
+            <p role={addNote.error ? 'alert' : 'status'} className="surface-add-note">
+              {addNote.error || addNote.message}
+            </p>
+          )}
+        </form>
+      )}
+      {attentionCount > 0 && (
+        <Section id="connections-attention" label="Needs attention" count={attentionCount} tone="attention">
+          <List label="Needs attention">
+            {providerWaiting.map((h) => providerRow(h, 'attention'))}
+            {waitingServices.map((c) => (
+              <ConnectionRow key={c.id} connection={c} fail={fail} variant="page" />
+            ))}
+          </List>
+        </Section>
+      )}
+      <Section id="connections-ai" label="AI accounts">
+        <List label="AI accounts">{accountRows.map((h) => providerRow(h))}</List>
+      </Section>
+      <Section
+        id="connections-services"
+        label="Services"
+        count={services.length || undefined}
+        footnote="Reading happens automatically. Changes always ask you first. Employees can also use command-line tools in their working folder, within their permissions."
+      >
+        {services.length ? (
+          <List label="Services">
+            {services.map((c) => (
+              <ConnectionRow key={c.id} connection={c} fail={fail} variant="page" />
+            ))}
+          </List>
+        ) : (
+          <p className="surface-empty">
+            No services yet. Add one now, or an employee will ask when a task needs it.
+          </p>
+        )}
+      </Section>
+      <Section id="connections-permissions" label="Permissions">
+        <List label="Permissions">
+          <Switch
+            label="Ask before another employee uses an account"
+            hint="Changes always ask for your approval, whichever employee makes them."
+            checked={!!askBeforeSharing}
+            disabled={askBeforeSharing === null || saving}
+            onChange={(value) =>
+              void saveSetting('/connections/sharing', { askBeforeSharing: value }, (saved) =>
+                setAskBeforeSharing(saved.askBeforeSharing),
+              )
+            }
+          />
+          <Switch
+            label="Let Claude Code use its own configured tools"
+            hint="Uses the MCP servers in your Claude Code settings. Project servers can start when an agent opens that project, so turn this on only for projects you trust."
+            checked={!!nativeMcp}
+            disabled={nativeMcp === null || saving}
+            onChange={(value) =>
+              void saveSetting('/connections/native-mcp', { enabled: value }, (saved) =>
+                setNativeMcp(saved.enabled),
+              )
+            }
+          />
+        </List>
+      </Section>
+    </Page>
+  );
+}
+function readableError(message: string) {
+  if (/(?:is not a function|is not defined|is not iterable|Cannot read propert(?:y|ies) of|Cannot set propert(?:y|ies) of|undefined is not an object|null is not an object)/i.test(message)) {
+    return 'Something went wrong on this screen. Please try again, or reload Abralo if it keeps happening.';
+  }
+  return message;
+}
+
+type UsageWindow = {
+  key: string;
+  label: string;
+  used: number;
+  resetsAt: number;
+  minutes: number;
+};
+function usageWindowLabel(w: { label?: string; windowDurationMins?: number | null }) {
+  if (w.label) return w.label;
+  const minutes = Number(w.windowDurationMins) || 0;
+  if (minutes && minutes <= 360) return 'This session';
+  if (minutes === 10080) return 'This week';
+  if (minutes >= 1440 && minutes % 1440 === 0) return `${minutes / 1440}-day window`;
+  return minutes ? `${Math.round(minutes / 60)}-hour window` : 'Usage';
+}
+/** Today → "18:00"; later → "Thu 04:00". */
+function usageTime(ms: number) {
+  const date = new Date(ms);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return date.toLocaleString([], {
+    ...(sameDay ? {} : { weekday: 'short' }),
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+function usageWindows(provider: any) {
+  const limits = provider?.limits;
+  const buckets: [string, any][] = Object.entries(
+    limits?.rateLimitsByLimitId || (limits?.rateLimits ? { default: limits.rateLimits } : {}),
+  ).filter(([, bucket]) => Boolean(bucket));
+  const mainKey =
+    buckets.find(([key]) => ['plan', 'default', 'codex'].includes(key))?.[0] || buckets[0]?.[0];
+  const main: UsageWindow[] = [];
+  const models: UsageWindow[] = [];
+  for (const [bucketKey, bucket] of buckets)
+    for (const slot of ['primary', 'secondary'] as const) {
+      const w = bucket[slot];
+      if (!w || typeof w.usedPercent !== 'number' || typeof w.resetsAt !== 'number') continue;
+      const base = usageWindowLabel(w);
+      const label =
+        bucketKey === mainKey || w.label
+          ? base
+          : `${bucket.limitName || bucketKey.replace(/[_-]/g, ' ')} · ${base.toLowerCase()}`;
+      (bucketKey === mainKey ? main : models).push({
+        key: `${provider.harness}.${bucketKey}.${slot}`,
+        label,
+        used: Math.max(0, Math.min(100, w.usedPercent)),
+        resetsAt: w.resetsAt * 1000,
+        minutes: Number(w.windowDurationMins) || 0,
+      });
+    }
+  main.sort((x, y) => x.minutes - y.minutes);
+  return { main, models };
+}
+function UsageWindowRow({ w, forecast }: { w: UsageWindow; forecast?: { earliest: number } }) {
+  const left = Math.round(100 - w.used);
+  const runsOut = forecast && forecast.earliest < w.resetsAt ? forecast.earliest : 0;
+  return (
+    <li className="usage-window-row">
+      <span className="usage-window-label">{w.label}</span>
+      <Meter used={w.used} label={`${w.label}: ${left}% left`} />
+      <span className="usage-window-value">
+        <b>{left}% left</b> · resets {usageTime(w.resetsAt)}
+      </span>
+      {runsOut > 0 && (
+        <span className="usage-window-forecast">
+          At this pace this could run out around {usageTime(runsOut)}, before it resets.
+        </span>
+      )}
+    </li>
+  );
+}
+function UsageView({ employees = [], onOpenConnections, avatar }: any) {
+  const [accounts, setAccounts] = useState<any>(null);
+  const [data, setData] = useState<any>({ runs: [] });
+  const [period, setPeriod] = useState<'today' | 'week'>('week');
+  useEffect(() => {
+    let live = true;
+    api('/usage')
+      .then((value) => live && setData(value))
+      .catch(() => {});
+    const refresh = () =>
+      void api('/usage/accounts')
+        .then((value) => live && setAccounts(value))
+        .catch(() => live && setAccounts((current: any) => current || { providers: [], forecasts: {}, limited: [] }));
     refresh();
     const timer = setInterval(refresh, 60000);
-    return () => clearInterval(timer);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
   }, []);
-  const totals: Record<string, number> = {};
-  for (const r of data.runs) {
-    const u = r.usage?.usage || r.usage?.last || r.usage?.tokens || {};
-    totals[r.name] =
-      (totals[r.name] || 0) +
-      (u.input_tokens || u.inputTokens || u.input || 0) +
-      (u.output_tokens || u.outputTokens || u.output || 0);
+  const providers: any[] = (accounts?.providers || []).filter(
+    (p: any) => p.authenticated === true || p.limits,
+  );
+  const limited: any[] = accounts?.limited || [];
+  const attention: { key: string; harness: string; title: string; subtitle: string }[] = [];
+  for (const p of providers) {
+    const { main } = usageWindows(p);
+    const tight = [...main].sort((x, y) => y.used - x.used)[0];
+    if (tight && tight.used >= 85)
+      attention.push({
+        key: 'low.' + p.harness,
+        harness: p.harness,
+        title:
+          tight.used >= 100
+            ? `${names[p.harness]} has reached its limit`
+            : `${names[p.harness]} is nearly used up`,
+        subtitle: `${Math.round(100 - tight.used)}% left ${tight.label.toLowerCase()} · resets ${usageTime(tight.resetsAt)}`,
+      });
   }
+  const pausedGroups = new Map<string, any[]>();
+  for (const run of limited) {
+    const key = run.harness + '|' + (run.retryAt || '');
+    pausedGroups.set(key, [...(pausedGroups.get(key) || []), run]);
+  }
+  for (const [key, runs] of pausedGroups) {
+    const people = [...new Set(runs.map((r) => r.employeeName))];
+    const retry = runs[0].retryAt ? Date.parse(runs[0].retryAt) : 0;
+    const automatic = runs.every((r) => r.autoResume);
+    attention.push({
+      key: 'paused.' + key,
+      harness: runs[0].harness,
+      title: retry ? `Paused until ${usageTime(retry)}` : 'Paused by a usage limit',
+      subtitle: `${namesList(people)} ${automatic ? (people.length > 1 ? 'continue' : 'continues') + ' automatically' : (people.length > 1 ? 'are' : 'is') + ' waiting for you to resume'}.`,
+    });
+  }
+  const cutoff =
+    period === 'today'
+      ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+      : Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const totals = new Map<string, { id: string; name: string; tokens: number }>();
+  for (const r of data.runs || []) {
+    if (Date.parse(r.createdAt) < cutoff) continue;
+    const u = r.usage?.usage || r.usage?.last || r.usage?.tokens || {};
+    const tokens =
+      (u.input_tokens || u.inputTokens || u.input || 0) + (u.output_tokens || u.outputTokens || u.output || 0);
+    if (!tokens) continue;
+    const key = r.employeeId || r.name;
+    const entry = totals.get(key) || { id: r.employeeId || key, name: r.name, tokens: 0 };
+    entry.tokens += tokens;
+    totals.set(key, entry);
+  }
+  const ranked = [...totals.values()].sort((x, y) => y.tokens - x.tokens);
+  const total = ranked.reduce((sum, e) => sum + e.tokens, 0);
+  const known = new Set(employees.map((e: any) => e.id));
   return (
-    <Modal title="Usage" onClose={onClose}>
-      <div className="usage-content">
-        <p className="quiet">
-          Account limits are shared with your other apps. Employee figures show only activity
-          observed in this workspace.
-        </p>
-        {accounts.providers.map((p: any) => (
-          <div className="usage-account" key={p.harness}>
-            <strong>{names[p.harness]}</strong>
-            {p.authenticated ? (
-              <small>{p.detail}</small>
-            ) : (
-              <button className="quiet-button" onClick={onConnect}>
-                {`Sign in with ${names[p.harness]}`}
-              </button>
-            )}
-            {p.limits ? (
-              Object.entries(p.limits.rateLimitsByLimitId || { default: p.limits.rateLimits })
-                .filter(([, bucket]) => Boolean(bucket))
-                .map(([bucketKey, bucket]: any) => (
-                  <div key={bucketKey}>
-                    {(['primary', 'secondary'] as const).map((windowKey) => {
-                      const w = bucket[windowKey];
-                      if (!w) return null;
-                      const trendKey = `${p.harness}.${bucketKey}.${windowKey}`;
-                      const estimate = accounts.forecasts[trendKey];
-                      return (
-                        <div className="usage-window" key={windowKey}>
-                          <div className="usage-label">
-                            <span>{Math.round(w.windowDurationMins / 60)} hour window</span>
-                            <b>{Math.max(0, 100 - w.usedPercent)}% remaining</b>
-                          </div>
-                          <progress max={100} value={w.usedPercent} />
-                          <div className="usage-window-detail">
-                            <small>Resets {new Date(w.resetsAt * 1000).toLocaleString()}</small>
-                            <UsageSparkline samples={accounts.trends[trendKey]} />
-                          </div>
-                          {estimate && (
-                            <p className="usage-estimate">
-                              At this pace, could run out between{' '}
-                              {new Date(estimate.earliest).toLocaleString([], {
-                                weekday: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}{' '}
-                              and{' '}
-                              {new Date(estimate.latest).toLocaleString([], {
-                                weekday: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                              .
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))
-            ) : (
-              <p className="quiet">Remaining allowance unavailable</p>
-            )}
+    <Page label="Usage">
+      {attention.length > 0 && (
+        <Section id="usage-attention" label="Needs attention" count={attention.length} tone="attention">
+          <List label="Usage that needs attention">
+            {attention.map((item) => (
+              <Row
+                key={item.key}
+                tone="attention"
+                mark={<ServiceMark service={item.harness} name={names[item.harness] || item.harness} />}
+                title={item.title}
+                subtitle={item.subtitle}
+              />
+            ))}
+          </List>
+        </Section>
+      )}
+      <Section id="usage-accounts" label="AI accounts">
+        {!accounts ? (
+          <p className="surface-empty">Checking your accounts…</p>
+        ) : !providers.length ? (
+          <div className="surface-empty">
+            <p>Connect an AI account to see how much room your team has.</p>
+            <button className="secondary" onClick={onOpenConnections}>
+              Open Connections
+            </button>
           </div>
-        ))}
-        <h3>Observed by employee</h3>
-        <p className="usage-section-note">
-          Share across up to 500 recent runs with reported token usage.
-        </p>
-        {Object.keys(totals).length > 0 && <EmployeeUsageChart totals={totals} />}
-        {!data.runs.length && (
-          <p className="quiet">Usage appears after a provider reports a completed turn.</p>
+        ) : (
+          <div className="usage-providers">
+            {providers.map((p) => {
+              const { main, models } = usageWindows(p);
+              const tight = [...main].sort((x, y) => y.used - x.used)[0];
+              return (
+                <article className="usage-provider" key={p.harness} aria-label={`${names[p.harness]} usage`}>
+                  <header className="usage-provider-head">
+                    <ServiceMark service={p.harness} name={names[p.harness]} size={22} />
+                    <div className="usage-provider-name">
+                      <strong>{names[p.harness]}</strong>
+                      <span>{providerPlan(p) || p.detail}</span>
+                    </div>
+                    {tight && (
+                      <div className="usage-headline">
+                        <b>{Math.round(100 - tight.used)}%</b>
+                        <span>
+                          left {tight.label.toLowerCase()}
+                        </span>
+                      </div>
+                    )}
+                  </header>
+                  {main.length ? (
+                    <ul className="usage-windows" aria-label={`${names[p.harness]} limits`}>
+                      {main.map((w) => (
+                        <UsageWindowRow key={w.key} w={w} forecast={accounts.forecasts?.[w.key]} />
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="usage-unreported">
+                      {names[p.harness]} doesn’t report its remaining allowance.
+                    </p>
+                  )}
+                  {models.length > 0 && (
+                    <details className="usage-models">
+                      <summary>Model limits</summary>
+                      <ul className="usage-windows">
+                        {models.map((w) => (
+                          <UsageWindowRow key={w.key} w={w} forecast={accounts.forecasts?.[w.key]} />
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </article>
+              );
+            })}
+          </div>
         )}
-        <p className="caption">
-          Estimates use recent account-wide activity; other apps share the allowance. They appear
-          only when enough fresh samples are available.
-        </p>
-      </div>
-    </Modal>
+      </Section>
+      <Section
+        id="usage-people"
+        label="Who’s using it"
+        footnote="Limits are shared with your other apps on the same account. This list counts work in this workspace only."
+        aside={
+          <Segmented
+            label="Period"
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { value: 'today', label: 'Today' },
+              { value: 'week', label: '7 days' },
+            ]}
+          />
+        }
+      >
+        {ranked.length ? (
+          <List label="Usage by employee">
+            {ranked.map((e) => {
+              const share = total ? (e.tokens / total) * 100 : 0;
+              return (
+                <li className="surface-row usage-person" key={e.id} title={`${e.tokens.toLocaleString()} tokens`}>
+                  <div className="surface-row-head">
+                    <span className="surface-row-mark">
+                      {avatar && known.has(e.id) ? avatar(e.id, e.name) : <ServiceMark service="" name={e.name} />}
+                    </span>
+                    <span className="usage-person-name">{e.name}</span>
+                    <span className="usage-person-bar" aria-hidden="true">
+                      <span style={{ width: Math.max(2, (e.tokens / ranked[0].tokens) * 100) + '%' }} />
+                    </span>
+                    <span className="usage-person-share">{share < 1 ? '<1' : Math.round(share)}%</span>
+                  </div>
+                </li>
+              );
+            })}
+          </List>
+        ) : (
+          <p className="surface-empty">No work recorded {period === 'today' ? 'today' : 'in the last 7 days'}.</p>
+        )}
+      </Section>
+    </Page>
   );
 }
 function Schedules({ workspace: w, fail }: any) {
@@ -5661,29 +5880,46 @@ function PermissionMenu({ employee, fail }: any) {
     </>
   );
 }
-function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, initialTab }: any) {
+function UpdatePreparationStatus() {
+  const [update, setUpdate] = useState<any>(null);
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () => void api('/maintenance').then(value => { if (!disposed) setUpdate(value); }).catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, []);
+  const job = update?.job;
+  if (!update?.supported || !job) return null;
+  const message = job.waitingForSpace ? 'Update queued: waiting for free disk space. Agents can keep working.'
+    : job.phase === 'stopping' || job.phase === 'starting' ? 'Installing update and checking your saved workspace. Please wait a moment.'
+    : job.phase === 'succeeded' ? 'Update installed.'
+    : job.phase === 'rolled-back' ? 'The update could not start. Your previous version is running.'
+    : job.phase === 'failed' || job.phase === 'recovery-required' ? 'Update needs attention.'
+    : job.message || 'Update queued.';
+  return <section className="settings-section" aria-label="Update status">
+    <h3>Updates</h3>
+    <p role="status">{message}</p>
+    {job.error && <p className="caption">{job.error}</p>}
+    {job.compaction?.state === 'switched' && <p className="caption">Workspace storage compacted and verified. Recovery copy retained.</p>}
+  </section>;
+}
+
+function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, initialTab = 'general' }: any) {
   const [notificationStatus, setNotificationStatus] = useState('');
   const [notificationInfo, setNotificationInfo] = useState<any>(null);
   const [startup, setStartup] = useState<any>(null);
-  const [tab, setTab] = useState(initialTab || 'general'),
+  const [tab, setTab] = useState(initialTab),
     [prefs, setPrefs] = useState<any>({ enabled: true, sound: true, privatePreview: false }),
-    [memories, setMemories] = useState<any[]>([]),
-    [accountProviders, setAccountProviders] = useState<any[]>([]),
-    [checkingAccounts, setCheckingAccounts] = useState(false);
-  async function refreshAccounts(check?: string) {
-    setCheckingAccounts(true);
-    try {
-      const result = await api('/providers' + (check ? '?check=' + check : ''));
-      setAccountProviders(result);
-      return result;
-    } finally {
-      setCheckingAccounts(false);
-    }
-  }
+    [memories, setMemories] = useState<any[]>([]);
   useEffect(() => {
-    const loadNotifications = () => void api('/notifications')
-      .then((r) => { setPrefs(r.preferences); setNotificationInfo(r); })
-      .catch((e) => setSettingsError(e.message));
+    const loadNotifications = () =>
+      void api('/notifications')
+        .then((r) => {
+          setPrefs(r.preferences);
+          setNotificationInfo(r);
+        })
+        .catch((e) => setSettingsError(e.message));
     loadNotifications();
     window.addEventListener('workspace-notification-channel', loadNotifications);
     api('/memories')
@@ -5694,11 +5930,6 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
       .catch(() => {});
     return () => window.removeEventListener('workspace-notification-channel', loadNotifications);
   }, []);
-  useEffect(() => {
-    if (tab === 'accounts' && accountProviders.length === 0) {
-      void refreshAccounts('opencode').catch((e: any) => setSettingsError(e.message));
-    }
-  }, [tab]);
   const [draft, setDraft] = useState({ workspace: w.name, name: w.user.name, password: '' });
   const [saved, setSaved] = useState({ workspace: w.name, name: w.user.name });
   const [saving, setSaving] = useState(false);
@@ -5750,7 +5981,7 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
     <Modal title="Workspace settings" onClose={close} className="workspace-settings-dialog">
       <div className="workspace-settings-layout">
         <nav className="settings-navigation" aria-label="Settings sections">
-          {['general', 'notifications', 'memory', 'accounts', 'schedules'].map((t) => (
+          {['general', ...(w.user.role === 'owner' ? ['voice'] : []), 'notifications', 'memory', 'accounts', 'schedules'].map((t) => (
             <button
               type="button"
               aria-current={tab === t ? 'page' : undefined}
@@ -5758,12 +5989,12 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
               key={t}
               onClick={() => setTab(t)}
             >
-              {t}
+              {t === 'accounts' ? 'providers' : t}
             </button>
           ))}
         </nav>
         <div className="settings-scroll">
-          {tab === 'general' ? (
+          {tab === 'voice' ? <VoiceSettings onSaved={() => void refresh().catch(fail)} /> : tab === 'general' ? (
             <form
               id="workspace-preferences"
               className="settings-general"
@@ -5873,6 +6104,7 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                   </p>
                 )}
               </section>
+              {w.user.role === 'owner' && <UpdatePreparationStatus />}
               <button
                 type="button"
                 className="quiet-button settings-signout"
@@ -5888,25 +6120,17 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                 }}
               >
                 <LogOut size={14} />
-                Sign out of Abralo
+                Sign out
               </button>
-              <p className="caption">
-                This signs you out of the workspace. It does not sign you out of connected AI
-                providers.
-              </p>
             </form>
           ) : tab === 'accounts' ? (
             <>
-              {['codex', 'claude', 'opencode'].map((h) => (
-                <ProviderLogin
-                  key={h}
-                  harness={h}
-                  provider={accountProviders.find((p) => p.harness === h)}
-                  checking={checkingAccounts}
-                  refresh={refreshAccounts}
-                  fail={setSettingsError}
-                />
-              ))}
+              <section className="settings-section provider-settings-intro">
+                <h3>Connect AI providers</h3>
+                <p>Connect Codex, Claude and OpenCode separately. You can keep more than one connected and choose which provider each employee uses when you add or edit them.</p>
+              </section>
+              {w.user.role === 'owner' && <ModelSettings />}
+              <ProviderSection fail={setSettingsError} />
             </>
           ) : tab === 'schedules' ? (
             <Schedules workspace={w} fail={setSettingsError} />
@@ -5925,7 +6149,10 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                         ? 'In-app alerts are on. Desktop alerts need browser permission on this device.'
                         : 'Alerts are off.'}
                   {notificationInfo.lastDelivery?.error &&
-                    !(notificationInfo.nativeAvailable && notificationInfo.lastDelivery.channel === 'none') &&
+                    !(
+                      notificationInfo.nativeAvailable &&
+                      notificationInfo.lastDelivery.channel === 'none'
+                    ) &&
                     ` Last attempt failed: ${notificationInfo.lastDelivery.error}`}
                 </p>
               )}
@@ -5945,24 +6172,29 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                 <Bell size={15} />
                 {prefs.enabled ? 'Turn off notifications' : 'Turn on notifications'}
               </button>
-              {prefs.enabled && notificationInfo && !notificationInfo.nativeAvailable &&
+              {prefs.enabled &&
+                notificationInfo &&
+                !notificationInfo.nativeAvailable &&
                 !notificationInfo.browserSubscriptions && (
-                <button className="secondary" onClick={async () => {
-                  try {
-                    if (!('Notification' in window) || !('serviceWorker' in navigator))
-                      throw new Error('This browser does not support desktop alerts.');
-                    const permission = await Notification.requestPermission();
-                    if (permission !== 'granted')
-                      throw new Error('Desktop alerts are blocked in this browser.');
-                    await ensureBrowserNotificationSubscription(notificationInfo.publicKey);
-                    setNotificationStatus('Browser desktop alerts connected.');
-                  } catch (e: any) {
-                    setNotificationStatus(e.message);
-                  }
-                }}>
-                  Allow browser desktop alerts
-                </button>
-              )}
+                  <button
+                    className="secondary"
+                    onClick={async () => {
+                      try {
+                        if (!('Notification' in window) || !('serviceWorker' in navigator))
+                          throw new Error('This browser does not support desktop alerts.');
+                        const permission = await Notification.requestPermission();
+                        if (permission !== 'granted')
+                          throw new Error('Desktop alerts are blocked in this browser.');
+                        await ensureBrowserNotificationSubscription(notificationInfo.publicKey);
+                        setNotificationStatus('Browser desktop alerts connected.');
+                      } catch (e: any) {
+                        setNotificationStatus(e.message);
+                      }
+                    }}
+                  >
+                    Allow browser desktop alerts
+                  </button>
+                )}
               {['sound', 'privatePreview'].map((key) => (
                 <label className="check-label" key={key}>
                   <input
@@ -5981,45 +6213,46 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
                   {key === 'sound' ? 'Play sounds where supported' : 'Hide message previews'}
                 </label>
               ))}
-              {prefs.enabled && !!(notificationInfo?.nativeAvailable || notificationInfo?.browserSubscriptions) && (
-                <button
-                  className="secondary"
-                  onClick={async () => {
-                    setNotificationStatus('Sending…');
-                    try {
-                      if (notificationInfo?.nativeAvailable) {
-                        const result = await api('/notifications/test', {}, 'POST');
-                        setNotificationStatus(result.message);
-                        return;
+              {prefs.enabled &&
+                !!(notificationInfo?.nativeAvailable || notificationInfo?.browserSubscriptions) && (
+                  <button
+                    className="secondary"
+                    onClick={async () => {
+                      setNotificationStatus('Sending…');
+                      try {
+                        if (notificationInfo?.nativeAvailable) {
+                          const result = await api('/notifications/test', {}, 'POST');
+                          setNotificationStatus(result.message);
+                          return;
+                        }
+                        if (!('Notification' in window) || Notification.permission !== 'granted')
+                          throw new Error(
+                            'Notifications are blocked for this browser. Enable them in site settings.',
+                          );
+                        const registration = await navigator.serviceWorker.getRegistration('/');
+                        if (!registration?.active)
+                          throw new Error(
+                            'The notification worker is not ready. Enable notifications again.',
+                          );
+                        await registration.showNotification('Chief of Staff', {
+                          body: 'A small ping. A working notification.',
+                          tag: 'workspace-test-' + Date.now(),
+                          icon: '/icon.svg',
+                          silent: !prefs.sound,
+                          data: {},
+                        });
+                        if (prefs.sound) messageSound();
+                        setNotificationStatus(
+                          'Sent to your browser. If no banner appears, check Windows notification settings and Do not disturb.',
+                        );
+                      } catch (e: any) {
+                        setNotificationStatus(e.message);
                       }
-                      if (!('Notification' in window) || Notification.permission !== 'granted')
-                        throw new Error(
-                          'Notifications are blocked for this browser. Enable them in site settings.',
-                        );
-                      const registration = await navigator.serviceWorker.getRegistration('/');
-                      if (!registration?.active)
-                        throw new Error(
-                          'The notification worker is not ready. Enable notifications again.',
-                        );
-                      await registration.showNotification('Chief of Staff', {
-                        body: 'A small ping. A working notification.',
-                        tag: 'workspace-test-' + Date.now(),
-                        icon: '/icon.svg',
-                        silent: !prefs.sound,
-                        data: {},
-                      });
-                      if (prefs.sound) messageSound();
-                      setNotificationStatus(
-                        'Sent to your browser. If no banner appears, check Windows notification settings and Do not disturb.',
-                      );
-                    } catch (e: any) {
-                      setNotificationStatus(e.message);
-                    }
-                  }}
-                >
-                  Send a test
-                </button>
-              )}
+                    }}
+                  >
+                    Send a test
+                  </button>
+                )}
               {notificationStatus && (
                 <p role="status" className="notification-result">
                   {notificationStatus}
@@ -6029,8 +6262,8 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
           ) : (
             <>
               <p className="quiet">
-                Agents carry workspace facts across rooms and use conversation notes only here.
-                Forget a note to remove it from future context.
+                Agents carry workspace facts across conversations and use conversation notes only
+                here. Forget a note to remove it from future context.
               </p>
               {memories.map((m) => (
                 <div className="inline-card" key={m.id}>
@@ -6080,7 +6313,7 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
           )}
         </div>
       </div>
-      <footer className="settings-footer">
+      {(tab !== 'voice' || dirty || closing) && <footer className="settings-footer">
         <div aria-live="polite">
           {settingsError ? (
             <span className="settings-error" role="alert">
@@ -6093,7 +6326,7 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
           ) : (
             status || 'All changes saved'
           )}
-          {tab !== 'general' && !dirty && (
+          {tab !== 'general' && tab !== 'voice' && !dirty && (
             <small>Preferences in this section save as you go.</small>
           )}
         </div>
@@ -6120,7 +6353,7 @@ function SettingsPanel({ workspace: w, onClose, refresh, onMemorySource, fail, i
         >
           {saving ? 'Saving…' : 'Save changes'}
         </button>
-      </footer>
+      </footer>}
     </Modal>
   );
 }

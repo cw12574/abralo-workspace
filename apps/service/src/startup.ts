@@ -19,9 +19,11 @@ export function startupInfo() {
     'Start Menu',
     'Programs',
     'Startup',
-    'Agent Workspace.lnk',
+    'Abralo.lnk',
   );
-  return { supported, enabled: supported && existsSync(link) };
+  // Installs before 1.0 used the old product name for the shortcut.
+  const legacy = join(link, '..', 'Agent Workspace.lnk');
+  return { supported, enabled: supported && (existsSync(link) || existsSync(legacy)) };
 }
 export async function setStartup(enabled: boolean) {
   if (!startupInfo().supported)
@@ -30,7 +32,7 @@ export async function setStartup(enabled: boolean) {
     enabled,
     script: join(process.env.LOCALAPPDATA!, 'Programs', 'AgentWorkspace', 'Background Workspace.ps1'),
   };
-  const code = `$data=[Console]::In.ReadToEnd()|ConvertFrom-Json; $link=Join-Path ([Environment]::GetFolderPath('Startup')) 'Agent Workspace.lnk'; if($data.enabled){$shell=New-Object -ComObject WScript.Shell;$s=$shell.CreateShortcut($link);$s.TargetPath=Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe';$s.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$data.script+'"';$s.WindowStyle=7;$s.Save()}elseif(Test-Path -LiteralPath $link){Remove-Item -LiteralPath $link}`;
+  const code = `$data=[Console]::In.ReadToEnd()|ConvertFrom-Json; $folder=[Environment]::GetFolderPath('Startup'); $link=Join-Path $folder 'Abralo.lnk'; $legacy=Join-Path $folder 'Agent Workspace.lnk'; if(Test-Path -LiteralPath $legacy){Remove-Item -LiteralPath $legacy}; if($data.enabled){$shell=New-Object -ComObject WScript.Shell;$s=$shell.CreateShortcut($link);$s.TargetPath=Join-Path $env:SystemRoot 'System32\\WindowsPowerShell\\v1.0\\powershell.exe';$s.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$data.script+'"';$s.WindowStyle=7;$s.Save()}elseif(Test-Path -LiteralPath $link){Remove-Item -LiteralPath $link}`;
   await new Promise<void>((resolve, reject) => {
     const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', code], {
       windowsHide: true,

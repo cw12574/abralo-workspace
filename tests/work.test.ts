@@ -45,7 +45,7 @@ it('keeps one work card per request and requires a check before completion', () 
   }
 });
 
-it('links work after a lead handoff without exposing a private goal in a shared room', () => {
+it('links work after a lead handoff without exposing a private goal to the previous lead', () => {
   const dir = mkdtempSync(join(tmpdir(), 'abralo-work-handoff-'));
   const store = new Store(dir);
   try {
@@ -88,9 +88,7 @@ it('links work after a lead handoff without exposing a private goal in a shared 
       message_id: uid(),
     });
     expect(() => work.start(run(first.id, first.dmId), input)).toThrow(/unavailable/);
-    expect(() => work.start(run(second.id, store.setting('workspace.team')), input)).toThrow(
-      /unavailable/,
-    );
+    expect(() => work.start(run(second.id, first.dmId), input)).toThrow(/unavailable/);
     expect(work.start(run(second.id, second.dmId), input).goalId).toBe(created.id);
   } finally {
     store.close();
