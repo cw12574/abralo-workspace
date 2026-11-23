@@ -220,7 +220,9 @@ export async function createApp(
   };
   const canonicalFolder = (path: string) => {
     try {
-      const canonical = realpathSync(path);
+      // Native resolution also expands Windows short names (RUNNER~1), so one folder
+      // has one stored path, matching how task worktrees resolve it.
+      const canonical = realpathSync.native(path);
       if (!statSync(canonical).isDirectory()) throw new Error();
       return canonical;
     } catch {
