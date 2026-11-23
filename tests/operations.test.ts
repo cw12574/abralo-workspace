@@ -38,7 +38,10 @@ describe('recovery and boundaries', () => {
     const session = s.newSession(owner.id);
     const { app } = await createApp(s);
     try {
-      for (let i = 0; i < 500; i++) s.emit('replay.test', null, { body: 'x'.repeat(5000) }, owner.id);
+      // One transaction for the fixture: the test is about replay size, not 500 separate disk syncs.
+      s.db.transaction(() => {
+        for (let i = 0; i < 500; i++) s.emit('replay.test', null, { body: 'x'.repeat(5000) }, owner.id);
+      })();
       const response = await app.inject({
         method: 'GET',
         url: '/api/events?after=0',

@@ -66,6 +66,8 @@ export async function createApp(
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   const authAttempts = new Map<string, { count: number; until: number }>();
+  // The Vite dev server's origin is trusted only when running from source, never in a build.
+  const devOrigin = import.meta.url.endsWith('.ts') ? 'http://127.0.0.1:5178' : undefined;
   app.decorateRequest('user', null);
   app.addHook('onRequest', async (req, reply) => {
     const configured = process.env.WORKSPACE_PUBLIC_URL;
@@ -84,7 +86,7 @@ export async function createApp(
       const u = new URL(origin);
       if (
         !allowed.has(u.hostname) ||
-        (u.host !== req.headers.host && origin !== configured && origin !== 'http://127.0.0.1:5178')
+        (u.host !== req.headers.host && origin !== configured && origin !== devOrigin)
       )
         throw new ApiError(403, 'Origin is not allowed.');
     }
