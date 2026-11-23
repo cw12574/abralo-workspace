@@ -1,7 +1,7 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Store, uid, now } from '../apps/service/src/store.js';
 import { createApp } from '../apps/service/src/app.js';
 
@@ -23,7 +23,9 @@ for (let i = 0; i < 20; i++)
     role: 'Team member',
     instructions: '',
   });
-const { app } = await createApp(store);
+const { app } = await createApp(store, {
+  staticRoot: resolve(process.env.SIDEBAR_STATIC_ROOT || 'dist/web'),
+});
 await app.listen({ host: '127.0.0.1', port: 0 });
 const origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -99,6 +101,105 @@ try {
   await expect(dialog).toHaveCount(0);
   report.checks.push('selection drag and dialog padding stay open; backdrop and Escape close');
   mkdirSync('evidence', { recursive: true });
+  const conversationUrl = page.url();
+  const destinations = sidebar.locator('.workspace-destinations');
+  const goalsLink = destinations.getByRole('button', { name: 'Goals', exact: true });
+  const briefingLink = destinations.getByRole('button', { name: 'Morning briefing', exact: true });
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 640 });
+    if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
+    await sidebar.locator('nav').evaluate(el => el.scrollTop = 0);
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(value => document.documentElement.dataset.theme = value, theme);
+      const firstEmployee = sidebar.locator('.employee-row').first();
+      const name = (await firstEmployee.locator('.employee-name').boundingBox())!;
+      for (const link of [goalsLink, briefingLink]) {
+        await expect(link.locator('.navigation-mark')).toBeVisible();
+        const label = (await link.locator('span').boundingBox())!;
+        expect(Math.abs(label.x - name.x)).toBeLessThan(1);
+        expect(await link.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(false);
+        await link.focus();
+        await expect(link).toBeFocused();
+        if (width === 390) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      }
+      const goalsBox = (await goalsLink.boundingBox())!;
+      const briefingBox = (await briefingLink.boundingBox())!;
+      expect(briefingBox.y - goalsBox.y - goalsBox.height).toBe(4);
+      const heading = (await sidebar.locator('.nav-title').first().boundingBox())!;
+      expect(heading.y - briefingBox.y - briefingBox.height).toBe(16);
+      await briefingLink.blur();
+      await page.mouse.move(600, 600);
+      await page.screenshot({ path: `evidence/sidebar-landmarks-${width}-${theme}.png` });
+      await sidebar.screenshot({ path: `evidence/sidebar-landmarks-detail-${width}-${theme}.png` });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await goalsLink.focus();
+  await page.keyboard.press('Enter');
+  await expect(goalsLink).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Goals', exact: true, level: 1 })).toBeVisible();
+  await briefingLink.click();
+  await expect(briefingLink).toHaveAttribute('aria-current', 'page');
+  await page.goto(conversationUrl);
+  await expect(sidebar.locator('.employee-row').first()).toBeVisible();
+  report.checks.push('pixel navigation marks: aligned names, 4px row gap, section spacing, keyboard activation, selected state and 44px mobile targets in both themes');
+  const orderedRows = sidebar.locator('.reorderable-employee');
+  const ids = () =>
+    orderedRows.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-employee-id')));
+  const originalOrder = await ids();
+  const initialConversation = new URL(page.url()).searchParams.get('conversation');
+  const movingRow = orderedRows.nth(2).locator('.employee-row');
+  const sourceBox = (await movingRow.boundingBox())!;
+  const destinationBox = (await orderedRows.first().boundingBox())!;
+  await page.mouse.move(sourceBox.x + 55, sourceBox.y + sourceBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(destinationBox.x + 55, destinationBox.y + destinationBox.height / 2, {
+    steps: 12,
+  });
+  await expect(sidebar.locator('.is-lifted')).toHaveCount(1);
+  await expect(sidebar.locator('.employee-drop-slot')).toBeVisible();
+  await page.screenshot({ path: 'evidence/sidebar-reorder-drag-light.png' });
+  await page.mouse.up();
+  const movedOrder = [originalOrder[2], ...originalOrder.slice(0, 2), ...originalOrder.slice(3)];
+  await expect.poll(ids).toEqual(movedOrder);
+  expect(new URL(page.url()).searchParams.get('conversation')).toBe(initialConversation);
+  await page.reload();
+  await expect.poll(ids).toEqual(movedOrder);
+  const topButton = orderedRows.first().locator('.employee-row');
+  await topButton.focus();
+  await page.keyboard.press('Alt+ArrowDown');
+  await page.keyboard.press('Alt+ArrowDown');
+  await expect.poll(ids).toEqual(originalOrder);
+  await expect(orderedRows.nth(2).locator('.employee-row')).toBeFocused();
+  const cancelBox = (await orderedRows.nth(1).boundingBox())!;
+  await page.mouse.move(cancelBox.x + 55, cancelBox.y + 15);
+  await page.mouse.down();
+  await page.mouse.move(cancelBox.x + 55, cancelBox.y + 100, { steps: 10 });
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await expect.poll(ids).toEqual(originalOrder);
+  await expect(sidebar.locator('.is-lifted, .employee-drop-slot')).toHaveCount(0);
+  const outsideBox = (await orderedRows.nth(1).boundingBox())!;
+  await page.mouse.move(outsideBox.x + 55, outsideBox.y + 15);
+  await page.mouse.down();
+  await page.mouse.move(600, outsideBox.y + 90, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(ids).toEqual(originalOrder);
+  const scrollBox = (await orderedRows.first().boundingBox())!;
+  const navBox = (await sidebar.locator('nav').boundingBox())!;
+  await page.mouse.move(scrollBox.x + 55, scrollBox.y + 15);
+  await page.mouse.down();
+  await page.mouse.move(scrollBox.x + 55, navBox.y + navBox.height - 5, { steps: 15 });
+  await expect
+    .poll(() => sidebar.locator('nav').evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(40);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await orderedRows.first().scrollIntoViewIfNeeded();
+  await expect.poll(ids).toEqual(originalOrder);
+  report.checks.push(
+    'pointer reorder with insertion slot, no accidental navigation, persisted order, keyboard movement with retained focus, Escape/outside cancellation and edge scrolling',
+  );
   const agentRow = sidebar.locator('.employee-row').first();
   const personRow = sidebar.locator('.employee-row').last();
   await expect(agentRow.locator('.agent-avatar.is-working')).toBeVisible();
@@ -113,7 +214,9 @@ try {
   await expect(agentRow).toHaveAccessibleDescription(
     /Working · Unread activity · Next scheduled run/,
   );
-  await expect(agentRows.nth(1).locator('.employee-row')).toHaveAccessibleDescription('Idle');
+  await expect(agentRows.nth(1).locator('.employee-row')).toHaveAccessibleDescription(
+    /^Idle Drag to reorder/,
+  );
   await expect(agentRow.locator('.employee-name')).toHaveCSS('font-weight', '600');
   await expect(sidebar.locator('.presence-square, .agent-presence')).toHaveCount(0);
   const animation = () =>
@@ -199,6 +302,27 @@ try {
   }
   await personRow.scrollIntoViewIfNeeded();
   await expect(personRow.locator('.member-kind')).toBeVisible();
+  await orderedRows.first().scrollIntoViewIfNeeded();
+  const touchSource = (await orderedRows.first().locator('.agent-avatar').boundingBox())!;
+  const touchTarget = (await orderedRows.nth(2).boundingBox())!;
+  const touch = await page.context().newCDPSession(page);
+  await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: touchSource.x + 12, y: touchSource.y + 12 }],
+  });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: touchSource.x + 12, y: touchTarget.y + touchTarget.height / 2 }],
+  });
+  await expect(sidebar.locator('.is-lifted')).toHaveCount(1);
+  await page.screenshot({ path: 'evidence/sidebar-reorder-touch-dark.png' });
+  await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await expect
+    .poll(ids)
+    .toEqual([...originalOrder.slice(1, 3), originalOrder[0], ...originalOrder.slice(3)]);
+  await touch.detach();
+  report.checks.push('touch portrait drag reorders on the mobile sidebar');
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))
     throw Error('Mobile overflow');
   report.checks.push('mobile resizer hidden, no page overflow');

@@ -1,0 +1,22 @@
+﻿.model-notice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  margin-block: var(--space-2);
+  border-radius: 8px;
+  background: var(--tint);
+  color: var(--accent);
+  font-size: 12px;
+}
+.model-notice-open { text-align: left; justify-content: flex-start; padding: var(--space-1); }
+.model-notice small { grid-column: 1 / -1; }
+.model-settings { display: flex; flex-direction: column; gap: var(--space-4); }
+.model-settings > * { margin-block: 0; }
+.model-new-list { padding: var(--space-3); border-radius: 8px; background: var(--tint); }
+.model-new-list ul { padding-inline-start: var(--space-5); }
+.model-settings .check-label { display: flex; gap: var(--space-2); align-items: flex-start; }
+.model-settings input[type='checkbox'] { flex: 0 0 16px; width: 16px; height: 16px; min-height: 16px; margin: 2px 0 0; }
+.settings-section.model-settings :is(h3, h4, p, label, ul) { margin: 0; }
+.model-settings .check-label { flex-direction: row; line-height: 1.5; }

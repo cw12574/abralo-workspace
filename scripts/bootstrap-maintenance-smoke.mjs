@@ -14,7 +14,10 @@ const installRoot = join(fixture, 'program'), data = join(fixture, 'data');
 mkdirSync(join(installRoot, 'versions'), { recursive: true });
 function copyVersion(source, name) {
   const target = join(installRoot, 'versions', name); mkdirSync(target);
-  for (const entry of ['dist', 'scripts', 'runtime', 'package.json', 'release.json']) cpSync(join(source, entry), join(target, entry), { recursive: true });
+  for (const entry of ['dist', 'scripts', 'package.json', 'release.json']) cpSync(join(source, entry), join(target, entry), { recursive: true });
+  // This service-only fixture does not need three copies of bundled Chromium.
+  mkdirSync(join(target, 'runtime'));
+  copyFileSync(join(source, 'runtime/node.exe'), join(target, 'runtime/node.exe'));
   symlinkSync(join(source, 'node_modules'), join(target, 'node_modules'), 'junction');
   return target;
 }
@@ -63,6 +66,11 @@ try {
   assert.equal(read(first.jobFile).phase, 'succeeded', JSON.stringify(read(first.jobFile)));
   assert(!alive(service.pid)); assert.equal((await health(port)).buildId, 'new');
   assert.equal(readFileSync(join(installRoot, 'current.txt'), 'utf8').trim(), candidate);
+  for (const name of ['Open Workspace.ps1', 'Background Workspace.ps1']) {
+    const launcher = readFileSync(join(installRoot, name), 'utf8');
+    assert(launcher.includes(`$env:WORKSPACE_DATA_DIR = '${data.replaceAll("'", "''")}'`));
+    assert(launcher.includes(`$env:WORKSPACE_PORT = '${port}'`));
+  }
   const saved = new Database(read(first.jobFile).backup, { readonly: true });
   assert.equal(saved.pragma('quick_check', { simple: true }), 'ok');
   assert.equal(saved.prepare('SELECT text FROM messages WHERE id=?').get(message.id).text, message.text); saved.close();

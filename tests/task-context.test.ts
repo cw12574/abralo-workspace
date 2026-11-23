@@ -45,7 +45,7 @@ it('uses the granted folder when a local git repository has no first commit', as
   expect(spawnSync('git', ['-C', root, 'init', '--quiet']).status).toBe(0);
   const db = store();
   const folder = await taskFolder(db, { cwd: root }, 'unborn-repository-context');
-  expect(folder.replace(/\\/g, '/')).toBe(git(root, 'rev-parse', '--show-toplevel').replace(/\\/g, '/'));
+  expect(folder.replace(/\\/g, '/')).toBe(root.replace(/\\/g, '/'));
   expect(db.setting('worktree.unborn-repository-context')).toBeNull();
 }, 15000);
 

@@ -21,7 +21,10 @@ export function useConversationViewport(
     const element = scroll.current;
     if (!element || !ready) return;
     reading.current = null;
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
     const rememberReading = () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, 150);
       if (following.current) {
         reading.current = null;
         return;
@@ -47,8 +50,7 @@ export function useConversationViewport(
     // Opening intent owns position; cached measurements only speed up rendering.
     if (following.current)
       element.scrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
-    return () => {
-      element.removeEventListener('scroll', rememberReading);
+    const save = () => {
       const top = element.getBoundingClientRect().top;
       const anchor = [...element.querySelectorAll<HTMLElement>('[data-message-id]')].find(
         (node) => node.getBoundingClientRect().bottom > top,
@@ -65,6 +67,17 @@ export function useConversationViewport(
         height: element.clientHeight,
         measurements: latest.current.virtual.takeSnapshot(),
       });
+    };
+    const leaving = () => {
+      save();
+      conversationCache.flush();
+    };
+    window.addEventListener('pagehide', leaving);
+    return () => {
+      clearTimeout(saveTimer);
+      element.removeEventListener('scroll', rememberReading);
+      window.removeEventListener('pagehide', leaving);
+      save();
     };
   }, [view, ready]);
   useLayoutEffect(() => {

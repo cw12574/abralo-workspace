@@ -1,22 +1,19 @@
-# Abralo — lasting goals for your AI team
+# Abralo
 
-**Give your AI team a goal you can pick up tomorrow.**
+**Your AI company, on your own computer.**
 
-Abralo is an open-source, local workspace for people and coding agents. Keep an outcome, its current position, decisions and next step together across sessions. A named lead maintains the goal; substantial tasks record checks and inspectable results.
+Abralo is an open-source workspace where you and a team of AI employees work together. Give them lasting goals, talk to them one to one, and start the day with a briefing from your Chief of Staff. Everything runs locally: your conversations, goals and files stay on your machine, and model requests go only to the provider you sign in with.
 
-1. Tell your agent what you want to achieve and ask it to keep a lasting goal.
-2. Agree on success and a useful next step. Ask the agent to do that work and show its checks.
-3. Reopen Abralo, review the saved progress and continue the same project.
+- **A team of AI employees.** Each has a name, a role and its own conversation. Your Chief of Staff organises the team and hands out work.
+- **Lasting goals.** Each goal has a lead, a definition of success and a next step. Work continues across sessions, and a goal only closes after an independent check against its success criteria.
+- **Morning briefing.** Talk or type with your Chief of Staff to see what moved, agree priorities and assign the day's goals.
+- **Your own agents.** Employees run on Claude Code, Codex or OpenCode, signed in with your own account. Abralo never uses a model API you did not choose.
+- **Connected tools with approvals.** Connect services such as Stripe, Railway and Gmail. Any change to the outside world waits for your approval.
+- **Careful with your work.** Repository tasks run in their own Git worktree, agents get an isolated browser, and desktop control needs your explicit, time-limited permission.
 
-Work starts from your requests or an explicit schedule. Lasting goals do not promise continuous background execution or guaranteed outcomes. Ordinary conversation remains available while work runs.
+Prefer not to run it yourself? [Abralo Cloud](https://abralo.com) hosts it for you.
 
-**[Website and assisted trial](https://abralo.com/#try)** · **[Release status and older previews](https://github.com/cw12574/abralo-workspace/releases)** · **[Goals walkthrough](docs/preview/GOALS-TRIAL.md)** · **[Setup guide](docs/preview/START-HERE.md)**
-
-## Durable-goals release candidate
-
-Version `0.2.0-preview` adds lasting goals, task checks, shared browser tools and durable connection actions. Windows x64, Linux x64, macOS Intel and macOS Apple silicon are build targets. Until a release is published with matching assets and checksums, a CI build is a candidate, not a supported download. The older `0.1.3-preview` download does not include durable goals.
-
-Use disposable, non-sensitive files and your own supported provider account for initial trials. Packages are unsigned; macOS notarization and interactive platform acceptance remain separate checks. Model requests go to your selected provider. See [release notes](docs/preview/RELEASE-NOTES.md) and [data durability requirements](docs/preview/DATA-DURABILITY.md).
+**[Download](https://github.com/cw12574/abralo-workspace/releases/latest)** · **[Getting started](docs/preview/START-HERE.md)** · **[Goals guide](docs/preview/GOALS-TRIAL.md)** · **[Morning briefing](docs/preview/MORNING-BRIEFING.md)** · **[Privacy and access](docs/preview/ACCESS-AND-PRIVACY.md)**
 
 This source tree is licensed under [Apache-2.0](LICENSE).
 
@@ -46,7 +43,7 @@ Notifications are on by default. The installed, single-user Windows host sends d
 
 ## Packaging and development
 
-All direct dependency versions and the lockfile are pinned. `pnpm build` emits the web bundle and service modules. No Docker, Redis, external vector database or Electron runtime is required. Desktop packages include Chromium for agent browser sessions. Native coding harnesses and Chromium dominate the installation's disk size; the service's measured memory is not a total-agent memory claim.
+All direct dependency versions and the lockfile are pinned. `pnpm build` emits the web bundle and service modules. No Docker, Redis, external vector database or Electron runtime is required. Windows packages include Chromium for agent browser sessions. Native coding harnesses and Chromium dominate the installation's disk size; the service's measured memory is not a total-agent memory claim.
 
 Set `WORKSPACE_PNPM_CLI` to pnpm's JavaScript entry point and run `node scripts/package.mjs NEW_OUTPUT_DIRECTORY`. Packaging uses a hoisted production dependency tree for portable Windows copies, includes the pinned Chromium browser, and removes redundant OpenCode binary copies. On Windows run `scripts/install-windows.ps1 -ReleaseDirectory OUTPUT`. On macOS/Linux run the packaged `runtime/node scripts/install-posix.mjs`; those installers still require platform acceptance testing.
 

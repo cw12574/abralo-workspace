@@ -22,6 +22,7 @@ export const EmployeeInput = z.object({
   cwd: z.string().max(2000).default(''),
   instructions: z.string().max(16000).default(''),
   permissionMode: z.enum(['auto', 'ask', 'bypass']).default('auto'),
+  canDelegate: z.boolean().default(false),
 });
 export type RunState =
   | 'accepted'
@@ -70,6 +71,7 @@ export interface Employee {
   cwd: string;
   instructions: string;
   permissionMode?: 'auto' | 'ask' | 'bypass';
+  canDelegate?: boolean;
   latestWork?: { conversationId: string; threadId: string | null; state: string; name: string };
   working?: boolean;
   attentionUnread?: number;
@@ -83,11 +85,10 @@ export interface Employee {
 export interface Conversation {
   id: string;
   name: string;
-  kind: 'dm' | 'channel';
+  kind: 'dm' | 'human_dm';
   employeeId: string | null;
   createdAt: string;
   unread?: number;
-  archivedAt?: string | null;
 }
 export interface Message {
   id: string;
@@ -107,17 +108,26 @@ export interface Message {
   runId: string | null;
   replyCount?: number;
   activity?: Activity[];
+  /** Shown version of a message that was edited and resent, starting at 1. */
+  version?: number;
+  versionCount?: number;
+  /** The message went to an agent, so editing can resend it. */
+  resendable?: boolean;
 }
 export interface Activity {
   id: string;
   type: string;
   title: string;
+  /** A short description of what the step did, derived from its input. */
+  label?: string;
   detail?: string;
   hasDetail?: boolean;
   state?: string;
   time: string;
   updatedAt?: string;
   url?: string;
+  /** Length of the reply text when this step began; places the step within the text. */
+  textOffset?: number;
 }
 export interface WorkspaceEvent {
   cursor: number;
@@ -135,7 +145,11 @@ export interface ProviderInfo {
   authenticated: boolean | null;
   version: string;
   detail: string;
-  models?: { id: string; name: string }[];
+  models?: { id: string; name: string; isDefault?: boolean; upgrade?: string; aliases?: string[] }[];
+  /** Hashed native account identity; never a credential. */
+  accountKey?: string;
+  catalogueError?: string;
+  checkedAt?: number;
   limits?: unknown;
 }
 export interface AdapterEvent {

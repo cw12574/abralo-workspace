@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Store, uid } from '../apps/service/src/store.js';
 import { createApp } from '../apps/service/src/app.js';
 
-it('keeps workspace facts visible across rooms and editable from settings', async () => {
+it('keeps workspace facts visible across employee conversations and editable from settings', async () => {
   const s = new Store(mkdtempSync(join(tmpdir(), 'workspace-memory-')));
   const { app } = await createApp(s);
   try {

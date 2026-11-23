@@ -1,3 +1,4 @@
-Railway icon: Simple Icons, https://github.com/simple-icons/simple-icons/blob/develop/icons/railway.svg
-Simple Icons assets are CC0-1.0; the Railway name and logo remain their owner's trademarks.
-Vendored SVG, no runtime icon service or tracking request.
+Service and provider icons: Simple Icons (https://github.com/simple-icons/simple-icons), v16.38.0.
+Files: railway.svg, stripe.svg, resend.svg, gmail.svg, openai.svg, claude.svg, github.svg.
+Simple Icons assets are CC0-1.0; each name and logo remains its owner's trademark.
+Vendored SVGs, no runtime icon service or tracking request.

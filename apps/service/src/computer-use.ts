@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { execFileAsync } from '../../../packages/host/src/index.js';
@@ -69,9 +69,7 @@ export class ComputerUse {
     this.assertRun(run);
     let session = this.browsers.get(run.id);
     if (!session) {
-      const manifestPath = join(process.cwd(), 'release.json');
-      const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : {};
-      const bundled = manifest.chromiumExecutable ? join(process.cwd(), manifest.chromiumExecutable) : process.platform === 'win32'
+      const bundled = process.platform === 'win32'
         ? join(process.cwd(), 'runtime', 'chromium', 'chrome-win64', 'chrome.exe')
         : '';
       const browser = await chromium.launch({

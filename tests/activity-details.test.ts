@@ -73,13 +73,36 @@ afterEach(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+it('signals expired replay explicitly and continues delivering new events', async () => {
+  const head = store.replay.head();
+  store.set('events.floor', head);
+  const origin = await app.listen({ host: '127.0.0.1', port: 0 });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const result = await fetch(`${origin}/api/events?after=0`, { headers, signal: controller.signal });
+    const reader = result.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain('"type":"workspace.resync"');
+    expect(first).toContain('"reason":"history_expired"');
+    expect(first).toContain(`id: ${head}\n`);
+    expect(first).not.toContain('Large tool result');
+    const e = store.emit('workspace.changed', agent.dmId, { verified: true });
+    const next = new TextDecoder().decode((await reader.read()).value);
+    expect(next).toContain(`id: ${e.cursor}\n`);
+    expect(next).toContain('"verified":true');
+    await reader.cancel();
+  } finally { clearTimeout(timeout); controller.abort(); }
+});
+
 it('serves small history summaries and fetches the full output only by step', async () => {
   for (const url of [
     `/api/conversations/${agent.dmId}/messages?activity=summary`,
-    `/api/conversations/${agent.dmId}/messages?agentView=1&activity=summary`,
+    `/api/conversations/${agent.dmId}/messages?activity=summary`,
   ]) {
     const result = await app.inject({ url, headers });
     expect(result.statusCode).toBe(200);
+    expect(result.json().cursor).toBe(store.replay.head());
     expect(result.body.length).toBeLessThan(10000);
     const message = result.json().messages.find((m: any) => m.id === response.id);
     expect(message).toMatchObject({

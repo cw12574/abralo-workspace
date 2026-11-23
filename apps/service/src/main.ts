@@ -3,8 +3,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Store } from './store.js';
 import { createApp } from './app.js';
-const store = new Store(dataDirectory());
+import { prepareStartupCompaction } from './maintenance-startup.js';
+const data = dataDirectory();
+await prepareStartupCompaction(process.cwd(), data, process.env.WORKSPACE_INSTALL_ROOT, process.env.WORKSPACE_MAINTENANCE_JOB);
+const store = new Store(data);
 let exiting = false;
+let listening = false;
 const shutdown = async (): Promise<void> => {
   if (exiting) return;
   exiting = true;
@@ -15,8 +19,9 @@ const shutdown = async (): Promise<void> => {
   catch (error) { console.error('Workspace shutdown failed:', error); process.exit(1); }
 };
 const { app, supervisor } = await createApp(store, {
+  providerUpdates: true,
   maintenance: process.env.WORKSPACE_INSTALL_ROOT ? {
-    root: process.cwd(), installRoot: process.env.WORKSPACE_INSTALL_ROOT, shutdown,
+    root: process.cwd(), installRoot: process.env.WORKSPACE_INSTALL_ROOT, shutdown, isReady: () => listening,
   } : undefined,
 });
 const host = process.env.WORKSPACE_HOST || '127.0.0.1';
@@ -31,6 +36,7 @@ if (
 const port = Number(process.env.WORKSPACE_PORT || 4317);
 const address = await app.listen({ host, port });
 supervisor.origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
+listening = true;
 writeFileSync(
   join(store.dir, 'runtime.json'),
   JSON.stringify({ pid: process.pid, port: (app.server.address() as any).port, version: '0.1.0' }),

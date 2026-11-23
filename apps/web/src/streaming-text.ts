@@ -1,24 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  StreamingTextPacer,
+  REVEAL_INTERVAL,
+  MAX_BUFFERED_CHARS,
+  revealEnd,
+} from './streaming-text-pacer';
 
-export const REVEAL_INTERVAL = 55;
 export const REVEAL_FADE = 160;
 
-// Release complete words together, but never hold a long word, URL or CJK text
-// indefinitely. Large bursts catch up in one update rather than forming a queue.
-export function revealEnd(text: string, start: number, flush: boolean) {
-  if (flush) return text.length;
-  const tail = text.slice(start);
-  const complete = tail.match(/^[\s\S]*\s/);
-  return start + (complete?.[0].length || 0);
-}
-
 type Reveal = { start: number; end: number; at: number };
+const NO_REVEALS: Reveal[] = [];
 
 export function useStreamingText(text: string, streaming: boolean) {
   const [reduced, setReduced] = useState(
     () => matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
-  const [frame, setFrame] = useState(() => ({ text, reveals: [] as Reveal[] }));
+  const [frame, setFrame] = useState(() => ({ text, reveals: NO_REVEALS }));
+  const pacer = useRef(new StreamingTextPacer(text.length));
   const latest = useRef({ text, streaming });
   latest.current = { text, streaming };
   const current = useRef(frame);
@@ -35,8 +33,8 @@ export function useStreamingText(text: string, streaming: boolean) {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let heldSince = 0;
     const tick = () => {
+      clearTimeout(timer);
       timer = undefined;
       const target = latest.current;
       const previous = current.current;
@@ -48,18 +46,16 @@ export function useStreamingText(text: string, streaming: boolean) {
         document.hidden ||
         !target.text.startsWith(previous.text)
       ) {
-        next = { text: target.text, reveals: [] };
+        pacer.current.reset(target.text.length);
+        next = { text: target.text, reveals: NO_REVEALS };
       } else {
-        if (target.text.length > previous.text.length && !heldSince) heldSince = time;
-        const end = revealEnd(
-          target.text,
-          previous.text.length,
-          !!heldSince && time - heldSince >= REVEAL_INTERVAL,
-        );
+        pacer.current.receive(target.text.length, time);
+        const end = revealEnd(target.text, previous.text.length, pacer.current.position(time));
         const reveals = previous.reveals.filter((item) => time - item.at < REVEAL_FADE);
-        if (end > previous.text.length) {
+        if (end - previous.text.length > MAX_BUFFERED_CHARS) {
+          reveals.length = 0;
+        } else if (end > previous.text.length) {
           reveals.push({ start: previous.text.length, end, at: time });
-          heldSince = 0;
         }
         next = { text: target.text.slice(0, end), reveals };
       }
@@ -71,24 +67,33 @@ export function useStreamingText(text: string, streaming: boolean) {
         current.current = next;
         setFrame(next);
       }
-      if (target.streaming && !reduced && (next.text !== target.text || next.reveals.length))
+      if (
+        target.streaming &&
+        !reduced &&
+        !document.hidden &&
+        (next.text !== target.text || next.reveals.length)
+      )
         timer = setTimeout(tick, REVEAL_INTERVAL);
     };
     wake.current = () => {
       if (timer === undefined) timer = setTimeout(tick, REVEAL_INTERVAL);
     };
+    // Flush when leaving the tab; returning never replays an animation backlog.
+    document.addEventListener('visibilitychange', tick);
     tick();
     return () => {
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', tick);
       wake.current = () => {};
     };
   }, [streaming, reduced]);
   useEffect(() => {
+    pacer.current.receive(text.length, performance.now());
     if (text !== current.current.text) wake.current();
   }, [text]);
 
   // Completion, corrections and reduced motion must never wait for a timer.
-  if (!streaming || reduced || !text.startsWith(frame.text)) return { text, reveals: [] };
+  if (!streaming || reduced || !text.startsWith(frame.text)) return { text, reveals: NO_REVEALS };
   return frame;
 }
 

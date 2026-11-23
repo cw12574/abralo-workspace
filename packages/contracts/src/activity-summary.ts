@@ -1,4 +1,5 @@
 import type { Activity, Message, WorkspaceEvent } from './index.js';
+import { activityLabel } from './activity-label.js';
 
 // Only display metadata belongs in history snapshots or their event journals.
 export function activitySummary(activity: Activity): Activity {
@@ -6,10 +7,13 @@ export function activitySummary(activity: Activity): Activity {
     id: activity.id,
     type: activity.type,
     title: activity.title,
+    // Worked out while the detail is still here; summaries drop the detail.
+    label: activity.label ?? activityLabel(activity),
     state: activity.state,
     time: activity.time,
     updatedAt: activity.updatedAt,
     url: activity.url,
+    textOffset: activity.textOffset,
     hasDetail: !!(activity.hasDetail || activity.detail),
   };
 }

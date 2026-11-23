@@ -130,7 +130,7 @@ if (mode === '--prepare') {
     atomicText(join(job.installRoot, 'launcher.mjs'), readFileSync(join(root, 'scripts/installed-launcher.mjs'), 'utf8'));
     const quote = text => "'" + text.replaceAll("'", "''") + "'";
     for (const [name, background] of [['Open Workspace.ps1', false], ['Background Workspace.ps1', true]])
-      atomicText(join(job.installRoot, name), `Start-Process -FilePath ${quote(job.candidate.node)} -ArgumentList @(${quote('"' + join(job.installRoot, 'launcher.mjs') + '"')}${background ? ",'--background'" : ''}) -WindowStyle Hidden\r\n`);
+      atomicText(join(job.installRoot, name), `$env:WORKSPACE_DATA_DIR = ${quote(job.data)}\r\n$env:WORKSPACE_PORT = ${quote(String(job.port))}\r\nStart-Process -FilePath ${quote(job.candidate.node)} -ArgumentList @(${quote('"' + join(job.installRoot, 'launcher.mjs') + '"')}${background ? ",'--background'" : ''}) -WindowStyle Hidden\r\n`);
     atomicText(join(job.installRoot, 'current.txt'), root + '\n');
     save({ phase: 'succeeded' }); unlock();
     console.log('Installed and verified ' + job.candidate.buildId);

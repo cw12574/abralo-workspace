@@ -1,21 +1,57 @@
 // Shared with the detached helper. Keep this module free of app/DB dependencies.
 import { createHash } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
 import {
   closeSync,
   existsSync,
   fsyncSync,
   openSync,
   readFileSync,
+  readSync,
   readdirSync,
   realpathSync,
   renameSync,
   statSync,
+  statfsSync,
   lstatSync,
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname, join, relative, isAbsolute } from 'node:path';
 
 export const terminalMaintenance = new Set(['succeeded', 'rolled-back', 'failed']);
+export function freeDiskBytes(path: string) {
+  const disk = statfsSync(path);
+  return disk.bavail * disk.bsize;
+}
+export function windowsBackgroundLauncher(data: string, port: number) {
+  const quote = (text: string) => "'" + text.replaceAll("'", "''") + "'";
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `$env:WORKSPACE_DATA_DIR = ${quote(data)}`,
+    `$env:WORKSPACE_PORT = ${quote(String(port))}`,
+    "$selected = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'current.txt') -Raw).Trim()",
+    "$runtime = Join-Path $selected 'runtime\\node.exe'",
+    "$launcher = Join-Path $PSScriptRoot 'launcher.mjs'",
+    "Start-Process -FilePath $runtime -ArgumentList @(('\"' + $launcher + '\"'),'--background') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden",
+    '',
+  ].join('\r\n');
+}
+export function refreshInstalledLauncher(
+  root: string,
+  installRoot: string,
+  data: string,
+  port: number,
+) {
+  atomicText(
+    join(installRoot, 'launcher.mjs'),
+    readFileSync(join(root, 'scripts/installed-launcher.mjs'), 'utf8'),
+  );
+  if (process.platform === 'win32')
+    atomicText(
+      join(installRoot, 'Background Workspace.ps1'),
+      windowsBackgroundLauncher(data, port),
+    );
+}
 export function readJson(path: string): any {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
@@ -94,6 +130,8 @@ export function versionInfo(root: string, installRoot: string) {
   if (!existsSync(join(root, 'node_modules')))
     throw new Error('Prepared release dependencies are missing.');
   const digest = createHash('sha256');
+  // Reuse one bounded buffer, including for Chromium's hundreds-of-MiB DLL.
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
   const walk = (path: string) => {
     if (lstatSync(path).isSymbolicLink())
       throw new Error('Release code must not contain symbolic links.');
@@ -104,7 +142,14 @@ export function versionInfo(root: string, installRoot: string) {
       for (const name of readdirSync(path).sort()) walk(join(path, name));
     } else {
       digest.update(rel.replaceAll('\\', '/'));
-      digest.update(readFileSync(path));
+      const fd = openSync(path, 'r');
+      try {
+        let bytes: number;
+        while ((bytes = readSync(fd, buffer, 0, buffer.length, null)) > 0)
+          digest.update(buffer.subarray(0, bytes));
+      } finally {
+        closeSync(fd);
+      }
     }
   };
   for (const part of ['dist', 'scripts', 'package.json', 'release.json', 'runtime'])
@@ -116,6 +161,43 @@ export function versionInfo(root: string, installRoot: string) {
     dataCompatibility: release.dataCompatibility,
     fingerprint: digest.digest('hex'),
   };
+}
+// Serialize verification workers: concurrent approvals must not multiply memory
+// or disk pressure. Never run recursive hashing on the service's event loop.
+let verificationTail: Promise<unknown> = Promise.resolve();
+export function versionInfoAsync(
+  root: string,
+  installRoot: string,
+): Promise<ReturnType<typeof versionInfo>> {
+  const task = verificationTail.then(
+    () =>
+      new Promise<ReturnType<typeof versionInfo>>((resolve, reject) => {
+        const worker = new Worker(
+          `
+      const { parentPort, workerData } = require('node:worker_threads');
+      import(workerData.module).then(({ versionInfo }) => {
+        parentPort.postMessage(versionInfo(workerData.root, workerData.installRoot));
+      }).catch(error => { throw error; });
+    `,
+          {
+            eval: true,
+            workerData: { module: import.meta.url, root, installRoot },
+            resourceLimits: { maxOldGenerationSizeMb: 64 },
+          },
+        );
+        let received = false;
+        worker.once('message', (value) => {
+          received = true;
+          resolve(value);
+        });
+        worker.once('error', reject);
+        worker.once('exit', (code) => {
+          if (!received) reject(new Error(`Verification helper exited (${code}).`));
+        });
+      }),
+  );
+  verificationTail = task.catch(() => {});
+  return task;
 }
 export async function health(port: number): Promise<any> {
   try {

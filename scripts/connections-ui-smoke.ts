@@ -1,10 +1,12 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { Store, uid } from '../apps/service/src/store.js';
 import { createApp } from '../apps/service/src/app.js';
 
+// This temporary test workspace is independent of the installed app's restart handoff.
+delete process.env.WORKSPACE_MAINTENANCE_JOB;
 const store = new Store(mkdtempSync(join(tmpdir(), 'abralo-connections-ui-')));
 const user = store.createOwner('Morgan');
 const employee = store.createEmployee(user.id, {
@@ -16,7 +18,9 @@ const employee = store.createEmployee(user.id, {
   instructions: '',
 });
 store.set('workspace.onboarded', true);
-const { app, supervisor, broker } = await createApp(store);
+const { app, supervisor, broker } = await createApp(store, {
+  staticRoot: resolve(process.env.CONNECTIONS_STATIC_ROOT || 'dist/web'),
+});
 supervisor.infos = async () => [];
 const connectionId = uid();
 store.run(
@@ -35,6 +39,8 @@ const run = {
   conversation_id: employee.dmId,
   message_id: uid(),
 };
+// This check covers the opt-in mode where the owner is asked before sharing.
+store.set('connections.askBeforeSharing.' + user.id, true);
 broker.request(run, 'railway', 'write');
 store.addMessage(
   employee.dmId,
@@ -64,7 +70,7 @@ try {
   const card = page.locator('.connection-row');
   await expect(card).toHaveCount(1);
   await expect(card.getByRole('button', { name: /^Connect/ })).toHaveCount(0);
-  await card.getByRole('button', { name: /Use existing connection/ }).click();
+  await card.getByRole('button', { name: /Share your Railway account/ }).click();
   await expect(card).toHaveCount(0);
   const action = broker.actions.request(run, connectionId, 'create_service', {
     project: 'Abralo',
@@ -102,11 +108,56 @@ try {
   await expect(actionCard).toContainText('Completed');
   expect(executions).toBe(1);
   expect(broker.actions.get(action.actionId, user.id).state).toBe('succeeded');
+  const dismiss = actionCard.getByRole('button', { name: 'Dismiss Railway action' });
+  await page.route('**/api/connection-actions/*/dismissal', route => route.fulfill({
+    status: 503, json: { error: 'Could not save dismissal. Try again.' },
+  }), { times: 1 });
+  await dismiss.click();
+  await expect(actionCard.getByRole('alert')).toContainText('Could not save dismissal');
+  await expect(dismiss).toBeEnabled();
+  await dismiss.click();
+  await expect(actionCard).toHaveCount(0);
+  await page.reload();
+  await expect(actionCard).toHaveCount(0);
+  // The dismissed card leaves a note in its own place in the timeline, not at the bottom.
+  const note = page.getByRole('button', { name: 'Show dismissed Railway action' });
+  await expect(note).toHaveCount(1);
+  expect(
+    await note.evaluate((el) => !!el.closest('.inline-actions') || !el.nextElementSibling),
+  ).toBe(true);
+  await note.click();
+  await expect(actionCard).toContainText('Completed');
+  await actionCard.getByRole('button', { name: 'Restore Railway action' }).click();
+  await expect(dismiss).toBeVisible();
+  expect(executions).toBe(1);
+  store.run("UPDATE connection_actions SET state='failed' WHERE id=?", action.actionId);
+  broker.actions.changed(broker.actions.get(action.actionId, user.id));
+  await expect(actionCard).toContainText('Could not complete');
+  await dismiss.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'evidence/connections-dismiss-dark.png', fullPage: true });
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
+  await page.screenshot({ path: 'evidence/connections-dismiss-light.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dismiss.scrollIntoViewIfNeeded();
+  await expect(dismiss).toBeInViewport();
+  await page.screenshot({ path: 'evidence/connections-dismiss-mobile-light.png', fullPage: true });
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await page.getByRole('button', { name: 'Toggle theme' }).click();
+  await page.getByRole('button', { name: 'Abralo Engineer', exact: true }).click();
+  await dismiss.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'evidence/connections-dismiss-mobile-dark.png', fullPage: true });
+  await dismiss.click();
+  await expect(actionCard).toHaveCount(0);
+  await page.reload();
+  await expect(actionCard).toHaveCount(0);
+  expect(broker.actions.get(action.actionId, user.id).state).toBe('failed');
+  expect(executions).toBe(1);
+  await page.setViewportSize({ width: 1280, height: 640 });
   await page.getByRole('button', { name: 'Toggle theme' }).click();
   await page.getByRole('button', { name: 'Connections', exact: true }).click();
-  const nativeMcp = page.getByRole('checkbox', { name: 'Allow configured Claude Code MCP servers' });
+  const nativeMcp = page.getByRole('switch', { name: 'Let Claude Code use its own configured tools' });
   await expect(nativeMcp).not.toBeChecked();
-  await nativeMcp.check();
+  await nativeMcp.click();
   expect(store.setting('connections.nativeMcp.' + user.id)).toBe(true);
   await page.reload();
   await expect(nativeMcp).toBeChecked();
@@ -137,8 +188,10 @@ try {
           'inline error and reachable retry',
           'one provider dispatch',
           'result survives reload',
+          'dismissal error is recoverable; completed/failed cards stay dismissed on reload; show/restore preserves action history and never re-executes',
+          'dismiss control reachable in desktop/mobile and light/dark themes',
           '390px layout',
-          'configured Claude MCP opt-in persists and failed saves retain the previous setting',
+          'configured Claude MCP switch persists and failed saves retain the previous setting',
           'no browser errors',
         ],
         executions,
@@ -148,6 +201,10 @@ try {
     ),
   );
   console.log('Connection UI checks passed; provider execution was simulated.');
+} catch (error) {
+  console.log(await page.locator('.connection-row, .connection-action, [role="alert"]').allTextContents());
+  await page.screenshot({ path: 'evidence/connections-ui-failure.png', fullPage: true });
+  throw error;
 } finally {
   await browser.close();
   await app.close();

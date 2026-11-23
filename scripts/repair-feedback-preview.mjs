@@ -14,7 +14,7 @@ for(const c of await api('/connections'))if(c.state==='ready'&&['stripe','railwa
 }
 for(const p of await api('/proposals'))if(p.approved&&!p.handoffMessageId){
  const r=await api('/proposals/'+p.id+'/brief',{});
- report.teams.push({channelId:r.channelId,handoffQueued:!!r.handoffMessageId});
+ report.teams.push({handoffQueued:!!r.handoffMessageId});
 }
 writeFileSync('evidence/feedback-installed.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report));
