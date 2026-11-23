@@ -326,7 +326,22 @@ export class OpenCodeAdapter implements Adapter {
         await this.api(`/mcp/${toolName}/disconnect`, 'POST', {}, directory).catch(() => {});
     }
   }
-  async dispose() {
-    if (this.child?.pid) await killTree(this.child.pid);
+  /**
+   * Stop this adapter's OpenCode server and wait until it has really gone.
+   * A server that ignores the polite signal is forced after a grace period:
+   * every model refresh replaces the server, so one that lingers keeps its
+   * memory (hundreds of MB) for good.
+   */
+  async dispose(graceMs = 5000) {
+    const child = this.child;
+    if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise<boolean>((resolve) => child.once('exit', () => resolve(true)));
+    const within = (ms: number) =>
+      Promise.race([exited, new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms).unref())]);
+    await killTree(child.pid);
+    if (await within(graceMs)) return;
+    console.warn(`OpenCode server ${child.pid} did not stop after ${graceMs} ms; forcing it to quit.`);
+    try { child.kill('SIGKILL'); } catch { /* already gone */ }
+    if (!(await within(2000))) console.error(`OpenCode server ${child.pid} is still running after a forced stop.`);
   }
 }

@@ -25,19 +25,19 @@ Data is stored under the OS user application-data directory, outside the checkou
 
 Native harnesses use the owner's supported login. Invitations do not grant other humans access to the host owner's provider credentials. No model API fallback is selected automatically.
 
-## Local test build
+## Installed app
 
-This is a working preview, not a signed public release. No sample conversations or simulated agent activity are installed in the user's workspace.
+Install from the [latest release](https://github.com/cw12574/abralo-workspace/releases/latest); see [Getting started](docs/preview/START-HERE.md). Builds are not yet code-signed. No sample conversations or simulated agent activity are installed in your workspace.
 
-On Windows the installer adds **Agent Workspace** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings → General lets you turn automatic startup off or on.
+On Windows the installer adds **Abralo** to the Desktop and Start menu with startup on login off for new installations. Existing startup preferences are preserved. It opens the browser at your last conversation while a detached local service keeps working if you close the tab. Sleeping or shutting down the host stops execution; unconfirmed work is marked interrupted on restart rather than blindly repeated. Settings → General lets you turn automatic startup off or on.
 
 The default data directory is `%LOCALAPPDATA%\AgentWorkspace` on Windows, `~/Library/Application Support/AgentWorkspace` on macOS and `$XDG_DATA_HOME/AgentWorkspace` (or `~/.local/share/AgentWorkspace`) on Linux. Installation code and user data are separate. Backups omit provider tokens; `scripts/restore.mjs` restores into a new directory and leaves schedules disabled until explicitly re-enabled.
 
 Codex and Claude employees require native subscription sign-in. OpenCode exposes native provider sign-in and an explicit API billing choice. Account owners can grant a trusted human access to an employee in employee settings; that human gets a separate DM and uses the owner's provider allowance. Membership in a workspace alone does not grant account use.
 
-Repository tasks use a dedicated Git worktree from HEAD. Uncommitted changes are not copied or overwritten. Working copies and branches remain available for inspection; this preview does not automatically merge or delete them. Ordinary folders are used directly. Run artifacts are downloaded through authenticated routes.
+Repository tasks use a dedicated Git worktree from HEAD. Uncommitted changes are not copied or overwritten. Working copies and branches remain available for inspection; Abralo does not automatically merge or delete them. Ordinary folders are used directly. Run artifacts are downloaded through authenticated routes.
 
-Connection setup happens in chat. Stripe and Railway use their official MCP endpoints. Gmail uses Google's OAuth library and API and requires a Google client configured for this self-hosted installation. Secrets go to dedicated forms and the encrypted vault, never ordinary chat. On Windows the vault key uses DPAPI; the other platforms' keyring integration remains a release gate.
+Connection setup happens in chat. Stripe and Railway use their official MCP endpoints. Gmail uses Google's OAuth library and API and requires a Google client configured for this self-hosted installation. Secrets go to dedicated forms and the encrypted vault, never ordinary chat. On Windows the vault key is protected with DPAPI; on macOS and Linux it is stored in the user-only data folder (system keychain support is planned).
 
 Notifications are on by default. The installed, single-user Windows host sends desktop alerts directly through Windows; a focused Abralo page handles alerts in-app. If browser notification permission has already been granted, Abralo repairs its push subscription automatically and uses it when native delivery fails. On other hosts, desktop alerts need browser permission, while in-app alerts and the unread inbox work immediately. An explicit turn-off is preserved. Windows notification settings and Do not disturb can suppress banners even when Abralo sends one. HTTPS is required for remote phone access; this installation defaults to loopback and does not expose a public listener. `WORKSPACE_PUBLIC_URL` and an authenticated HTTPS reverse proxy are required when setting a non-loopback `WORKSPACE_HOST`.
 
