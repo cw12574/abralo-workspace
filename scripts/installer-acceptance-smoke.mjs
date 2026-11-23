@@ -100,10 +100,10 @@ try {
       throw new Error('Could not resolve Windows shell folders.');
     const [desktop, startMenu, startup] = folders;
     const shortcuts = [
-      join(desktop, 'Agent Workspace.lnk'),
-      join(startMenu, 'Programs', 'Agent Workspace.lnk'),
+      join(desktop, 'Abralo.lnk'),
+      join(startMenu, 'Programs', 'Abralo.lnk'),
     ];
-    const startupShortcut = join(startup, 'Agent Workspace.lnk');
+    const startupShortcut = join(startup, 'Abralo.lnk');
     if ([...shortcuts, startupShortcut].some(existsSync))
       throw new Error('A Workspace shortcut already exists on this runner; refusing to overwrite it.');
     ownedShortcuts = shortcuts;
@@ -156,7 +156,7 @@ try {
     assertInside(programBase, installedRoot);
     const installedNode = verifyInstalledPayload(installedRoot);
     if (process.platform === 'darwin') {
-      const app = join(fixture, 'Applications', 'Agent Workspace.app');
+      const app = join(fixture, 'Applications', 'Abralo.app');
       const appExecutable = join(app, 'Contents', 'MacOS', 'AgentWorkspace');
       if (!existsSync(appExecutable) || !readFileSync(appExecutable, 'utf8').includes(installedNode))
         throw new Error('The macOS app wrapper does not launch the installed runtime.');

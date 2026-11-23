@@ -5,6 +5,7 @@ import { Store, ApiError, uid, now } from './store.js';
 import type { Supervisor } from './supervisor.js';
 import Database from 'better-sqlite3';
 import { startupInfo, setStartup } from './startup.js';
+import { APP_VERSION } from './version.js';
 
 export function tickSchedules(s: Store, sup: Supervisor) {
   if (sup.maintenance) return;
@@ -111,7 +112,7 @@ export function registerOperations(app: any, s: Store, sup: Supervisor) {
   app.get('/api/diagnostics', async (req: any) => {
     if (req.user.role !== 'owner') throw new ApiError(403, 'Owner access required');
     return {
-      version: '0.1.0-preview',
+      version: APP_VERSION,
       platform: process.platform,
       arch: process.arch,
       node: process.version,

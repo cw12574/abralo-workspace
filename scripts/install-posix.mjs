@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, existsSync, writeFileSync, chmodSync, readFileSync } from 'node:fs';
+import { cpSync, mkdirSync, existsSync, writeFileSync, chmodSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +24,9 @@ cpSync(join(target, 'scripts', 'installed-launcher.mjs'), launcher);
 writeFileSync(join(base, 'current.txt'), target + '\n', { mode: 0o600 });
 chmodSync(node, 0o755);
 if (process.platform === 'darwin') {
-  const app = join(homedir(), 'Applications', 'Agent Workspace.app', 'Contents');
+  // Installs before 1.0 created the app under the old product name.
+  rmSync(join(homedir(), 'Applications', 'Agent Workspace.app'), { recursive: true, force: true });
+  const app = join(homedir(), 'Applications', 'Abralo.app', 'Contents');
   mkdirSync(join(app, 'MacOS'), { recursive: true });
   const quote = (s) => "'" + s.replaceAll("'", "'\\''") + "'";
   writeFileSync(
@@ -34,7 +36,7 @@ if (process.platform === 'darwin') {
   );
   writeFileSync(
     join(app, 'Info.plist'),
-    '<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.agentworkspace.app</string><key>CFBundleName</key><string>Agent Workspace</string><key>CFBundleExecutable</key><string>AgentWorkspace</string><key>CFBundleVersion</key><string>0.1.0</string></dict></plist>',
+    '<?xml version="1.0"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.agentworkspace.app</string><key>CFBundleName</key><string>Abralo</string><key>CFBundleExecutable</key><string>AgentWorkspace</string><key>CFBundleVersion</key><string>' + JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')).version + '</string></dict></plist>',
   );
 } else {
   const dir = join(homedir(), '.local', 'share', 'applications');
@@ -42,7 +44,7 @@ if (process.platform === 'darwin') {
   const quote = (s) => '"' + s.replace(/["\\`$]/g, '\\$&') + '"';
   writeFileSync(
     join(dir, 'agent-workspace.desktop'),
-    '[Desktop Entry]\nType=Application\nName=Agent Workspace\nTerminal=false\nExec=' +
+    '[Desktop Entry]\nType=Application\nName=Abralo\nTerminal=false\nExec=' +
       quote(node) +
       ' ' +
       quote(launcher) +

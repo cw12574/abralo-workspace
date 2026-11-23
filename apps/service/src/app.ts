@@ -46,6 +46,7 @@ import { GoalRunner } from './goal-runner.js';
 import { Work, registerWorkRoutes } from './work.js';
 import { ComputerUse } from './computer-use.js';
 import { Briefings, registerBriefingRoutes } from './briefings.js';
+import { APP_VERSION } from './version.js';
 export async function createApp(
   store: Store,
   options: { providerUpdates?: boolean; supervisor?: Supervisor; staticRoot?: string; maintenance?: MaintenanceConfig } = {},
@@ -416,7 +417,7 @@ if ($selected) { [Console]::WriteLine($selected) }
   app.get('/api/health', async () => ({
     ok: true,
     product: 'agent-workspace',
-    version: '0.1.0',
+    version: APP_VERSION,
     buildId,
     dataDirectoryId,
     maintenanceJob: process.env.WORKSPACE_MAINTENANCE_JOB || null,
@@ -537,7 +538,7 @@ if ($selected) { [Console]::WriteLine($selected) }
       })),
       humans: store.all('SELECT id,name,role FROM humans'),
       cursor: store.replay.head(),
-      capabilities: { remoteConfigured: !!process.env.WORKSPACE_PUBLIC_URL, version: '0.1.0' },
+      capabilities: { remoteConfigured: !!process.env.WORKSPACE_PUBLIC_URL, version: APP_VERSION },
     };
   });
   app.patch('/api/profile', async (req) => {

@@ -38,22 +38,27 @@ Set-Content -LiteralPath $backgroundScript -Encoding UTF8 -Value ($launchBody + 
 $shell=New-Object -ComObject WScript.Shell
 $locations=@([Environment]::GetFolderPath('Desktop'),(Join-Path ([Environment]::GetFolderPath('StartMenu')) 'Programs'))
 foreach($location in $locations){
-  $shortcut=$shell.CreateShortcut((Join-Path $location 'Agent Workspace.lnk'))
+  # Installs before 1.0 used the old product name.
+  $legacy=Join-Path $location 'Agent Workspace.lnk'
+  if(Test-Path -LiteralPath $legacy){ Remove-Item -LiteralPath $legacy }
+  $shortcut=$shell.CreateShortcut((Join-Path $location 'Abralo.lnk'))
   $shortcut.TargetPath=(Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
   $shortcut.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$launchScript+'"'
   $shortcut.WorkingDirectory=$installRoot
   $shortcut.WindowStyle=7
-  $shortcut.Description='Open your local human and agent workspace'
+  $shortcut.Description='Open Abralo'
   $shortcut.Save()
 }
 if($StartOnLogin){
   $startupLocation=[Environment]::GetFolderPath('Startup')
-  $startupShortcut=$shell.CreateShortcut((Join-Path $startupLocation 'Agent Workspace.lnk'))
+  $legacyStartup=Join-Path $startupLocation 'Agent Workspace.lnk'
+  if(Test-Path -LiteralPath $legacyStartup){ Remove-Item -LiteralPath $legacyStartup }
+  $startupShortcut=$shell.CreateShortcut((Join-Path $startupLocation 'Abralo.lnk'))
   $startupShortcut.TargetPath=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $startupShortcut.Arguments='-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'+$backgroundScript+'"'
   $startupShortcut.WorkingDirectory=$installRoot
   $startupShortcut.WindowStyle=7
-  $startupShortcut.Description='Start Agent Workspace when you sign in'
+  $startupShortcut.Description='Start Abralo when you sign in'
   $startupShortcut.Save()
 }
 Set-Content -LiteralPath (Join-Path $installRoot 'current.txt') -Value $target

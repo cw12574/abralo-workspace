@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, copyFileSync, writeFileSync, existsSync,readdirSync,realpathSync,unlinkSync,cpSync } from 'node:fs';
+import { mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync,readdirSync,realpathSync,unlinkSync,cpSync } from 'node:fs';
 import { join, resolve, dirname,relative,isAbsolute } from 'node:path';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +54,7 @@ writeFileSync(
   join(target, 'release.json'),
   JSON.stringify(
     {
-      version: (process.env.ABRALO_VERSION || '0.2.0-preview').replace(/^v/, ''),
+      version: (process.env.ABRALO_VERSION || JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version).replace(/^v/, ''),
       platform: process.platform,
       arch: process.arch,
       node: process.version,

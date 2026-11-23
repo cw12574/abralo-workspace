@@ -46,7 +46,7 @@ jobs:
       - name: Package for this runner
         run: pnpm package "release/abralo-${{ matrix.target }}"
         env:
-          ABRALO_VERSION: '0.2.0-preview'
+          ABRALO_VERSION: '1.0.0'
       - name: Verify packaged runtime and contents
         run: node scripts/verify-package.mjs "release/abralo-${{ matrix.target }}"
       - name: Verify native providers in a clean profile without inference

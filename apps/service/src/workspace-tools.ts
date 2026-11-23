@@ -14,6 +14,7 @@ import { goalReport } from './goal-runner.js';
 import { Work } from './work.js';
 import { ComputerUse } from './computer-use.js';
 import { briefingReport } from './briefings.js';
+import { APP_VERSION } from './version.js';
 export async function registerWorkspaceTools(
   app: any,
   s: Store,
@@ -110,7 +111,7 @@ export async function registerWorkspaceTools(
       });
     const employee = s.employee(run.employee_id)!;
     s.authorizeEmployee(employee.id, run.conversation_id);
-    const server = new McpServer({ name: 'workspace', version: '0.1.0' });
+    const server = new McpServer({ name: 'workspace', version: APP_VERSION });
     const result = (v: any) => ({ content: [{ type: 'text' as const, text: JSON.stringify(v) }] });
     if (briefingId && sup.briefings)
       server.registerTool(

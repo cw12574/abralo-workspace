@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { Store } from './store.js';
 import { createApp } from './app.js';
 import { prepareStartupCompaction } from './maintenance-startup.js';
+import { APP_VERSION } from './version.js';
 const data = dataDirectory();
 await prepareStartupCompaction(process.cwd(), data, process.env.WORKSPACE_INSTALL_ROOT, process.env.WORKSPACE_MAINTENANCE_JOB);
 const store = new Store(data);
@@ -39,7 +40,7 @@ supervisor.origin = `http://127.0.0.1:${(app.server.address() as any).port}`;
 listening = true;
 writeFileSync(
   join(store.dir, 'runtime.json'),
-  JSON.stringify({ pid: process.pid, port: (app.server.address() as any).port, version: '0.1.0' }),
+  JSON.stringify({ pid: process.pid, port: (app.server.address() as any).port, version: APP_VERSION }),
   { mode: 0o600 },
 );
 console.log(`Workspace is listening at ${address}`);

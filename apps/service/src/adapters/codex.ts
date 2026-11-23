@@ -13,6 +13,7 @@ import {
 import type { Adapter, RunInput, ProviderInfo } from '../../../../packages/contracts/src/index.js';
 import { providerLimitFromError } from './provider-limit.js';
 import type { SandboxPolicy } from '../../../../packages/contracts/generated/codex/v2/SandboxPolicy.js';
+import { APP_VERSION } from '../version.js';
 export class CodexAdapter implements Adapter {
   child?: ChildProcessWithoutNullStreams;
   ready?: Promise<void>;
@@ -64,7 +65,7 @@ export class CodexAdapter implements Adapter {
         fail(new Error('Codex App Server stopped; the run outcome must be reconciled.')),
       );
       await this.request('initialize', {
-        clientInfo: { name: 'agent_workspace', title: 'Agent Workspace', version: '0.1.0' },
+        clientInfo: { name: 'agent_workspace', title: 'Abralo', version: APP_VERSION },
         capabilities: { experimentalApi: true },
       });
       this.notify('initialized', {});

@@ -23,6 +23,7 @@ import {
   identityTool,
   revokeOAuth,
 } from './connection-accounts.js';
+import { APP_VERSION } from './version.js';
 /** How an agent picks among several accounts on one service. */
 export type AccountChoice = { account?: string; newAccount?: boolean };
 // Account checks after sign-in, for services Abralo has verified.
@@ -595,7 +596,7 @@ export class ConnectionBroker {
     const p: OAuthClientProvider = {
       redirectUrl: `${this.origin()}/oauth/callback/${id}`,
       clientMetadata: {
-        client_name: 'Agent Workspace',
+        client_name: 'Abralo',
         redirect_uris: [`${this.origin()}/oauth/callback/${id}`],
         grant_types: ['authorization_code', 'refresh_token'],
         response_types: ['code'],
@@ -694,7 +695,7 @@ export class ConnectionBroker {
     // Explicit API-key servers skip OAuth; otherwise sign-in is discovered from the server.
     if (!apiKey && recipe.auth === 'api_key')
       return this.needsApiKey(c, recipe, `${recipe.label} connects with an API key.`);
-    const client = new Client({ name: 'agent-workspace', version: '0.1.0' }),
+    const client = new Client({ name: 'agent-workspace', version: APP_VERSION }),
       transport = new StreamableHTTPClientTransport(
         new URL(recipe.url),
         apiKey
