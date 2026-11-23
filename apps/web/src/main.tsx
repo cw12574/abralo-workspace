@@ -1593,6 +1593,7 @@ function Login({ onDone, error }: { onDone: () => Promise<any>; error: string })
     </main>
   );
 }
+const ONBOARDING_DRAFT = 'abralo.onboarding.draft';
 function Onboarding({
   providers,
   refreshProviders,
@@ -1603,17 +1604,35 @@ function Onboarding({
 }: any) {
   const [checking, setChecking] = useState(false),
     [checked, setChecked] = useState(false);
-  const [step, setStep] = useState(0),
+  // Keep the setup draft in this tab, so a reload (often while signing in) resumes it.
+  const [draft] = useState<any>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(ONBOARDING_DRAFT) || '{}') || {};
+    } catch {
+      return {};
+    }
+  });
+  const [step, setStep] = useState<number>(draft.step ?? 0),
     [name] = useState('Chief of Staff'),
-    [harness, setHarness] = useState('codex'),
-    [model, setModel] = useState(''),
-    [objectives, setObjectives] = useState(['']),
+    [harness, setHarness] = useState<string>(draft.harness ?? 'codex'),
+    [model, setModel] = useState<string>(draft.model ?? ''),
+    [objectives, setObjectives] = useState<string[]>(draft.objectives ?? ['']),
     [objectiveError, setObjectiveError] = useState(''),
-    [userName, setUserName] = useState(
-      initialUserName && initialUserName !== 'You' ? initialUserName : '',
+    [userName, setUserName] = useState<string>(
+      draft.userName ?? (initialUserName && initialUserName !== 'You' ? initialUserName : ''),
     ),
     [busy, setBusy] = useState(false),
     [login, setLogin] = useState<any>(null);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        ONBOARDING_DRAFT,
+        JSON.stringify({ step, harness, model, objectives, userName }),
+      );
+    } catch {
+      /* storage unavailable: setup still works, it just won't survive a reload */
+    }
+  }, [step, harness, model, objectives, userName]);
   const provider = providers.find((p: ProviderInfo) => p.harness === harness);
   return (
     <main className={`onboarding step-${step}`}>
@@ -1704,7 +1723,18 @@ function Onboarding({
                 {provider?.detail || 'Checking this host…'}
               </p>
               {(!provider?.authenticated || harness === 'opencode') && (
-                <ProviderLogin harness={harness} fail={fail} />
+                // Share onboarding's provider status, so finishing sign-in unlocks Continue.
+                <ProviderLogin
+                  harness={harness}
+                  fail={fail}
+                  provider={provider}
+                  checking={checking}
+                  refresh={refreshProviders}
+                  onConnected={() => {
+                    fail('');
+                    setChecked(false);
+                  }}
+                />
               )}
               <button
                 className="quiet-button"
@@ -1714,6 +1744,8 @@ function Onboarding({
                   setChecked(false);
                   try {
                     await refreshProviders(harness);
+                    // The check reached Abralo, so an earlier "cannot reach" error no longer applies.
+                    fail('');
                     setChecked(true);
                   } catch (e: any) {
                     fail(e.message);
@@ -1767,6 +1799,7 @@ function Onboarding({
                       role: 'Organizes the team and keeps work moving',
                     },
                   });
+                  sessionStorage.removeItem(ONBOARDING_DRAFT);
                   await onDone(employee.dmId);
                 } catch (e: any) {
                   fail(e.message);

@@ -37,17 +37,14 @@ await page.route('**/api/providers**', async (route) => {
   }
   if (url.pathname.endsWith('/login')) {
     loginCalls++;
-    lastType = route.request().postDataJSON().type || 'chatgpt';
+    lastType = url.pathname.split('/').at(-2) || '';
     await new Promise((resolve) => setTimeout(resolve, 250));
     await route.fulfill({
-      json:
-        lastType === 'chatgptDeviceCode'
-          ? {
-              loginId: 'fixture',
-              userCode: 'FIXTURE-123',
-              verificationUrl: 'https://example.com/device',
-            }
-          : { loginId: 'fixture', authUrl: 'https://example.com/login' },
+      json: {
+        loginId: 'fixture-' + loginCalls,
+        userCode: 'FIXTURE-' + loginCalls,
+        verificationUrl: 'https://example.com/device',
+      },
     });
     return;
   }
@@ -68,45 +65,39 @@ try {
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page.getByText(/Cannot reach Abralo/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Start provider sign-in', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByText(/Cannot reach Abralo/)).toBeVisible();
   checks.push('service failure is actionable; unsuccessful sign-in unlocks controls');
   offline = false;
   await page.getByRole('button', { name: 'Check connection', exact: true }).click();
   await expect(page.getByText(/Cannot reach Abralo/)).toHaveCount(0);
-  await page.getByRole('button', { name: 'Start provider sign-in', exact: true }).click();
-  await expect(
-    page.getByRole('link', { name: 'Continue with ChatGPT', exact: true }),
-  ).toBeVisible();
+  checks.push('a successful check clears the earlier service error');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Open Codex sign-in', exact: true })).toBeVisible();
+  await expect(page.getByText('FIXTURE-1', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Waiting for you to finish in the browser/)).toBeVisible();
   expect(loginCalls).toBe(1);
-  await expect(page.getByRole('button', { name: 'Sign-in started', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Use a device code instead', exact: true }).click();
-  await expect(page.getByText('FIXTURE-123')).toBeVisible();
-  expect(lastType).toBe('chatgptDeviceCode');
-  await page.getByRole('button', { name: 'Cancel sign-in', exact: true }).click();
-  await expect(page.getByText('FIXTURE-123')).toHaveCount(0);
-  checks.push('browser sign-in, device fallback, duplicate prevention and cancellation');
-  await page.getByRole('button', { name: 'Start provider sign-in', exact: true }).click();
-  await expect(
-    page.getByRole('link', { name: 'Continue with ChatGPT', exact: true }),
-  ).toBeVisible();
+  expect(lastType).toBe('codex');
+  checks.push('device-code sign-in shows the code and link and waits for completion');
+  await page.getByRole('button', { name: 'Start again', exact: true }).click();
+  await expect(page.getByText('FIXTURE-2', { exact: true })).toBeVisible();
+  await expect(page.getByText('FIXTURE-1', { exact: true })).toHaveCount(0);
+  expect(loginCalls).toBe(2);
+  checks.push('starting again replaces the stale code instead of stacking sign-ins');
   signedIn = true;
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled({
     timeout: 10000,
   });
-  await expect(page.getByRole('link', { name: 'Continue with ChatGPT', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole('link', { name: 'Open Codex sign-in', exact: true })).toHaveCount(0);
+  await expect(page.getByText('FIXTURE-2', { exact: true })).toHaveCount(0);
   checks.push('automatic sign-in completion clears stale login controls');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Connect Chief of Staff.' })).toBeVisible();
   checks.push('page reload retains setup identity and rechecks connection');
   await page.getByRole('button', { name: /OpenCode.*Choose provider/ }).click();
-  await expect(page.getByRole('combobox', { name: 'OpenCode model' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
-  await page.getByRole('combobox', { name: 'OpenCode model' }).selectOption('fixture/model');
+  await expect(page.getByText('OpenCode account')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
-  checks.push('OpenCode requires an explicit connected-provider model');
+  checks.push('a connected OpenCode provider can lead with its default model');
   expect(errors).toEqual([]);
   console.log(JSON.stringify({ status: 'passed', checks, liveProviderCalls: false }, null, 2));
 } finally {
