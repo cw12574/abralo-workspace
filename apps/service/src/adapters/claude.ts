@@ -393,6 +393,9 @@ export class ClaudeAdapter implements Adapter {
         input.emit({ type: 'complete', data: { cancelled: true } });
         return;
       }
+      const message = e instanceof Error ? e.message : String(e);
+      if (/oauth session expired|could not be refreshed|refresh token.*expired/i.test(message))
+        throw new Error('Claude sign-in expired. Sign in again with Claude Code, then retry this task.');
       throw providerLimitFromError(e, 'claude') || e;
     } finally {
       input.signal.removeEventListener('abort', abort);
