@@ -54,11 +54,19 @@ export class ClaudeAdapter implements Adapter {
         detail: 'Install Claude Code, then sign in.',
       };
     try {
-      const r = await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
+      // Signed out, `claude auth status` prints its JSON status and exits 1. That is an
+      // answer ("sign in"), not a failure, so read the output either way.
+      const stdout = await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
         windowsHide: true,
         timeout: 20000,
-      });
-      const auth = JSON.parse(r.stdout);
+      }).then(
+        (r) => r.stdout,
+        (error: any) => {
+          if (typeof error?.stdout === 'string' && error.stdout.trim().startsWith('{')) return error.stdout;
+          throw error;
+        },
+      );
+      const auth = JSON.parse(stdout);
       return {
         harness: 'claude',
         installed: true,
