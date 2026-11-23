@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -45,7 +45,8 @@ it('uses the granted folder when a local git repository has no first commit', as
   expect(spawnSync('git', ['-C', root, 'init', '--quiet']).status).toBe(0);
   const db = store();
   const folder = await taskFolder(db, { cwd: root }, 'unborn-repository-context');
-  expect(folder.replace(/\\/g, '/')).toBe(root.replace(/\\/g, '/'));
+  // The task folder is the canonical path (macOS /private/var, Windows long names).
+  expect(folder.replace(/\\/g, '/')).toBe(realpathSync.native(root).replace(/\\/g, '/'));
   expect(db.setting('worktree.unborn-repository-context')).toBeNull();
 }, 15000);
 

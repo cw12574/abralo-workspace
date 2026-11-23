@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, uid } from '../apps/service/src/store.js';
@@ -197,7 +197,9 @@ describe('durable workspace', () => {
       headers,
     });
     expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toEqual({ path: f.dir, name: f.dir.split(/[\\/]/).pop() });
+    // Folders are stored by their canonical path (macOS /private/var, Windows long names).
+    const canonical = realpathSync.native(f.dir);
+    expect(saved.json()).toEqual({ path: canonical, name: canonical.split(/[\\/]/).pop() });
     expect(
       (
         await app.inject({
@@ -205,7 +207,7 @@ describe('durable workspace', () => {
           headers,
         })
       ).json().path,
-    ).toBe(f.dir);
+    ).toBe(canonical);
     const invalid = await app.inject({
       method: 'PUT',
       url: `/api/conversations/${f.employee.dmId}/working-folder`,
