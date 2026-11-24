@@ -11,6 +11,39 @@ type LimitWindow = { usedPercent: number; windowDurationMins: number; resetsAt: 
 export type ClaudeLimits = { rateLimitsByLimitId: Record<string, { primary?: LimitWindow; secondary?: LimitWindow }> };
 type UsageWindow = { utilization: number | null; resets_at: string | null } | null | undefined;
 
+async function readClaudeAuthStatus(bin: Executable): Promise<any> {
+  let stdout: string;
+  try {
+    stdout = (await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
+      windowsHide: true,
+      timeout: 20000,
+    })).stdout;
+  } catch (error: any) {
+    // `claude auth status` intentionally exits 1 when signed out, while still
+    // returning the JSON state that Abralo needs to offer sign-in.
+    if (typeof error?.stdout === 'string' && error.stdout.trim().startsWith('{')) {
+      stdout = error.stdout;
+    } else {
+      throw new Error(
+        'Could not read Claude Code account status: ' + (error instanceof Error ? error.message : String(error)),
+      );
+    }
+  }
+
+  let auth: any;
+  try {
+    auth = JSON.parse(stdout);
+  } catch (error) {
+    throw new Error(
+      'Claude Code returned invalid account-status JSON: ' + (error instanceof Error ? error.message : String(error)),
+    );
+  }
+  if (typeof auth?.loggedIn !== 'boolean') {
+    throw new Error('Claude Code account status did not include a login state.');
+  }
+  return auth;
+}
+
 function limitWindow(value: UsageWindow, label: string, windowDurationMins: number): LimitWindow | undefined {
   if (!value || typeof value.utilization !== 'number' || !value.resets_at) return undefined;
   const reset = Date.parse(value.resets_at);
@@ -54,19 +87,7 @@ export class ClaudeAdapter implements Adapter {
         detail: 'Install Claude Code, then sign in.',
       };
     try {
-      // Signed out, `claude auth status` prints its JSON status and exits 1. That is an
-      // answer ("sign in"), not a failure, so read the output either way.
-      const stdout = await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
-        windowsHide: true,
-        timeout: 20000,
-      }).then(
-        (r) => r.stdout,
-        (error: any) => {
-          if (typeof error?.stdout === 'string' && error.stdout.trim().startsWith('{')) return error.stdout;
-          throw error;
-        },
-      );
-      const auth = JSON.parse(stdout);
+      const auth = await readClaudeAuthStatus(bin);
       return {
         harness: 'claude',
         installed: true,
@@ -148,17 +169,10 @@ export class ClaudeAdapter implements Adapter {
     }
     const bin = this.binary || executable('claude');
     if (!bin) throw new Error('Claude Code is not installed');
-    const auth = JSON.parse(
-      (
-        await execFileAsync(bin.command, [...bin.args, 'auth', 'status'], {
-          windowsHide: true,
-          timeout: 20000,
-        })
-      ).stdout,
-    );
+    const auth = await readClaudeAuthStatus(bin);
     if (!auth.loggedIn || auth.authMethod !== 'claude.ai')
       throw new Error(
-        'Sign in with your Claude subscription. API billing is not enabled for this employee.',
+        'Claude Code needs sign-in. Open Connections, sign in, then retry this task.',
       );
     const env = { ...process.env };
     delete env.CLAUDECODE;
