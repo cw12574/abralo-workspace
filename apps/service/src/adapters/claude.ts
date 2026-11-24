@@ -99,13 +99,13 @@ export class ClaudeAdapter implements Adapter {
         accountKey: createHash('sha256').update(JSON.stringify([auth.email, auth.accountUuid, auth.orgUuid, auth.authMethod])).digest('hex'),
         ...(auth.loggedIn ? await this.catalogue(bin) : { models: [] }),
       };
-    } catch {
+    } catch (error) {
       return {
         harness: 'claude',
         installed: true,
         authenticated: null,
         version: '',
-        detail: 'Could not check Claude Code on this host.',
+        detail: 'Could not check Claude Code on this host: ' + (error instanceof Error ? error.message : String(error)),
       };
     }
   }
