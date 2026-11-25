@@ -8,7 +8,9 @@
 
 Abralo is an open-source workspace where you and a team of AI employees work towards lasting goals. Each employee runs on an agent you already use (Claude Code, Codex or OpenCode), signed in with your own account. A Chief of Staff organises the team, every goal has a lead and a success check, and nothing leaves your machine except the model requests you make.
 
-![An Abralo conversation with the Chief of Staff](docs/preview/images/conversation.png)
+![A team of seven AI employees, two working and three with unread messages, beside a conversation in which the Chief of Staff reports what needs a decision](docs/preview/images/conversation.png)
+
+<sub>Screenshots show the app with a fictional company.</sub>
 
 **[Download](https://github.com/cw12574/abralo-workspace/releases/latest)** · **[Getting started](docs/preview/START-HERE.md)** · **[Release notes](docs/preview/RELEASE-NOTES.md)** · **[Abralo Cloud](https://abralo.com)** (hosted for you)
 
@@ -21,7 +23,9 @@ Abralo is an open-source workspace where you and a team of AI employees work tow
 - **Connected tools, with approvals.** Stripe and Railway through their official MCP servers, Gmail with your own Google OAuth client, and other services found in the public MCP registry. Any change to the outside world waits for your approval and is never blindly repeated.
 - **Safe with your work.** Git tasks run in their own worktree, agents get an isolated browser per run, and desktop control (Windows) needs a time-limited permission you can revoke.
 
-![The Goals page](docs/preview/images/goals.png)
+![The Goals page, with a goal that needs an answer listed above the others](docs/preview/images/goals.png)
+
+![Customer Support asking for approval before making a refund](docs/preview/images/approval.png)
 
 ## Install
 
